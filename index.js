@@ -1,3 +1,6 @@
+app.get("/generate", (req, res) => {
+  res.send("OK");
+});
 const express = require("express");
 const app = express();
 
