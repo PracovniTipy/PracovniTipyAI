@@ -263,7 +263,7 @@ app.post("/generate", async (req, res) => {
 
             const imageBuffer = await createImage(job, template);
 
-            const videoUrl = await createReel(imageBuffer);
+           const imageUrl = await uploadBuffer(imageBuffer);
 
             herohero.push({
 
