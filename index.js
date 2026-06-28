@@ -121,7 +121,39 @@ async function uploadBuffer(buffer) {
     });
 
 }
+const os = require("os");
 
+async function createReel(imageBuffer) {
+    const id = Date.now();
+
+    const imagePath = path.join(os.tmpdir(), `${id}.png`);
+    const videoPath = path.join(os.tmpdir(), `${id}.mp4`);
+
+    fs.writeFileSync(imagePath, imageBuffer);
+
+    await new Promise((resolve, reject) => {
+        ffmpeg(imagePath)
+            .loop(8)
+            .videoCodec("libx264")
+            .outputOptions([
+                "-pix_fmt yuv420p",
+                "-vf scale=1080:1920"
+            ])
+            .save(videoPath)
+            .on("end", resolve)
+            .on("error", reject);
+    });
+
+    const result = await cloudinary.uploader.upload(videoPath, {
+        resource_type: "video",
+        folder: "PracovniTipyAI/reels"
+    });
+
+    fs.unlinkSync(imagePath);
+    fs.unlinkSync(videoPath);
+
+    return result.secure_url;
+}
 async function createImage(job, templateFile) {
 
     const template = await loadImage(
@@ -231,7 +263,7 @@ app.post("/generate", async (req, res) => {
 
             const imageBuffer = await createImage(job, template);
 
-            const imageUrl = await uploadBuffer(imageBuffer);
+            const videoUrl = await createReel(imageBuffer);
 
             herohero.push({
 
@@ -257,7 +289,11 @@ app.post("/generate", async (req, res) => {
 
             instagram.push({
 
-                ...reel,
+    ...reel,
+
+    videoUrl
+
+});
 
                 imageUrl
 
