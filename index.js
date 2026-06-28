@@ -1,4 +1,7 @@
-app.post("/generate", async (req, res) => {
+const express = require("express");
+const app = express();
+
+app.use(express.json());.post("/generate", async (req, res) => {
 
     try {
 
