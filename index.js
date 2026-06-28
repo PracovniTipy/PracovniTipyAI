@@ -285,19 +285,12 @@ app.post("/generate", async (req, res) => {
 
             const imageBuffer = await createImage(reel, template);
 
-            const imageUrl = await uploadBuffer(imageBuffer);
+            const videoUrl = await createReel(imageBuffer);
 
-            instagram.push({
-
+                instagram.push({
     ...reel,
-
     videoUrl
-
 });
-
-                imageUrl
-
-            });
 
         }
 
