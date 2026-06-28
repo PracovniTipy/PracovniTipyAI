@@ -18,7 +18,7 @@ cloudinary.config({
 
 const PORT = process.env.PORT || 3000;
 
-const TEMPLATE_FOLDER = path.join(__dirname, "Templates");
+const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
 const heroTemplates = {
     Austria: "Herohero/Rakousko Herohero.png",
