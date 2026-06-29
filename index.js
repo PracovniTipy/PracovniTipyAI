@@ -279,27 +279,20 @@ app.post("/generate", async (req, res) => {
 
         for (const reel of reels) {
 
-            const template = reelTemplates[reel.country];
+    const template = reelTemplates[reel.country];
 
-            if (!template) continue;
+    if (!template) continue;
 
-            const imageBuffer = await createImage(reel, template);
+    const imageBuffer = await createImage(reel, template);
 
-            const imageUrl = await uploadBuffer(imageBuffer);
+    const videoUrl = await createReel(imageBuffer);
 
-            instagram.push({
+    instagram.push({
+        ...reel,
+        videoUrl
+    });
 
-    ...reel,
-
-    videoUrl
-
-});
-
-                imageUrl
-
-            });
-
-        }
+}
 
         res.json({
 
