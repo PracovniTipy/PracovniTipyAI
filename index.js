@@ -162,6 +162,8 @@ async function createImage(job, templateFile) {
 
     const photo = await loadImage(job.image);
 
+console.log(job);
+    
     const canvas = createCanvas(template.width, template.height);
 
     const ctx = canvas.getContext("2d");
