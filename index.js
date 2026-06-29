@@ -156,14 +156,14 @@ async function createReel(imageBuffer) {
 }
 async function createImage(job, templateFile) {
 
+console.log(job);
+    
     const template = await loadImage(
         path.join(TEMPLATE_FOLDER, templateFile)
     );
-
+    
     const photo = await loadImage(job.image);
 
-console.log(job);
-    
     const canvas = createCanvas(template.width, template.height);
 
     const ctx = canvas.getContext("2d");
