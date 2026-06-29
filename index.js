@@ -16,9 +16,6 @@ const app = express();
 app.use(express.json());
 
 cloudinary.config({
-
-});
-    
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
@@ -260,8 +257,6 @@ app.post("/generate", async (req, res) => {
 
         for (const job of jobs) {
 
-console.log("COUNTRY =", job.country);
-            
             const template = heroTemplates[job.country];
 
             if (!template) continue;
@@ -290,12 +285,19 @@ console.log("COUNTRY =", job.country);
 
             const imageBuffer = await createImage(reel, template);
 
-            const videoUrl = await createReel(imageBuffer);
+            const imageUrl = await uploadBuffer(imageBuffer);
 
-                instagram.push({
+            instagram.push({
+
     ...reel,
+
     videoUrl
+
 });
+
+                imageUrl
+
+            });
 
         }
 
