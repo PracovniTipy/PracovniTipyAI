@@ -124,6 +124,9 @@ async function uploadBuffer(buffer) {
 const os = require("os");
 
 async function createReel(imageBuffer) {
+
+    console.log("CREATE REEL START");
+    
     const id = Date.now();
 
     const imagePath = path.join(os.tmpdir(), `${id}.png`);
@@ -144,11 +147,15 @@ async function createReel(imageBuffer) {
             .on("error", reject);
     });
 
+console.log("VIDEO CREATED");
+    
     const result = await cloudinary.uploader.upload(videoPath, {
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
 
+console.log(result.secure_url);
+    
     fs.unlinkSync(imagePath);
     fs.unlinkSync(videoPath);
 
@@ -162,21 +169,11 @@ console.log(job);
         path.join(TEMPLATE_FOLDER, templateFile)
     );
     
-    const photo = await loadImage(job.image);
-
     const canvas = createCanvas(template.width, template.height);
 
     const ctx = canvas.getContext("2d");
 
     ctx.drawImage(template, 0, 0);
-
-    ctx.drawImage(
-        photo,
-        250,
-        360,
-        580,
-        420
-    );
 
     drawCentered(
         ctx,
@@ -190,7 +187,7 @@ console.log(job);
 
     drawCentered(
         ctx,
-        job.city,
+        "",
         180,
         170,
         600,
@@ -222,16 +219,6 @@ console.log(job);
         ctx,
         job.language,
         610,
-        695,
-        180,
-        28,
-        "#000000"
-    );
-
-    drawCentered(
-        ctx,
-        job.time,
-        60,
         695,
         180,
         28,
