@@ -207,7 +207,7 @@ console.log(job);
 
     drawCentered(
         ctx,
-        job.housing,
+        job.accommodation,
         250,
         695,
         180,
