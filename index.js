@@ -26,8 +26,6 @@ const PORT = process.env.PORT || 3000;
 
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
-const fs = require("fs");
-
 console.log("TEMPLATE_FOLDER:", TEMPLATE_FOLDER);
 console.log("EXISTS:", fs.existsSync(TEMPLATE_FOLDER));
 console.log("FILES:", fs.readdirSync(TEMPLATE_FOLDER));
