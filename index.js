@@ -24,7 +24,7 @@ cloudinary.config({
 
 const PORT = process.env.PORT || 3000;
 
-const TEMPLATE_FOLDER = path.join(__dirname, "Templates");
+const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
 console.log("TEMPLATE_FOLDER:", TEMPLATE_FOLDER);
 console.log("EXISTS:", fs.existsSync(TEMPLATE_FOLDER));
