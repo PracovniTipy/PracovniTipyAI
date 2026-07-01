@@ -244,9 +244,11 @@ app.get("/", (req, res) => {
 });
 
 app.post("/generate", async (req, res) => {
-
+    
     try {
 
+        console.log("START RAM:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
+        
         const jobs = req.body.jobs || [];
         const reels = req.body.reels || [];
 
@@ -275,6 +277,8 @@ app.post("/generate", async (req, res) => {
 
         }
 
+        console.log("AFTER HERO:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
+
         // REELS
 
         for (const reel of reels) {
@@ -294,8 +298,12 @@ app.post("/generate", async (req, res) => {
 
 }
 
+console.log("AFTER REELS:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");        
+        
+        console.log("END RAM:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
+        
         res.json({
-
+            
             success: true,
 
             herohero,
