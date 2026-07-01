@@ -140,27 +140,40 @@ async function createReel(imageBuffer) {
 
     fs.writeFileSync(imagePath, imageBuffer);
 
-    await new Promise((resolve, reject) => {
-        ffmpeg(imagePath)
-            .loop(8)
-            .videoCodec("libx264")
+console.log("IMAGE SAVED");
+
+await new Promise((resolve, reject) => {
+
+    console.log("START FFMPEG");
+
+    ffmpeg(imagePath)
+        .loop(8)
+        .videoCodec("libx264")
             .outputOptions([
                 "-pix_fmt yuv420p",
                 "-vf scale=1080:1920"
             ])
             .save(videoPath)
-            .on("end", resolve)
-            .on("error", reject);
-    });
+            .on("end", () => {
 
 console.log("VIDEO CREATED");
+                
+    resolve();
+})
+.on("error", (err) => {
+    console.log("FFMPEG ERROR:", err);
+    reject(err);
+});
+    })
+    
+console.log("START CLOUDINARY");
     
     const result = await cloudinary.uploader.upload(videoPath, {
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
-
-console.log(result.secure_url);
+console.log("VIDEO UPLOADED");
+    console.log(result.secure_url);
     
     fs.unlinkSync(imagePath);
     fs.unlinkSync(videoPath);
