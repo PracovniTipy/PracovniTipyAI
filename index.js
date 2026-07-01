@@ -33,7 +33,7 @@ console.log("REEL EXISTS:", fs.existsSync(path.join(TEMPLATE_FOLDER, "reel")));
 console.log("REEL FILES:", fs.readdirSync(path.join(TEMPLATE_FOLDER, "reel")));
 
 const heroTemplates = {
-    Austria: "Herohero/Rakousko Herohero.png",
+    Austria: "Herohero/Austria Herohero.png",
     Belgium: "Herohero/Belgie Herohero.png",
     Denmark: "Herohero/Dánsko Herohero.png",
     Estonia: "Herohero/Estonsko Herohero.png",
