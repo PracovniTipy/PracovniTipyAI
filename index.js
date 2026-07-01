@@ -171,9 +171,14 @@ async function createImage(job, templateFile) {
 
 console.log(job);
     
-    const template = await loadImage(
-        path.join(TEMPLATE_FOLDER, templateFile)
-    );
+    const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
+
+console.log("TEMPLATE_FOLDER:", TEMPLATE_FOLDER);
+console.log("TEMPLATE FILE:", templateFile);
+console.log("FULL PATH:", fullPath);
+console.log("EXISTS:", fs.existsSync(fullPath));
+
+const template = await loadImage(fullPath);
     
     const canvas = createCanvas(template.width, template.height);
 
