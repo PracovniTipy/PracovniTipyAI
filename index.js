@@ -146,7 +146,16 @@ await new Promise((resolve, reject) => {
 
     console.log("START FFMPEG");
 
+console.log("IMAGE EXISTS:", fs.existsSync(imagePath));
+console.log("IMAGE SIZE:", fs.statSync(imagePath).size);
+    
     ffmpeg(imagePath)
+        .on("start", command => {
+    console.log("FFMPEG COMMAND:", command);
+})
+.on("stderr", line => {
+    console.log("FFMPEG:", line);
+})
         .loop(8)
         .videoCodec("libx264")
             .outputOptions([
