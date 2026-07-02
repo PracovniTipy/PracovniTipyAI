@@ -3,11 +3,14 @@ require("dotenv").config();
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
+
 const { createCanvas, loadImage } = require("canvas");
-const { v2: cloudinary } = require("cloudinary");
 
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
+
+const { v2: cloudinary } = require("cloudinary");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
@@ -19,19 +22,15 @@ cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
     api_secret: process.env.CLOUDINARY_API_SECRET
-   
 });
 
 const PORT = process.env.PORT || 3000;
 
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
-console.log("TEMPLATE_FOLDER:", TEMPLATE_FOLDER);
-console.log("EXISTS:", fs.existsSync(TEMPLATE_FOLDER));
-console.log("FILES:", fs.readdirSync(TEMPLATE_FOLDER));
-console.log("REEL EXISTS:", fs.existsSync(path.join(TEMPLATE_FOLDER, "reel")));
-console.log("REEL FILES:", fs.readdirSync(path.join(TEMPLATE_FOLDER, "reel")));
+console.log("Templates:", TEMPLATE_FOLDER);
 
+console.log("Exists:", fs.existsSync(TEMPLATE_FOLDER));
 const heroTemplates = {
     Austria: "Herohero/Rakousko Herohero.png",
     Belgium: "Herohero/Belgie Herohero.png",
@@ -41,7 +40,7 @@ const heroTemplates = {
     France: "Herohero/Francie Herohero.png",
     Netherlands: "Herohero/Holandsko Herohero.png",
     Ireland: "Herohero/Irsko Herohero.png",
-    Italy: "Herohero/italie Herohero.png",
+    Italy: "Herohero/Italie Herohero.png",
     Cyprus: "Herohero/Kypr Herohero.png",
     Malta: "Herohero/Malta Herohero.png",
     Germany: "Herohero/Nemecko Herohero.png",
@@ -69,6 +68,7 @@ const reelTemplates = {
     Spain: "reel/Spanelsko reel.png",
     Sweden: "reel/Svedsko reel.png"
 };
+
 function fitText(ctx, text, maxWidth, startSize) {
 
     let size = startSize;
@@ -77,8 +77,9 @@ function fitText(ctx, text, maxWidth, startSize) {
 
         ctx.font = `bold ${size}px Arial`;
 
-        if (ctx.measureText(text).width <= maxWidth)
+        if (ctx.measureText(text).width <= maxWidth) {
             break;
+        }
 
         size--;
 
@@ -93,124 +94,31 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
     const fontSize = fitText(ctx, text, width, startSize);
 
     ctx.font = `bold ${fontSize}px Arial`;
-
     ctx.fillStyle = color;
-
     ctx.textAlign = "center";
 
-    ctx.fillText(text, x + width / 2, y);
+    ctx.fillText(text || "", x + width / 2, y);
 
 }
 
-async function uploadBuffer(buffer) {
-
-    return await new Promise((resolve, reject) => {
-
-        const stream = cloudinary.uploader.upload_stream(
-
-            {
-                folder: "PracovniTipyAI"
-            },
-
-            (err, result) => {
-
-                if (err) return reject(err);
-
-                resolve(result.secure_url);
-
-            }
-
-        );
-
-        stream.end(buffer);
-
-    });
-
-}
-const os = require("os");
-
-async function createReel(imageBuffer) {
-
-    console.log("CREATE REEL START");
-    
-    const id = Date.now();
-
-    const imagePath = path.join(os.tmpdir(), `${id}.png`);
-    const videoPath = path.join(os.tmpdir(), `${id}.mp4`);
-
-    fs.writeFileSync(imagePath, imageBuffer);
-
-console.log("IMAGE SAVED");
-
-await new Promise((resolve, reject) => {
-
-    console.log("START FFMPEG");
-
-console.log("IMAGE EXISTS:", fs.existsSync(imagePath));
-console.log("IMAGE SIZE:", fs.statSync(imagePath).size);
-    
-    ffmpeg(imagePath)
-        .on("start", command => {
-    console.log("FFMPEG COMMAND:", command);
-})
-.on("stderr", line => {
-    console.log("FFMPEG:", line);
-})
-        .loop(8)
-        .videoCodec("libx264")
-            .outputOptions([
-                "-pix_fmt yuv420p",
-                "-vf scale=1080:1920"
-            ])
-            .save(videoPath)
-            .on("end", () => {
-
-console.log("VIDEO CREATED");
-                
-    resolve();
-})
-.on("error", (err) => {
-    console.log("FFMPEG ERROR:", err);
-    reject(err);
-});
-    })
-    
-console.log("START CLOUDINARY");
-    
-    const result = await cloudinary.uploader.upload(videoPath, {
-        resource_type: "video",
-        folder: "PracovniTipyAI/reels"
-    });
-console.log("VIDEO UPLOADED");
-    console.log(result.secure_url);
-    
-    fs.unlinkSync(imagePath);
-    fs.unlinkSync(videoPath);
-
-    return result.secure_url;
-}
 async function createImage(job, templateFile) {
 
-console.log(job);
-    
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
 
-console.log("TEMPLATE_FOLDER:", TEMPLATE_FOLDER);
-console.log("TEMPLATE FILE:", templateFile);
-console.log("FULL PATH:", fullPath);
-console.log("EXISTS:", fs.existsSync(fullPath));
+    if (!fs.existsSync(fullPath)) {
+        throw new Error(`Template not found: ${fullPath}`);
+    }
 
-const template = await loadImage(fullPath);
-    
+    const template = await loadImage(fullPath);
+
     const canvas = createCanvas(template.width, template.height);
-
     const ctx = canvas.getContext("2d");
 
     ctx.drawImage(template, 0, 0);
 
     drawCentered(
         ctx,
-        job.job_title,
+        job.job_title || "",
         180,
         120,
         600,
@@ -230,7 +138,7 @@ const template = await loadImage(fullPath);
 
     drawCentered(
         ctx,
-        job.salary,
+        job.salary || "",
         270,
         570,
         420,
@@ -240,7 +148,7 @@ const template = await loadImage(fullPath);
 
     drawCentered(
         ctx,
-        job.accommodation,
+        job.accommodation || "",
         250,
         695,
         180,
@@ -250,7 +158,7 @@ const template = await loadImage(fullPath);
 
     drawCentered(
         ctx,
-        job.language,
+        job.language || "",
         610,
         695,
         180,
@@ -261,16 +169,88 @@ const template = await loadImage(fullPath);
     return canvas.toBuffer("image/png");
 
 }
+
+async function uploadBuffer(buffer) {
+
+    return await new Promise((resolve, reject) => {
+
+        const stream = cloudinary.uploader.upload_stream(
+
+            {
+                folder: "PracovniTipyAI"
+            },
+
+            (err, result) => {
+
+                if (err) {
+                    return reject(err);
+                }
+
+                resolve(result.secure_url);
+
+            }
+
+        );
+
+        stream.end(buffer);
+
+    });
+
+}
+
+async function createReel(imageBuffer) {
+
+    const id = Date.now();
+
+    const imagePath = path.join(os.tmpdir(), `${id}.png`);
+    const videoPath = path.join(os.tmpdir(), `${id}.mp4`);
+
+    fs.writeFileSync(imagePath, imageBuffer);
+
+    await new Promise((resolve, reject) => {
+
+        ffmpeg(imagePath)
+            .loop(8)
+            .videoCodec("libx264")
+            .outputOptions([
+                "-pix_fmt",
+                "yuv420p",
+                "-vf",
+                "scale=1080:1920"
+            ])
+            .save(videoPath)
+            .on("end", () => resolve())
+            .on("error", reject);
+
+    });
+
+    const result = await cloudinary.uploader.upload(videoPath, {
+        resource_type: "video",
+        folder: "PracovniTipyAI/reels"
+    });
+
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+
+    return result.secure_url;
+
+}
+
 app.get("/", (req, res) => {
     res.send("PracovniTipyAI běží");
 });
 
 app.post("/generate", async (req, res) => {
+
+if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
+    return res.status(400).json({
+        success: false,
+        error: "jobs a reels musí být pole"
+    });
+}
     
     try {
 
-        console.log("START RAM:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
-        
         const jobs = req.body.jobs || [];
         const reels = req.body.reels || [];
 
@@ -283,55 +263,48 @@ app.post("/generate", async (req, res) => {
 
             const template = heroTemplates[job.country];
 
-            if (!template) continue;
+            if (!template) {
+                console.log(`HeroHero template not found: ${job.country}`);
+                continue;
+            }
 
             const imageBuffer = await createImage(job, template);
 
-           const imageUrl = await uploadBuffer(imageBuffer);
+            const imageUrl = await uploadBuffer(imageBuffer);
 
             herohero.push({
-
                 ...job,
-
                 imageUrl
-
             });
 
         }
-
-        console.log("AFTER HERO:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
 
         // REELS
 
         for (const reel of reels) {
 
-    const template = reelTemplates[reel.country];
+            const template = reelTemplates[reel.country];
 
-    if (!template) continue;
+            if (!template) {
+                console.log(`Reel template not found: ${reel.country}`);
+                continue;
+            }
 
-    const imageBuffer = await createImage(reel, template);
+            const imageBuffer = await createImage(reel, template);
 
-    const videoUrl = await createReel(imageBuffer);
+            const videoUrl = await createReel(imageBuffer);
 
-    instagram.push({
-        ...reel,
-        videoUrl
-    });
+            instagram.push({
+                ...reel,
+                videoUrl
+            });
 
-}
+        }
 
-console.log("AFTER REELS:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");        
-        
-        console.log("END RAM:", Math.round(process.memoryUsage().rss / 1024 / 1024), "MB");
-        
         res.json({
-            
             success: true,
-
             herohero,
-
             instagram
-
         });
 
     } catch (err) {
@@ -339,18 +312,14 @@ console.log("AFTER REELS:", Math.round(process.memoryUsage().rss / 1024 / 1024),
         console.error(err);
 
         res.status(500).json({
-
             success: false,
-
             error: err.message
-
         });
 
     }
 
 });
+
 app.listen(PORT, () => {
-
     console.log(`Server běží na portu ${PORT}`);
-
 });
