@@ -310,6 +310,7 @@ if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
     } catch (err) {
 
         console.error(err);
+console.error(err.response);
 
         res.status(500).json({
             success: false,
