@@ -171,7 +171,9 @@ async function createImage(job, templateFile) {
 }
 
 async function uploadBuffer(buffer) {
-
+    
+return "https://test.cz";
+    
     return await new Promise((resolve, reject) => {
 
         const stream = cloudinary.uploader.upload_stream(
@@ -200,6 +202,8 @@ async function uploadBuffer(buffer) {
 
 async function createReel(imageBuffer) {
 
+return "https://test.mp4";
+    
     const id = Date.now();
 
     const imagePath = path.join(os.tmpdir(), `${id}.png`);
