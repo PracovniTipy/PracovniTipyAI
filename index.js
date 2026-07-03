@@ -242,17 +242,17 @@ app.get("/", (req, res) => {
 
 app.post("/generate", async (req, res) => {
 
-if (!Array.isArray(req.body.Jobs) || !Array.isArray(req.body.Reels)) {
+if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
     return res.status(400).json({
         success: false,
-        error: "Jobs a Reels musí být pole"
+        error: "jobs a reels musí být pole"
     });
 }
     
     try {
 
-        const jobs = req.body.Jobs || [];
-        const reels = req.body.Reels || [];
+        const jobs = req.body.jobs || [];
+        const reels = req.body.reels || [];
 
         const herohero = [];
         const instagram = [];
