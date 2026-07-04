@@ -309,15 +309,17 @@ if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
 
     } catch (err) {
 
-        console.error(err);
-console.error(err.response);
+    console.error(err);
+    console.error("HTTP CODE:", err.http_code);
+    console.error("MESSAGE:", err.message);
+    console.error("FULL ERROR:", JSON.stringify(err, null, 2));
 
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
+    res.status(500).json({
+        success: false,
+        error: err.message
+    });
 
-    }
+}
 
 });
 
