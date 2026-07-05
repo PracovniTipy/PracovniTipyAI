@@ -333,15 +333,13 @@ if (err.response?.body) {
     console.log("BODY:");
     console.dir(err.response.body, { depth: null });
 }
-
-    res.status(500).json({
-        success: false,
-        error: err.message
-
-}
+  res.status(500).json({
+    success: false,
+    error: err.message
+  });
 
 });
 
 app.listen(PORT, () => {
-    console.log(`Server běží na portu ${PORT}`);
+  console.log(`Server běží na portu ${PORT}`);
 });
