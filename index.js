@@ -308,19 +308,22 @@ if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
         });
 
     } catch (err) {
+console.error("FULL ERROR:");
+console.dir(err, { depth: null });
 
-    console.error(err);
-    console.error("HTTP CODE:", err.http_code);
-    console.error("MESSAGE:", err.message);
-    console.error(err);
-console.error(err.response);
-console.error(err.error);
-console.error(err.stack);
+if (err.response) {
+    console.log("RESPONSE:");
+    console.dir(err.response, { depth: null });
+}
+
+if (err.response?.body) {
+    console.log("BODY:");
+    console.dir(err.response.body, { depth: null });
+}
 
     res.status(500).json({
         success: false,
         error: err.message
-    });
 
 }
 
