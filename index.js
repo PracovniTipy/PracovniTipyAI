@@ -32,41 +32,41 @@ console.log("Templates:", TEMPLATE_FOLDER);
 
 console.log("Exists:", fs.existsSync(TEMPLATE_FOLDER));
 const heroTemplates = {
-    Rakousko: "Herohero/Rakousko Herohero.png",
-    Belgie: "Herohero/Belgie Herohero.png",
-    Dánsko: "Herohero/Dansko Herohero.png",
-    Estonsko: "Herohero/Estonsko Herohero.png",
-    Finsko: "Herohero/Finsko Herohero.png",
+    Austria: "Herohero/Rakousko Herohero.png",
+    Belgium: "Herohero/Belgie Herohero.png",
+    Denmark: "Herohero/Dansko Herohero.png",
+    Estonia: "Herohero/Estonsko Herohero.png",
+    Finland: "Herohero/Finsko Herohero.png",
     France: "Herohero/Francie Herohero.png",
-    Nizozemsko: "Herohero/Holandsko Herohero.png",
-    Irsko: "Herohero/Irsko Herohero.png",
-    Itálie: "Herohero/Italie Herohero.png",
-    Kypr: "Herohero/Kypr Herohero.png",
+    Netherlands: "Herohero/Holandsko Herohero.png",
+    Ireland: "Herohero/Irsko Herohero.png",
+    Italy: "Herohero/Italie Herohero.png",
+    Cyprus: "Herohero/Kypr Herohero.png",
     Malta: "Herohero/Malta Herohero.png",
-    Německo: "Herohero/Nemecko Herohero.png",
-    Norsko: "Herohero/Norsko Herohero.png",
-    Řecko: "Herohero/Recko Herohero.png",
-    Španělsko: "Herohero/Spanelsko Herohero.png",
-    Švédsko: "Herohero/Svedsko Herohero.png"
+    Germany: "Herohero/Nemecko Herohero.png",
+    Norway: "Herohero/Norsko Herohero.png",
+    Greece: "Herohero/Recko Herohero.png",
+    Spain: "Herohero/Spanelsko Herohero.png",
+    Sweden: "Herohero/Svedsko Herohero.png"
 };
 
 const reelTemplates = {
-    Rakousko: "reel/Rakousko reel.png",
-    Belgie: "reel/Belgie reel.png",
-    Dánsko: "reel/Dansko reel.png",
-    Estonsko: "reel/Estonsko reel.png",
-    Finsko: "reel/Finsko reel.png",
-    Francie: "reel/Francie reel.png",
-    Nizozemsko: "reel/Holandsko reel.png",
-    Irsko: "reel/Irsko reel.png",
-    Itálie: "reel/Italie reel.png",
-    Kypr: "reel/Kypr reel.png",
+    Austria: "reel/Rakousko reel.png",
+    Belgium: "reel/Belgie reel.png",
+    Denmark: "reel/Dansko reel.png",
+    Estonia: "reel/Estonsko reel.png",
+    Finland: "reel/Finsko reel.png",
+    France: "reel/Francie reel.png",
+    Netherlands: "reel/Holandsko reel.png",
+    Ireland: "reel/Irsko reel.png",
+    Italy: "reel/Italie reel.png",
+    Cyprus: "reel/Kypr reel.png",
     Malta: "reel/Malta reel.png",
-    Německo: "reel/Nemecko reel.png",
-    Norsko: "reel/Norsko reel.png",
-    Řecko: "reel/Recko reel.png",
-    Španělsko: "reel/Spanelsko reel.png",
-    Švédsko: "reel/Svedsko reel.png"
+    Germany: "reel/Nemecko reel.png",
+    Norway: "reel/Norsko reel.png",
+    Greece: "reel/Recko reel.png",
+    Spain: "reel/Spanelsko reel.png",
+    Sweden: "reel/Svedsko reel.png"
 };
 
 function fitText(ctx, text, maxWidth, startSize) {
