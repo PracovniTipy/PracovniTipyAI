@@ -312,7 +312,10 @@ if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
     console.error(err);
     console.error("HTTP CODE:", err.http_code);
     console.error("MESSAGE:", err.message);
-    console.error("FULL ERROR:", JSON.stringify(err, null, 2));
+    console.error(err);
+console.error(err.response);
+console.error(err.error);
+console.error(err.stack);
 
     res.status(500).json({
         success: false,
