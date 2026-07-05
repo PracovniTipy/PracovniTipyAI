@@ -223,8 +223,15 @@ async function createReel(imageBuffer) {
             .on("error", reject);
 
     });
+console.log("Video existuje:", fs.existsSync(videoPath));
 
-    const result = await cloudinary.uploader.upload(videoPath, {
+if (fs.existsSync(videoPath)) {
+    console.log("Velikost videa:", fs.statSync(videoPath).size);
+}
+
+console.log("Cesta:", videoPath);
+
+const result = await cloudinary.uploader.upload(videoPath, {
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
