@@ -242,18 +242,19 @@ if (fs.existsSync(videoPath)) {
 console.log("Cesta:", videoPath);
 
 console.log("UPLOAD VIDEO START");
-    
-const result = await cloudinary.uploader.upload(videoPath, {
-    
-        resource_type: "video",
-        folder: "PracovniTipyAI/reels"
-    });
-console.log("UPLOAD VIDEO HOTOVO");
-    
-    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
 
-    return result.secure_url;
+const result = await cloudinary.uploader.upload(videoPath, {
+    resource_type: "video",
+    folder: "PracovniTipyAI/reels"
+});
+
+console.log("UPLOAD VIDEO HOTOVO");
+console.dir(result, { depth: null });
+
+if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+
+return result.secure_url;
 
 }
 
@@ -322,6 +323,8 @@ if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
 
         }
 
+console.log("POSILAM RESPONSE");
+        
         res.json({
             success: true,
             herohero,
