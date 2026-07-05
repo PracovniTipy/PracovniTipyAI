@@ -273,6 +273,9 @@ app.get("/", (req, res) => {
 
 app.post("/generate", async (req, res) => {
 
+    console.log("REQUEST PRIJATA");
+console.dir(req.body, { depth: null });
+
 if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
     return res.status(400).json({
         success: false,
