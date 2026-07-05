@@ -24,6 +24,12 @@ cloudinary.config({
     api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
+console.log(cloudinary.config());
+
+cloudinary.api.ping()
+    .then(r => console.log("PING:", r))
+    .catch(e => console.error("PING ERROR:", e));
+
 const PORT = process.env.PORT || 3000;
 
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
