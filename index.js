@@ -178,8 +178,12 @@ async function createImage(job, templateFile) {
 
 async function uploadBuffer(buffer) {
     
+    console.log("FFmpeg START");  
+    
     return await new Promise((resolve, reject) => {
 
+    console.log("FFmpeg HOTOVO");
+        
         const stream = cloudinary.uploader.upload_stream(
 
             {
@@ -237,11 +241,15 @@ if (fs.existsSync(videoPath)) {
 
 console.log("Cesta:", videoPath);
 
+console.log("UPLOAD VIDEO START");
+    
 const result = await cloudinary.uploader.upload(videoPath, {
+    
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
-
+console.log("UPLOAD VIDEO HOTOVO");
+    
     if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
     if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
 
