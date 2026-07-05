@@ -243,13 +243,22 @@ console.log("Cesta:", videoPath);
 
 console.log("UPLOAD VIDEO START");
 
-const result = await cloudinary.uploader.upload(videoPath, {
-    resource_type: "video",
-    folder: "PracovniTipyAI/reels"
-});
+let result;
 
-console.log("UPLOAD VIDEO HOTOVO");
-console.dir(result, { depth: null });
+try {
+    result = await cloudinary.uploader.upload(videoPath, {
+        resource_type: "video",
+        folder: "PracovniTipyAI/reels"
+    });
+
+    console.log("UPLOAD VIDEO HOTOVO");
+    console.dir(result, { depth: null });
+
+} catch (e) {
+    console.log("UPLOAD VIDEO CHYBA");
+    console.dir(e, { depth: null });
+    throw e;
+}
 
 if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
 if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
