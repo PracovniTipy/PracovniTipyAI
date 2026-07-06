@@ -222,8 +222,8 @@ async function createReel(imageBuffer) {
  ffmpeg()
     .input(imagePath)
     .inputOptions([
-        "-loop 1",
-        "-framerate 25"
+    "-loop", "1",
+    "-framerate", "25"
         ])
     .videoCodec("libx264")
     .outputOptions([
