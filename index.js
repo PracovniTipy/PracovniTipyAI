@@ -263,12 +263,15 @@ console.log("UPLOAD VIDEO START");
 let result;
 
 try {
+    console.log("Zacinam upload do Cloudinary...");
     result = await cloudinary.uploader.upload(videoPath, {
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
 
     console.log("UPLOAD VIDEO HOTOVO");
+    console.log("VIDEO URL:", result.secure_url);
+}
     console.dir(result, { depth: null });
 
 } catch (e) {
