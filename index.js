@@ -224,6 +224,7 @@ async function createReel(imageBuffer) {
     .inputOptions([
         "-loop 1",
         "-framerate 25"
+        ])
     .videoCodec("libx264")
     .outputOptions([
         "-t", "8",
@@ -242,11 +243,11 @@ async function createReel(imageBuffer) {
         console.error(err);
         reject(err);
     })
-    .on("end", () => {
-        console.log("FFMPEG END");
-        resolve();
-    })
-    .save(videoPath);
+   .on("end", () => {
+    console.log("FFMPEG END");
+    resolve();
+})
+.save(videoPath);
 
     });
 console.log("Video existuje:", fs.existsSync(videoPath));
