@@ -219,10 +219,12 @@ async function createReel(imageBuffer) {
 
     await new Promise((resolve, reject) => {
 
-    ffmpeg(imagePath)
-    .loop(8)
+   ffmpeg()
+    .input(imagePath)
+    .inputOptions(["-loop 1"])
     .videoCodec("libx264")
     .outputOptions([
+        "-t", "8",
         "-pix_fmt", "yuv420p",
         "-vf", "scale=1080:1920"
     ])
