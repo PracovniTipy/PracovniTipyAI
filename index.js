@@ -268,12 +268,10 @@ try {
         resource_type: "video",
         folder: "PracovniTipyAI/reels"
     });
-
-    console.log("UPLOAD VIDEO HOTOVO");
-    console.log("VIDEO URL:", result.secure_url);
-}
-    console.dir(result, { depth: null });
-
+console.log("UPLOAD VIDEO HOTOVO");
+console.log("VIDEO URL:", result.secure_url);
+console.dir(result, { depth: null });
+    
 } catch (e) {
     console.log("UPLOAD VIDEO CHYBA");
     console.dir(e, { depth: null });
