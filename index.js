@@ -264,9 +264,9 @@ let result;
 
 try {
     console.log("Zacinam upload do Cloudinary...");
-    result = await cloudinary.uploader.upload(videoPath, {
-        resource_type: "video",
-        folder: "PracovniTipyAI/reels"
+    result = await cloudinary.uploader.upload_large(videoPath, {
+    resource_type: "video",
+    folder: "PracovniTipyAI/reels"
     });
 console.log("UPLOAD VIDEO HOTOVO");
 console.log("VIDEO URL:", result.secure_url);
