@@ -219,18 +219,30 @@ async function createReel(imageBuffer) {
 
     await new Promise((resolve, reject) => {
 
-        ffmpeg(imagePath)
-            .loop(8)
-            .videoCodec("libx264")
-            .outputOptions([
-                "-pix_fmt",
-                "yuv420p",
-                "-vf",
-                "scale=1080:1920"
-            ])
-            .save(videoPath)
-            .on("end", () => resolve())
-            .on("error", reject);
+    ffmpeg(imagePath)
+    .loop(8)
+    .videoCodec("libx264")
+    .outputOptions([
+        "-pix_fmt", "yuv420p",
+        "-vf", "scale=1080:1920"
+    ])
+    .on("start", cmd => {
+        console.log("FFMPEG CMD:");
+        console.log(cmd);
+    })
+    .on("stderr", line => {
+        console.log("FFMPEG:", line);
+    })
+    .on("error", err => {
+        console.log("FFMPEG ERROR:");
+        console.error(err);
+        reject(err);
+    })
+    .on("end", () => {
+        console.log("FFMPEG END");
+        resolve();
+    })
+    .save(videoPath);
 
     });
 console.log("Video existuje:", fs.existsSync(videoPath));
