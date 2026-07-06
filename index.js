@@ -227,9 +227,9 @@ async function createReel(imageBuffer) {
         ])
     .videoCodec("libx264")
     .outputOptions([
-        "-frames:v", "200",
-        "-pix_fmt", "yuv420p",
-        "-vf", "scale=1080:1920"
+    "-t", "8",
+    "-pix_fmt", "yuv420p",
+    "-vf", "scale=1080:1920"
     ])
     .on("start", cmd => {
         console.log("FFMPEG CMD:");
