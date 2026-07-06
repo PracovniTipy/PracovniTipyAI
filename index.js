@@ -219,9 +219,11 @@ async function createReel(imageBuffer) {
 
     await new Promise((resolve, reject) => {
 
-   ffmpeg()
+ ffmpeg()
     .input(imagePath)
-    .inputOptions(["-loop 1"])
+    .inputOptions([
+        "-loop 1",
+        "-framerate 25"
     .videoCodec("libx264")
     .outputOptions([
         "-t", "8",
