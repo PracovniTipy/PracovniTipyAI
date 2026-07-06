@@ -227,7 +227,7 @@ async function createReel(imageBuffer) {
         ])
     .videoCodec("libx264")
     .outputOptions([
-        "-t", "8",
+        "-frames:v", "200",
         "-pix_fmt", "yuv420p",
         "-vf", "scale=1080:1920"
     ])
