@@ -1,5 +1,7 @@
 require("dotenv").config();
 
+const { chromium } = require("playwright");
+
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -15,6 +17,11 @@ const { v2: cloudinary } = require("cloudinary");
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
+
+app.use(express.urlencoded({ extended: true }));
+
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(express.json());
 
@@ -381,6 +388,11 @@ if (err.response?.body) {
     error: err.message
   });
      } //
+});
+
+app.post("/herohero/upload", upload.single("image"), async (req, res) => {
+  console.log("HeroHero upload přijat");
+  res.json({ success: true });
 });
 
 app.listen(PORT, () => {
