@@ -222,14 +222,17 @@ async function createReel(imageBuffer) {
  ffmpeg()
     .input(imagePath)
     .inputOptions([
-    "-loop", "1",
-    "-framerate", "25"
-        ])
+        "-loop", "1",
+        "-framerate", "25"
+    ])
     .videoCodec("libx264")
     .outputOptions([
-    "-t", "8",
-    "-pix_fmt", "yuv420p",
-    "-vf", "scale=1080:1920"
+        "-t", "8",
+        "-vf", "scale=720:1280",
+        "-pix_fmt", "yuv420p",
+        "-preset", "ultrafast",
+        "-threads", "1",
+        "-movflags", "+faststart"
     ])
     .on("start", cmd => {
         console.log("FFMPEG CMD:");
@@ -243,12 +246,11 @@ async function createReel(imageBuffer) {
         console.error(err);
         reject(err);
     })
-   .on("end", () => {
-    console.log("FFMPEG END");
-    resolve();
-})
-.save(videoPath);
-
+    .on("end", () => {
+        console.log("FFMPEG END");
+        resolve();
+    })
+    .save(videoPath);
     });
 console.log("Video existuje:", fs.existsSync(videoPath));
 
