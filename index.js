@@ -344,7 +344,7 @@ if (jobs.length === 0 && reels.length === 0) {
 
         for (const reel of reels) {
 
-            const template = reelTemplates[reel.country];
+            const template = reelTemplates[reel.country_code];
 
             if (!template) {
                 console.log(`Reel template not found: ${reel.country}`);
