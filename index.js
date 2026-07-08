@@ -322,7 +322,7 @@ if (jobs.length === 0 && reels.length === 0) {
 
         for (const job of jobs) {
 
-            const template = heroTemplates[job.country];
+            const template = heroTemplates[job.country_code];
 
             if (!template) {
                 console.log(`HeroHero template not found: ${job.country}`);
