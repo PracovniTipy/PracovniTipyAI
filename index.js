@@ -303,17 +303,17 @@ app.post("/generate", async (req, res) => {
     console.log("REQUEST PRIJATA");
 console.dir(req.body, { depth: null });
 
-if (!Array.isArray(req.body.jobs) || !Array.isArray(req.body.reels)) {
+const jobs = Array.isArray(req.body.jobs) ? req.body.jobs : [];
+const reels = Array.isArray(req.body.reels) ? req.body.reels : [];
+
+if (jobs.length === 0 && reels.length === 0) {
     return res.status(400).json({
         success: false,
-        error: "jobs a reels musí být pole"
+        error: "Musí být předáno jobs nebo reels"
     });
 }
     
     try {
-
-        const jobs = req.body.jobs || [];
-        const reels = req.body.reels || [];
 
         const herohero = [];
         const instagram = [];
