@@ -301,18 +301,21 @@ app.get("/", (req, res) => {
 app.post("/generate", async (req, res) => {
 
     console.log("REQUEST PRIJATA");
-console.dir(req.body, { depth: null });
+    console.dir(req.body, { depth: null });
 
-const jobs = Array.isArray(req.body.jobs) ? req.body.jobs : [];
-const reels = Array.isArray(req.body.reels) ? req.body.reels : [];
+    const jobs = Array.isArray(req.body.jobs) ? req.body.jobs : [];
+    const reels = Array.isArray(req.body.reels) ? req.body.reels : [];
 
-if (jobs.length === 0 && reels.length === 0) {
-    return res.status(400).json({
-        success: false,
-        error: "Musí být předáno jobs nebo reels"
-    });
-}
-    
+    console.log("JOBS COUNT:", jobs.length);
+    console.log("REELS COUNT:", reels.length);
+
+    if (jobs.length === 0 && reels.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Musí být předáno jobs nebo reels"
+        });
+    }
+
     try {
 
         const herohero = [];
@@ -322,48 +325,70 @@ if (jobs.length === 0 && reels.length === 0) {
 
         for (const job of jobs) {
 
+            console.log("HERO JOB:", job.job_title);
+
             const template = heroTemplates[job.country_code];
 
+            console.log("HERO TEMPLATE:", template);
+
             if (!template) {
-                console.log(`HeroHero template not found: ${job.country}`);
+                console.log("HERO TEMPLATE NOT FOUND:", job.country_code);
                 continue;
             }
 
             const imageBuffer = await createImage(job, template);
 
+            console.log("HERO IMAGE CREATED");
+
             const imageUrl = await uploadBuffer(imageBuffer);
+
+            console.log("HERO IMAGE URL:", imageUrl);
 
             herohero.push({
                 ...job,
                 imageUrl
             });
 
+            console.log("HERO PUSH OK");
         }
 
         // REELS
 
         for (const reel of reels) {
 
+            console.log("REEL:", reel.job_title);
+            console.log("COUNTRY CODE:", reel.country_code);
+
             const template = reelTemplates[reel.country_code];
 
+            console.log("REEL TEMPLATE:", template);
+
             if (!template) {
-                console.log(`Reel template not found: ${reel.country}`);
+                console.log("REEL TEMPLATE NOT FOUND:", reel.country_code);
                 continue;
             }
 
             const imageBuffer = await createImage(reel, template);
 
+            console.log("REEL IMAGE CREATED");
+
             const videoUrl = await createReel(imageBuffer);
+
+            console.log("VIDEO URL:", videoUrl);
 
             instagram.push({
                 ...reel,
                 videoUrl
             });
 
+            console.log("INSTAGRAM PUSH OK");
         }
 
-console.log("POSILAM RESPONSE");
-        
+        console.log("HERO COUNT:", herohero.length);
+        console.log("INSTAGRAM COUNT:", instagram.length);
+
+        console.log("POSILAM RESPONSE");
+
         res.json({
             success: true,
             herohero,
@@ -371,23 +396,25 @@ console.log("POSILAM RESPONSE");
         });
 
     } catch (err) {
-console.error("FULL ERROR:");
-console.dir(err, { depth: null });
 
-if (err.response) {
-    console.log("RESPONSE:");
-    console.dir(err.response, { depth: null });
-}
+        console.error("FULL ERROR:");
+        console.dir(err, { depth: null });
 
-if (err.response?.body) {
-    console.log("BODY:");
-    console.dir(err.response.body, { depth: null });
-}
-  res.status(500).json({
-    success: false,
-    error: err.message
-  });
-     } //
+        if (err.response) {
+            console.log("RESPONSE:");
+            console.dir(err.response, { depth: null });
+        }
+
+        if (err.response?.body) {
+            console.log("BODY:");
+            console.dir(err.response.body, { depth: null });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
 });
 
 app.post("/herohero/upload", upload.single("image"), async (req, res) => {
