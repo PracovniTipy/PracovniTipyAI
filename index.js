@@ -8,6 +8,7 @@ const path = require("path");
 const os = require("os");
 
 const { createCanvas, loadImage } = require("canvas");
+const { registerFont } = require("canvas");
 
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
@@ -40,6 +41,12 @@ cloudinary.api.ping()
 const PORT = process.env.PORT || 3000;
 
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
+registerFont(
+    path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
+    {
+        family: "Bebas Neue"
+    }
+);
 
 console.log("Templates:", TEMPLATE_FOLDER);
 
@@ -87,8 +94,8 @@ function fitText(ctx, text, maxWidth, startSize) {
     let size = startSize;
 
     do {
-
-        ctx.font = `bold ${size}px Arial`;
+        
+        ctx.font = `bold ${size}px Bebas Neue`;
 
         if (ctx.measureText(text).width <= maxWidth) {
             break;
@@ -106,7 +113,7 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     const fontSize = fitText(ctx, text, width, startSize);
 
-    ctx.font = `bold ${fontSize}px Arial`;
+    ctx.font = `bold ${fontSize}px Bebas Neue`;
     ctx.fillStyle = color;
     ctx.textAlign = "center";
 
