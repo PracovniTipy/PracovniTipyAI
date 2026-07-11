@@ -102,84 +102,58 @@ function fitText(ctx, text, maxWidth, startSize) {
 
 }
 
-function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
+function drawLabel(ctx, text, x, y) {
 
-    const fontSize = fitText(ctx, text, width, startSize);
+    ctx.save();
 
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.fillStyle = color;
-    ctx.textAlign = "center";
+    ctx.font = "bold 42px Arial";
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
 
-    ctx.fillText(text || "", x + width / 2, y);
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
+
+    ctx.fillText(text, x, y);
+
+    ctx.restore();
 
 }
 
-async function createImage(job, templateFile) {
+function drawValue(ctx, text, x, y, maxWidth) {
 
-    const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
+    const size = fitText(ctx, text || "", maxWidth, 72);
 
-    if (!fs.existsSync(fullPath)) {
-        throw new Error(`Template not found: ${fullPath}`);
-    }
+    ctx.save();
 
-    const template = await loadImage(fullPath);
+    ctx.font = `bold ${size}px Arial`;
+    ctx.fillStyle = "#ffffff";
+    ctx.textAlign = "left";
 
-    const canvas = createCanvas(template.width, template.height);
-    const ctx = canvas.getContext("2d");
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 6;
 
-    ctx.drawImage(template, 0, 0);
+    ctx.fillText(text || "", x, y);
 
-    drawCentered(
-        ctx,
-        job.job_title || "",
-        180,
-        120,
-        600,
-        48,
-        "#ffffff"
-    );
+    ctx.restore();
 
-    drawCentered(
-        ctx,
-        "",
-        180,
-        170,
-        600,
-        34,
-        "#ffffff"
-    );
+}
 
-    drawCentered(
-        ctx,
-        job.salary || "",
-        270,
-        570,
-        420,
-        42,
-        "#000000"
-    );
+function drawLine(ctx, y) {
 
-    drawCentered(
-        ctx,
-        job.accommodation || "",
-        250,
-        695,
-        180,
-        28,
-        "#000000"
-    );
+    ctx.beginPath();
 
-    drawCentered(
-        ctx,
-        job.language || "",
-        610,
-        695,
-        180,
-        28,
-        "#000000"
-    );
+    ctx.moveTo(90, y);
+    ctx.lineTo(450, y);
 
-    return canvas.toBuffer("image/png");
+    ctx.lineWidth = 2;
+
+    ctx.strokeStyle = "rgba(255,255,255,0.75)";
+
+    ctx.stroke();
 
 }
 
