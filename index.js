@@ -88,31 +88,27 @@ const reelTemplates = {
     Spain: "reel/Spanelsko reel.png",
     Sweden: "reel/Svedsko reel.png"
 };
-
-function fitText(ctx, text, maxWidth, startSize) {
-
 function wrapText(ctx, text, maxWidth, startSize) {
 
     let size = startSize;
-    let lines = [];
 
-    while (size > 20) {
+    while (size >= 20) {
 
         ctx.font = `bold ${size}px Bebas Neue`;
 
         const words = (text || "").split(" ");
 
-        lines = [];
+        const lines = [];
         let line = "";
 
         for (const word of words) {
 
-            const test = line ? line + " " + word : word;
+            const test = line ? `${line} ${word}` : word;
 
             if (ctx.measureText(test).width <= maxWidth) {
                 line = test;
             } else {
-                lines.push(line);
+                if (line) lines.push(line);
                 line = word;
             }
 
@@ -137,25 +133,27 @@ function wrapText(ctx, text, maxWidth, startSize) {
     };
 
 }
-    
-    let size = startSize;
 
-    do {
-        
-        ctx.font = `bold ${size}px Bebas Neue`;
+function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
-        if (ctx.measureText(text).width <= maxWidth) {
-            break;
-        }
+    const result = wrapText(ctx, text, width, startSize);
 
-        size--;
+    ctx.font = `bold ${result.size}px Bebas Neue`;
+    ctx.fillStyle = color;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
 
-    } while (size > 20);
+    const lineHeight = result.size + 8;
 
-    return size;
+    result.lines.forEach((line, index) => {
+        ctx.fillText(
+            line,
+            x + width / 2,
+            y + index * lineHeight
+        );
+    });
 
 }
-
 function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     const result = wrapText(ctx, text, width, startSize);
