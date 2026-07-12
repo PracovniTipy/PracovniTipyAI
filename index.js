@@ -147,27 +147,6 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
     });
 
 }
-function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
-
-    const result = wrapText(ctx, text, width, startSize);
-
-    ctx.font = `bold ${result.size}px Bebas Neue`;
-    ctx.fillStyle = color;
-    ctx.textAlign = "center";
-
-    const lineHeight = result.size + 8;
-
-    result.lines.forEach((line, index) => {
-
-        ctx.fillText(
-            line,
-            x + width / 2,
-            y + index * lineHeight
-        );
-
-    });
-
-}
 
 async function createImage(job, templateFile) {
 
