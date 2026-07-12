@@ -178,8 +178,6 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
 }
 
-}
-
 async function createImage(job, templateFile) {
 
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
@@ -198,50 +196,50 @@ async function createImage(job, templateFile) {
     drawCentered(
         ctx,
         job.job_title || "",
-        170,
-        120,
-        620,
-        54,
+        90,
+        400,
+        340,
+        58,
         "#ffffff"
     );
 
     drawCentered(
         ctx,
-        "",
-        180,
-        170,
-        600,
-        34,
+        job.country || "",
+        90,
+        575,
+        340,
+        56,
         "#ffffff"
     );
 
     drawCentered(
         ctx,
         job.salary_czk_month || job.salary || "",
-        240,
-        560,
-        480,
-        46,
+        90,
+        735,
+        340,
+        48,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.accommodation || "",
-        210,
-        695,
-        260,
-        32,
+        90,
+        1075,
+        340,
+        44,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.language || "",
-        550,
-        695,
-        260,
-        32,
+        90,
+        905,
+        340,
+        44,
         "#000000"
     );
 
