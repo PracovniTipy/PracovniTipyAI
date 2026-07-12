@@ -227,7 +227,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.accommodation || "",
         90,
-        1075,
+        1095,
         340,
         44,
         "#000000"
@@ -237,7 +237,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.language || "",
         90,
-        905,
+        920,
         340,
         44,
         "#000000"
