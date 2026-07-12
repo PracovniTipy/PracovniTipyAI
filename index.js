@@ -137,6 +137,10 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     ctx.font = `bold ${result.size}px Bebas Neue`;
     ctx.fillStyle = color;
+    ctx.shadowColor = "rgba(0,0,0,0.9)";
+    ctx.shadowBlur = 12;
+    ctx.shadowOffsetX = 3;
+    ctx.shadowOffsetY = 3;
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
 
@@ -144,6 +148,10 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     result.lines.forEach((line, index) => {
         ctx.fillText(
+            ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 15;
+    ctx.shadowOffsetX = 4;
+    ctx.shadowOffsetY = 4;
             line,
             x + width / 2,
             y + index * lineHeight
@@ -171,19 +179,9 @@ async function createImage(job, templateFile) {
         ctx,
         job.job_title || "",
         90,
-        400,
+        390,
         340,
-        58,
-        "#ffffff"
-    );
-
-    drawCentered(
-        ctx,
-        job.country || "",
-        90,
-        575,
-        340,
-        56,
+        70,
         "#ffffff"
     );
 
@@ -191,30 +189,41 @@ async function createImage(job, templateFile) {
         ctx,
         job.salary_czk_month || job.salary || "",
         90,
-        735,
+        510,
         340,
-        48,
-        "#000000"
+        55,
+        "#ffffff"
+    );
+
+    
+    drawCentered(
+        ctx,
+        job.country || "",
+        90,
+        610,
+        340,
+        40,
+        "#ffffff"
     );
 
     drawCentered(
         ctx,
         job.accommodation || "",
         90,
-        1095,
+        810,
         340,
-        44,
-        "#000000"
+        40,
+        "#ffffff"
     );
 
     drawCentered(
         ctx,
         job.language || "",
         90,
-        920,
+        710,
         340,
-        44,
-        "#000000"
+        40,
+       "#ffffff"
     );
 
     return canvas.toBuffer("image/png");
