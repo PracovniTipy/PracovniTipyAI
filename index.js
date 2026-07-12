@@ -1,4 +1,4 @@
-require("dotenv").config();
+    require("dotenv").config();
 
 const { chromium } = require("playwright");
 
@@ -91,6 +91,53 @@ const reelTemplates = {
 
 function fitText(ctx, text, maxWidth, startSize) {
 
+function wrapText(ctx, text, maxWidth, startSize) {
+
+    let size = startSize;
+    let lines = [];
+
+    while (size > 20) {
+
+        ctx.font = `bold ${size}px Bebas Neue`;
+
+        const words = (text || "").split(" ");
+
+        lines = [];
+        let line = "";
+
+        for (const word of words) {
+
+            const test = line ? line + " " + word : word;
+
+            if (ctx.measureText(test).width <= maxWidth) {
+                line = test;
+            } else {
+                lines.push(line);
+                line = word;
+            }
+
+        }
+
+        if (line) lines.push(line);
+
+        if (lines.length <= 2) {
+            return {
+                size,
+                lines
+            };
+        }
+
+        size--;
+
+    }
+
+    return {
+        size: 20,
+        lines: [text]
+    };
+
+}
+    
     let size = startSize;
 
     do {
@@ -111,13 +158,25 @@ function fitText(ctx, text, maxWidth, startSize) {
 
 function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
-    const fontSize = fitText(ctx, text, width, startSize);
+    const result = wrapText(ctx, text, width, startSize);
 
-    ctx.font = `bold ${fontSize}px Bebas Neue`;
+    ctx.font = `bold ${result.size}px Bebas Neue`;
     ctx.fillStyle = color;
     ctx.textAlign = "center";
 
-    ctx.fillText(text || "", x + width / 2, y);
+    const lineHeight = result.size + 8;
+
+    result.lines.forEach((line, index) => {
+
+        ctx.fillText(
+            line,
+            x + width / 2,
+            y + index * lineHeight
+        );
+
+    });
+
+}
 
 }
 
@@ -139,10 +198,10 @@ async function createImage(job, templateFile) {
     drawCentered(
         ctx,
         job.job_title || "",
-        180,
+        170,
         120,
-        600,
-        48,
+        620,
+        54,
         "#ffffff"
     );
 
@@ -158,31 +217,31 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.salary || "",
-        270,
-        570,
-        420,
-        42,
+        job.salary_czk_month || job.salary || ""
+        250,
+        565,
+        460,
+        44,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.accommodation || "",
-        250,
+        220,
         695,
-        180,
-        28,
+        240,
+        30,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.language || "",
-        610,
+        560,
         695,
-        180,
-        28,
+        240,
+        30,
         "#000000"
     );
 
