@@ -217,31 +217,31 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.salary_czk_month || job.salary || ""
-        250,
-        565,
-        460,
-        44,
+        job.salary_czk_month || job.salary || "",
+        240,
+        560,
+        480,
+        46,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.accommodation || "",
-        220,
+        210,
         695,
-        240,
-        30,
+        260,
+        32,
         "#000000"
     );
 
     drawCentered(
         ctx,
         job.language || "",
-        560,
+        550,
         695,
-        240,
-        30,
+        260,
+        32,
         "#000000"
     );
 
