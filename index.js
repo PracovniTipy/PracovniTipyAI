@@ -117,10 +117,7 @@ function wrapText(ctx, text, maxWidth, startSize) {
         if (line) lines.push(line);
 
         if (lines.length <= 2) {
-            return {
-                size,
-                lines
-            };
+            return { size, lines };
         }
 
         size--;
@@ -146,11 +143,7 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
     const lineHeight = result.size + 8;
 
     result.lines.forEach((line, index) => {
-        ctx.fillText(
-            line,
-            x + width / 2,
-            y + index * lineHeight
-        );
+        ctx.fillText(line, x + width / 2, y + index * lineHeight);
     });
 
 }
