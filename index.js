@@ -135,17 +135,21 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     const result = wrapText(ctx, text, width, startSize);
 
+    if (result.lines.length > 2) {
+    result.size -= 18;
+}
+
    ctx.font = `bold ${result.size}px Bebas Neue`;
 ctx.fillStyle = color;
 
-ctx.textAlign = "center";
+ctx.textAlign = "left";
 ctx.textBaseline = "top";
 
 const lineHeight = result.size + 8;
 
 result.lines.forEach((line, index) => {
 
-    const textX = x + width / 2;
+    const textX = x 
     const textY = y + index * lineHeight;
 
     // Černý obrys
@@ -201,7 +205,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.salary_czk_month || job.salary || "",
         90,
-        510,
+        535,
         340,
         90,
         "#ffffff"
@@ -212,7 +216,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.country || "",
         90,
-        610,
+        645,
         340,
         70,
         "#ffffff"
@@ -222,7 +226,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.accommodation || "",
         90,
-        810,
+        845,
         340,
         70,
         "#ffffff"
@@ -232,7 +236,7 @@ async function createImage(job, templateFile) {
         ctx,
         job.language || "",
         90,
-        710,
+        745,
         340,
         70,
        "#ffffff"
