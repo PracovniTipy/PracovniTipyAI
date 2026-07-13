@@ -135,29 +135,40 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     const result = wrapText(ctx, text, width, startSize);
 
-    ctx.font = `bold ${result.size}px Bebas Neue`;
-    ctx.fillStyle = color;
+   ctx.font = `bold ${result.size}px Bebas Neue`;
+ctx.fillStyle = color;
+
+ctx.textAlign = "center";
+ctx.textBaseline = "top";
+
+const lineHeight = result.size + 8;
+
+result.lines.forEach((line, index) => {
+
+    const textX = x + width / 2;
+    const textY = y + index * lineHeight;
+
+    // Černý obrys
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#000000";
+    ctx.strokeText(line, textX, textY);
+
+    // Jemný stín
     ctx.shadowColor = "rgba(0,0,0,0.9)";
-    ctx.shadowBlur = 12;
-    ctx.shadowOffsetX = 3;
-    ctx.shadowOffsetY = 3;
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+    ctx.shadowBlur = 18;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
 
-    const lineHeight = result.size + 8;
+    // Bílý text
+    ctx.fillStyle = color;
+    ctx.fillText(line, textX, textY);
 
-    result.lines.forEach((line, index) => {
-    
+    // Reset stínu
     ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 15;
-    ctx.shadowOffsetX = 4;
-    ctx.shadowOffsetY = 4;
-    ctx.fillText(
-            line,
-            x + width / 2,
-            y + index * lineHeight
-        );
-    });
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 0;
+});
 
 }
 
@@ -182,7 +193,7 @@ async function createImage(job, templateFile) {
         90,
         390,
         340,
-        70,
+        120,
         "#ffffff"
     );
 
@@ -192,7 +203,7 @@ async function createImage(job, templateFile) {
         90,
         510,
         340,
-        55,
+        90,
         "#ffffff"
     );
 
@@ -203,7 +214,7 @@ async function createImage(job, templateFile) {
         90,
         610,
         340,
-        40,
+        70,
         "#ffffff"
     );
 
@@ -213,7 +224,7 @@ async function createImage(job, templateFile) {
         90,
         810,
         340,
-        40,
+        70,
         "#ffffff"
     );
 
@@ -223,7 +234,7 @@ async function createImage(job, templateFile) {
         90,
         710,
         340,
-        40,
+        70,
        "#ffffff"
     );
 
