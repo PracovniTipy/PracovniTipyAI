@@ -147,11 +147,12 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
     const lineHeight = result.size + 8;
 
     result.lines.forEach((line, index) => {
-        ctx.fillText(
-            ctx.shadowColor = "transparent";
+    
+    ctx.shadowColor = "transparent";
     ctx.shadowBlur = 15;
     ctx.shadowOffsetX = 4;
     ctx.shadowOffsetY = 4;
+    ctx.fillText(
             line,
             x + width / 2,
             y + index * lineHeight
