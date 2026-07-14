@@ -206,17 +206,17 @@ ctx.fillStyle = "#ffffff";
 ctx.strokeStyle = "#000000";
 ctx.lineWidth = 6;
 
-ctx.strokeText(`💰 ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
-ctx.fillText(`💰 ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
+ctx.strokeText(`MZDA ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
+ctx.fillText(`MZDA ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
 
-ctx.strokeText(`🌍 ${job.country || "Neuvedeno"}`, 90, 650);
-ctx.fillText(`🌍 ${job.country || "Neuvedeno"}`, 90, 650);
+ctx.strokeText(`ZEMĚ ${job.country || "Neuvedeno"}`, 90, 650);
+ctx.fillText(`ZEMĚ ${job.country || "Neuvedeno"}`, 90, 650);
 
-ctx.strokeText(`🏠 ${job.accommodation || "Neuvedeno"}`, 90, 740);
-ctx.fillText(`🏠 ${job.accommodation || "Neuvedeno"}`, 90, 740);
+ctx.strokeText(`UBYTOVÁNÍ ${job.accommodation || "Neuvedeno"}`, 90, 740);
+ctx.fillText(`UBYTOVÁNÍ ${job.accommodation || "Neuvedeno"}`, 90, 740);
 
-ctx.strokeText(`🗣 ${job.language || "Neuvedeno"}`, 90, 830);
-ctx.fillText(`🗣 ${job.language || "Neuvedeno"}`, 90, 830);
+ctx.strokeText(`JAZYK ${job.language || "Neuvedeno"}`, 90, 830);
+ctx.fillText(`JAZYK ${job.language || "Neuvedeno"}`, 90, 830);
     return canvas.toBuffer("image/png");
 
 }
