@@ -214,16 +214,15 @@ async function createImage(job, templateFile) {
         "#ffffff"
     );
 
-    drawCentered(
-        ctx,
-        `Mzda: ${job.salary_czk_month || job.salary || "neuvedena"}`,
-        90,
-        535,
-        340,
-        90,
-        "#ffffff"
-    );
-
+   drawCentered(
+  ctx,
+  `💰 Mzda: ${job.salary_czk_month || job.salary || "Neuvedeno"}`,
+  80,
+  535,
+  340,
+  1,
+  "#ffffff"
+);
     
     drawCentered(
         ctx,
@@ -231,7 +230,7 @@ async function createImage(job, templateFile) {
         90,
         645,
         340,
-        70,
+        1,
         "#ffffff"
     );
 
@@ -241,7 +240,7 @@ async function createImage(job, templateFile) {
         90,
         845,
         340,
-        70,
+        1,
         "#ffffff"
     );
 
@@ -251,7 +250,7 @@ async function createImage(job, templateFile) {
         90,
         745,
         340,
-        70,
+        1,
        "#ffffff"
     );
 
