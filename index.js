@@ -199,61 +199,22 @@ async function createImage(job, templateFile) {
     const canvas = createCanvas(template.width, template.height);
     const ctx = canvas.getContext("2d");
 
-    ctx.drawImage(template, 0, 0);
+    ctx.font = "52px Bebas Neue";
+ctx.fillStyle = "#ffffff";
+ctx.strokeStyle = "#000000";
+ctx.lineWidth = 6;
 
-    drawCentered(
-        ctx,
-       (job.job_title || "")
-    .replace(/\(.*?\)/g, "")
-    .replace(/[-–|].*/g, "")
-    .trim(),
-        90,
-        390,
-        340,
-        120,
-        "#ffffff"
-    );
+ctx.strokeText(`💰 ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
+ctx.fillText(`💰 ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
 
-   drawCentered(
-  ctx,
-  `💰 Mzda: ${job.salary_czk_month || job.salary || "Neuvedeno"}`,
-  80,
-  535,
-  340,
-  1,
-  "#ffffff"
-);
-    
-    drawCentered(
-        ctx,
-        `Země: ${job.country || "neuvedena"}`,
-        90,
-        645,
-        340,
-        1,
-        "#ffffff"
-    );
+ctx.strokeText(`🌍 ${job.country || "Neuvedeno"}`, 90, 650);
+ctx.fillText(`🌍 ${job.country || "Neuvedeno"}`, 90, 650);
 
-    drawCentered(
-        ctx,
-       `Ubytování: ${job.accommodation || "neuvedeno"}`,
-        90,
-        845,
-        340,
-        1,
-        "#ffffff"
-    );
+ctx.strokeText(`🏠 ${job.accommodation || "Neuvedeno"}`, 90, 740);
+ctx.fillText(`🏠 ${job.accommodation || "Neuvedeno"}`, 90, 740);
 
-    drawCentered(
-        ctx,
-       `Jazyk: ${job.language || "neuveden"}`,
-        90,
-        745,
-        340,
-        1,
-       "#ffffff"
-    );
-
+ctx.strokeText(`🗣 ${job.language || "Neuvedeno"}`, 90, 830);
+ctx.fillText(`🗣 ${job.language || "Neuvedeno"}`, 90, 830);
     return canvas.toBuffer("image/png");
 
 }
