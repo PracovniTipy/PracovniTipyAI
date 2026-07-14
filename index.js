@@ -199,6 +199,8 @@ async function createImage(job, templateFile) {
     const canvas = createCanvas(template.width, template.height);
     const ctx = canvas.getContext("2d");
 
+ctx.drawImage(template, 0, 0);
+    
     ctx.font = "52px Bebas Neue";
 ctx.fillStyle = "#ffffff";
 ctx.strokeStyle = "#000000";
