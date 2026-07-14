@@ -98,6 +98,8 @@ function wrapText(ctx, text, maxWidth, startSize) {
 
         const words = (text || "").split(" ");
 
+        text = (text || "").replace(/\//g, "/ ");
+
         const lines = [];
         let line = "";
 
@@ -135,6 +137,14 @@ function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
 
     const result = wrapText(ctx, text, width, startSize);
 
+    if (text.length > 24) {
+    result.size -= 15;
+}
+
+if (text.length > 36) {
+    result.size -= 10;
+}
+
     if (result.lines.length > 2) {
     result.size -= 18;
 }
@@ -145,7 +155,7 @@ ctx.fillStyle = color;
 ctx.textAlign = "left";
 ctx.textBaseline = "top";
 
-const lineHeight = result.size + 8;
+const lineHeight = result.size + 10;
 
 result.lines.forEach((line, index) => {
 
@@ -193,7 +203,10 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.job_title || "",
+       (job.job_title || "")
+    .replace(/\(.*?\)/g, "")
+    .replace(/[-–|].*/g, "")
+    .trim(),
         90,
         390,
         340,
@@ -203,7 +216,7 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.salary_czk_month || job.salary || "",
+        `Mzda: ${job.salary_czk_month || job.salary || "neuvedena"}`,
         90,
         535,
         340,
@@ -214,7 +227,7 @@ async function createImage(job, templateFile) {
     
     drawCentered(
         ctx,
-        job.country || "",
+        `Země: ${job.country || "neuvedena"}`,
         90,
         645,
         340,
@@ -224,7 +237,7 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.accommodation || "",
+       `Ubytování: ${job.accommodation || "neuvedeno"}`,
         90,
         845,
         340,
@@ -234,7 +247,7 @@ async function createImage(job, templateFile) {
 
     drawCentered(
         ctx,
-        job.language || "",
+       `Jazyk: ${job.language || "neuveden"}`,
         90,
         745,
         340,
