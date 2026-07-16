@@ -385,6 +385,9 @@ app.post("/generate", async (req, res) => {
             herohero.push({
     ...job,
 
+postId: job.postId,
+categoryId: job.categoryId,
+                
     title: job.job_title,
     text: job.description,
     textHtml: `<p>${job.description.replace(/\n/g, "</p><p>")}</p>`,
