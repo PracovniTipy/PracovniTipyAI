@@ -383,9 +383,24 @@ app.post("/generate", async (req, res) => {
             console.log("HERO IMAGE URL:", imageUrl);
 
             herohero.push({
-                ...job,
-                imageUrl
-            });
+    ...job,
+
+    title: job.job_title,
+    text: job.description,
+    textHtml: `<p>${job.description.replace(/\n/g, "</p><p>")}</p>`,
+
+    imageUrl,
+
+    width: 1080,
+    height: 1350,
+    fileName: `${job.country} Herohero.png`,
+    fileSize: 0,
+
+    previewLevel: "FIRST_LINES",
+    isAgeRestricted: false,
+    isSponsored: false,
+    isExcludedFromRss: false
+});
 
             console.log("HERO PUSH OK");
         }
