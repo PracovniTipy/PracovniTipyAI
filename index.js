@@ -473,6 +473,21 @@ categoryId: job.categoryId,
     }
 });
 
+app.post("/publishHeroHero", async (req, res) => {
+
+    console.log("PUBLISH HEROHERO");
+
+    const herohero = req.body.herohero || [];
+
+    console.log("Počet příspěvků:", herohero.length);
+
+    res.json({
+        success: true,
+        received: herohero.length
+    });
+
+    });
+
 app.post("/herohero/upload", upload.single("image"), async (req, res) => {
   console.log("HeroHero upload přijat");
   res.json({ success: true });
