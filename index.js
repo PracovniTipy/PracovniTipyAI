@@ -481,9 +481,9 @@ app.post("/publishHeroHero", async (req, res) => {
 
 console.log("Publikuji:", job.title);
 console.dir(job, { depth: null });
-
-    console.log("Počet příspěvků:", herohero.length);
-
+    
+console.log("Titulek:", job.title);
+    
    res.json({
     success: true,
     title: job.title
