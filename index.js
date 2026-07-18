@@ -209,9 +209,10 @@ ctx.fillStyle = "#ffffff";
 ctx.strokeStyle = "#000000";
 ctx.lineWidth = 10;
 
-ctx.strokeText((job.country || "").toUpperCase(), 90, 220);
-ctx.fillText((job.country || "").toUpperCase(), 90, 220);
-
+if (job.country !== "NEUVEDENO") {
+  ctx.strokeText((job.country || "").toUpperCase(), 90, 220);
+  ctx.fillText((job.country || "").toUpperCase(), 90, 220);
+}
 // PRACOVNÍ NABÍDKA (2× větší)
 ctx.font = "104px Bebas Neue";
 ctx.lineWidth = 8;
