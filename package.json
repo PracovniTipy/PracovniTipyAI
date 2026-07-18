@@ -3,9 +3,10 @@
   "private": true,
   "type": "commonjs",
   "main": "index.js",
-  "scripts": {
-    "start": "node index.js"
-  },
+ "scripts": {
+  "start": "node index.js",
+  "test-playwright": "node test-playwright.js"
+},
   "engines": {
     "node": ">=20"
   },
