@@ -477,14 +477,17 @@ app.post("/publishHeroHero", async (req, res) => {
 
     console.log("PUBLISH HEROHERO");
 
-    const herohero = req.body.herohero || [];
+  const job = req.body;
+
+console.log("Publikuji:", job.title);
+console.dir(job, { depth: null });
 
     console.log("Počet příspěvků:", herohero.length);
 
-    res.json({
-        success: true,
-        received: herohero.length
-    });
+   res.json({
+    success: true,
+    title: job.title
+});
 
     });
 
