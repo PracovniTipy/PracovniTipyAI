@@ -3,10 +3,11 @@
   "private": true,
   "type": "commonjs",
   "main": "index.js",
- "scripts": {,
+"scripts": {
   "start": "node index.js",
-  "test-playwright": "node test-playwright.js"
-},
+  "test-playwright": "node test-playwright.js",
+  "postinstall": "npx playwright install chromium"
+}
   "engines": {
     "node": ">=20"
   },
