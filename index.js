@@ -162,7 +162,10 @@ result.lines.forEach((line, index) => {
     const textX = x 
     const textY = y + index * lineHeight;
 
-   
+    // Černý obrys
+    ctx.lineWidth = 8;
+    ctx.strokeStyle = "#000000";
+    ctx.strokeText(line, textX, textY);
 
     // Jemný stín
     ctx.shadowColor = "rgba(0,0,0,0.9)";
