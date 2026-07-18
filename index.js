@@ -201,22 +201,39 @@ async function createImage(job, templateFile) {
 
 ctx.drawImage(template, 0, 0);
     
-    ctx.font = "52px Bebas Neue";
+   ctx.drawImage(template, 0, 0);
+
+// ZEMĚ (3× větší)
+ctx.font = "156px Bebas Neue";
 ctx.fillStyle = "#ffffff";
 ctx.strokeStyle = "#000000";
+ctx.lineWidth = 10;
+
+ctx.strokeText((job.country || "").toUpperCase(), 90, 120);
+ctx.fillText((job.country || "").toUpperCase(), 90, 120);
+
+// PRACOVNÍ NABÍDKA (2× větší)
+ctx.font = "104px Bebas Neue";
+ctx.lineWidth = 8;
+
+ctx.strokeText(job.job_title || "", 90, 280);
+ctx.fillText(job.job_title || "", 90, 280);
+
+// MZDA (o 50 % větší)
+ctx.font = "78px Bebas Neue";
+ctx.lineWidth = 7;
+
+ctx.strokeText(job.salary_czk_month || "", 90, 450);
+ctx.fillText(job.salary_czk_month || "", 90, 450);
+
+// JAZYK
+ctx.font = "52px Bebas Neue";
 ctx.lineWidth = 6;
 
-ctx.strokeText(`MZDA ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
-ctx.fillText(`MZDA ${job.salary_czk_month || "Neuvedeno"}`, 90, 560);
+ctx.strokeText(job.language || "", 90, 560);
+ctx.fillText(job.language || "", 90, 560);
 
-ctx.strokeText(`ZEMĚ ${job.country || "Neuvedeno"}`, 90, 650);
-ctx.fillText(`ZEMĚ ${job.country || "Neuvedeno"}`, 90, 650);
-
-ctx.strokeText(`UBYTOVÁNÍ ${job.accommodation || "Neuvedeno"}`, 90, 740);
-ctx.fillText(`UBYTOVÁNÍ ${job.accommodation || "Neuvedeno"}`, 90, 740);
-
-ctx.strokeText(`JAZYK ${job.language || "Neuvedeno"}`, 90, 830);
-ctx.fillText(`JAZYK ${job.language || "Neuvedeno"}`, 90, 830);
+return canvas.toBuffer("image/png");
     return canvas.toBuffer("image/png");
 
 }
