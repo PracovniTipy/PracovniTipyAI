@@ -491,6 +491,40 @@ categoryId: job.categoryId,
     }
 });
 
+app.get("/test-playwright", async (req, res) => {
+    try {
+
+        const browser = await chromium.launch({
+            headless: true
+        });
+
+        const page = await browser.newPage();
+
+        await page.goto("https://herohero.co", {
+            waitUntil: "domcontentloaded"
+        });
+
+        const title = await page.title();
+
+        await browser.close();
+
+        res.json({
+            success: true,
+            title
+        });
+
+    } catch (err) {
+
+        console.error(err);
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+
+    }
+});
+
 app.post("/publishHeroHero", async (req, res) => {
 
     console.log("PUBLISH HEROHERO");
