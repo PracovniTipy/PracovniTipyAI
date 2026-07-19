@@ -1,27 +1,21 @@
 const { chromium } = require("playwright");
 
 (async () => {
-  const browser = await chromium.connectOverCDP(
-    `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
-  );
+  const browser = await chromium.launch({
+    headless: true
+  });
 
   const page = await browser.newPage();
 
-  await page.goto("https://herohero.co/login", {
-    waitUntil: "domcontentloaded",
-  });
+  await page.goto("https://herohero.co/login");
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
 
-  await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
+  await page.locator("button").last().click();
 
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForTimeout(3000);
 
-  await page.waitForLoadState("networkidle");
-
-  console.log("✅ Přihlášení proběhlo.");
-
-  await page.waitForTimeout(5000);
+  console.log(await page.content());
 
   await browser.close();
 })();
