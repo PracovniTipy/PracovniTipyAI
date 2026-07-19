@@ -538,7 +538,8 @@ console.log("Titulek:", job.title);
     
    res.json({
     success: true,
-    title: job.title
+    title,
+    hostname: require("os").hostname()
 });
 
     });
