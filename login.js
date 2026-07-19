@@ -11,13 +11,29 @@ const { chromium } = require("playwright");
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
 
-  await page.locator("button").last().click();
+  // klik na pokračovat po zadání e-mailu
+await page.locator("button").last().click();
 
-  await page.waitForTimeout(3000);
+// počkej na pole pro heslo
+await page.locator('input[type="password"]').waitFor({
+  timeout: 10000
+});
 
-  console.log(await page.content());
+// vyplň heslo
+await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
 
-await page.screenshot({ path: "login.png", fullPage: true });
+// klik na Přihlásit se
+await page.locator("button").last().click();
+
+// počkej na načtení stránky
+await page.waitForLoadState("networkidle");
+
+console.log("Přihlášení proběhlo.");
+
+await page.screenshot({
+  path: "login.png",
+  fullPage: true
+});
   
   await browser.close();
 })();
