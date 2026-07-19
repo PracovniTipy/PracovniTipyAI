@@ -28,8 +28,11 @@ const { chromium } = require("playwright");
     timeout: 10000,
   });
 
-  const cookies = await page.context().cookies();
-console.log(JSON.stringify(cookies, null, 2));
+  // Přihlásit
+await page.locator("button").last().click();
+
+// Počkat po přihlášení
+await page.waitForTimeout(5000);
   
   // Vyplnit heslo
   await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
