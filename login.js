@@ -2,51 +2,66 @@ const { chromium } = require("playwright");
 
 (async () => {
   const browser = await chromium.connectOverCDP(
-  `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
-);
+    `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
+  );
 
   const page = await browser.newPage();
 
+  // Login
   await page.goto("https://herohero.co/login");
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
 
-  // klik na pokračovat po zadání e-mailu
-await page.locator("button").last().click();
+  // Pokračovat
+  await page.locator("button").last().click();
 
-// počkej na pole pro heslo
-await page.locator('input[type="password"]').waitFor({
-  timeout: 10000
-});
+  // Počkat na heslo
+  await page.locator('input[type="password"]').waitFor({
+    timeout: 10000,
+  });
 
-// vyplň heslo
-await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
+  // Vyplnit heslo
+  await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
 
-// klik na Přihlásit se
-await page.locator("button").last().click();
+  // Přihlásit
+  await page.locator("button").last().click();
 
-// počkej na načtení stránky
-await page.waitForTimeout(5000);
+  // Počkat po přihlášení
+  await page.waitForTimeout(5000);
 
-const editors = await page.locator('[contenteditable="true"]').count();
-console.log("Počet contenteditable:", editors);
-  const inputs = await page.locator("input, textarea").evaluateAll(elements =>
-  elements.map(el => ({
-    tag: el.tagName,
-    type: el.getAttribute("type"),
-    placeholder: el.getAttribute("placeholder"),
-    aria: el.getAttribute("aria-label")
-  }))
-);
+  // Otevřít editor příspěvku
+  await page.goto("https://herohero.co/create");
 
-console.log(await page.url());
+  await page.waitForTimeout(5000);
 
-await page.screenshot({
-  path: "create.png",
-  fullPage: true
-});
+  // Zjistit počet contenteditable prvků
+  const editors = await page.locator('[contenteditable="true"]').count();
+  console.log("Počet contenteditable:", editors);
 
-console.log("Přihlášení proběhlo.");
-  
+  // Vypsat všechny inputy a textarea
+  const inputs = await page
+    .locator("input, textarea")
+    .evaluateAll((elements) =>
+      elements.map((el) => ({
+        tag: el.tagName,
+        type: el.getAttribute("type"),
+        placeholder: el.getAttribute("placeholder"),
+        aria: el.getAttribute("aria-label"),
+      }))
+    );
+
+  console.log(JSON.stringify(inputs, null, 2));
+
+  // Vypsat URL
+  console.log(await page.url());
+
+  // Screenshot
+  await page.screenshot({
+    path: "create.png",
+    fullPage: true,
+  });
+
+  console.log("Přihlášení proběhlo.");
+
   await browser.close();
 })();
