@@ -39,17 +39,7 @@ await page.screenshot({
   fullPage: true
 });
 
-await page.screenshot({
-  path: "login.png",
-  fullPage: true
-});
-
 console.log("Přihlášení proběhlo.");
-
-await page.screenshot({
-  path: "login.png",
-  fullPage: true
-});
   
   await browser.close();
 })();
