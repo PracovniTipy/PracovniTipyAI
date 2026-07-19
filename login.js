@@ -17,5 +17,7 @@ const { chromium } = require("playwright");
 
   console.log(await page.content());
 
+await page.screenshot({ path: "login.png", fullPage: true });
+  
   await browser.close();
 })();
