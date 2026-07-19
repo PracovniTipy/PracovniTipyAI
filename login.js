@@ -6,13 +6,26 @@ const { chromium } = require("playwright");
   );
 
   const page = await browser.newPage();
+  
+page.on("response", async (response) => {
+  const url = response.url();
 
-  page.on("response", async (response) => {
-  console.log(
-    response.status(),
-    response.request().method(),
-    response.url()
-  );
+  console.log(response.status(), response.request().method(), url);
+
+  if (
+    url.includes("/auth") ||
+    url.includes("/oauth") ||
+    url.includes("/graphql")
+  ) {
+    try {
+      console.log("BODY:");
+      console.log(await response.text());
+    } catch (e) {
+      console.log("Body nelze přečíst");
+    }
+
+    console.log("--------------------------------");
+  }
 });
   
   // Login
