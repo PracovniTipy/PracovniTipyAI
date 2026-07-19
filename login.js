@@ -30,11 +30,15 @@ await page.waitForTimeout(5000);
 
 const editors = await page.locator('[contenteditable="true"]').count();
 console.log("Počet contenteditable:", editors);
-  
-await page.locator('[contenteditable="true"]').first().click();
+  const inputs = await page.locator("input, textarea").evaluateAll(elements =>
+  elements.map(el => ({
+    tag: el.tagName,
+    type: el.getAttribute("type"),
+    placeholder: el.getAttribute("placeholder"),
+    aria: el.getAttribute("aria-label")
+  }))
+);
 
-await page.keyboard.type("TEST - Automatický příspěvek");
-  
 console.log(await page.url());
 
 await page.screenshot({
