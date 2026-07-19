@@ -494,9 +494,11 @@ categoryId: job.categoryId,
 app.get("/test-playwright", async (req, res) => {
     try {
 
-        const browser = await chromium.launch({
-            headless: true
-        });
+        console.log("HOST:", require("os").hostname());
+
+const browser = await chromium.launch({
+    headless: true
+});
 
         const page = await browser.newPage();
 
@@ -508,10 +510,11 @@ app.get("/test-playwright", async (req, res) => {
 
         await browser.close();
 
-        res.json({
-            success: true,
-            title
-        });
+      res.json({
+    success: true,
+    title,
+    hostname: require("os").hostname()
+});
 
     } catch (err) {
 
