@@ -26,7 +26,14 @@ await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
 await page.locator("button").last().click();
 
 // počkej na načtení stránky
-await page.waitForLoadState("networkidle");
+await page.waitForTimeout(5000);
+
+console.log(await page.url());
+
+await page.screenshot({
+  path: "login.png",
+  fullPage: true
+});
 
 console.log("Přihlášení proběhlo.");
 
