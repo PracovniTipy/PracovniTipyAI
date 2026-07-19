@@ -28,7 +28,16 @@ await page.locator("button").last().click();
 // počkej na načtení stránky
 await page.waitForTimeout(5000);
 
+await page.goto("https://herohero.co/create");
+
+await page.waitForTimeout(5000);
+
 console.log(await page.url());
+
+await page.screenshot({
+  path: "create.png",
+  fullPage: true
+});
 
 await page.screenshot({
   path: "login.png",
