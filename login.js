@@ -7,6 +7,14 @@ const { chromium } = require("playwright");
 
   const page = await browser.newPage();
 
+  page.on("response", async (response) => {
+  console.log(
+    response.status(),
+    response.request().method(),
+    response.url()
+  );
+});
+  
   // Login
   await page.goto("https://herohero.co/login");
 
