@@ -1,9 +1,9 @@
 const { chromium } = require("playwright");
 
 (async () => {
-  const browser = await chromium.launch({
-    headless: true
-  });
+  const browser = await chromium.connectOverCDP(
+  `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
+);
 
   const page = await browser.newPage();
 
