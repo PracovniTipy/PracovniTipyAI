@@ -86,7 +86,14 @@ await page.locator('input[type="password"]').waitFor({
 });
 
 await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
-await page.locator("button").last().click();
+
+  const passwordInput = page.locator('input[type="password"]');
+
+await passwordInput.locator("xpath=following::button[1]").click();
+
+  await page.waitForTimeout(5000);
+
+console.log("URL po odeslání hesla:", page.url());
 
 await page.waitForTimeout(5000);
 
