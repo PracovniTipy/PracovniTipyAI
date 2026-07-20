@@ -47,11 +47,24 @@ page.on("request", (request) => {
   await page.goto("https://herohero.co/login");
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
+  
+await page.screenshot({
+  path: "02-email-filled.png",
+  fullPage: true,
+});  
 
   // Pokračovat
   const emailInput = page.locator('input[type="email"]');
 
 await emailInput.locator("xpath=following::button[1]").click();
+
+  await page.waitForTimeout(3000);
+
+await page.screenshot({
+  path: "03-after-click.png",
+  fullPage: true,
+});
+  
 console.log("URL po kliknutí:", page.url());
 
 await page.waitForTimeout(3000);
@@ -67,7 +80,14 @@ await page.locator("button").last().click();
 await page.waitForTimeout(5000);
 
   // Otevřít editor příspěvku
-  await page.goto("https://herohero.co/create");
+ await page.goto("https://herohero.co/login", {
+  waitUntil: "domcontentloaded",
+});
+
+await page.screenshot({
+  path: "01-login-page.png",
+  fullPage: true,
+});
 
   await page.waitForTimeout(5000);
 
