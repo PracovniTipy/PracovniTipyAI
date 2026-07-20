@@ -7,7 +7,22 @@ const { chromium } = require("playwright");
 
   const page = await browser.newPage();
   
-page.on("response", async (response) => {
+page.on("request", (request) => {
+  const url = request.url();
+
+  if (url.includes("/auth") || url.includes("/oauth")) {
+    console.log("======== REQUEST ========");
+    console.log(request.method(), url);
+
+    try {
+      console.log(request.postData());
+    } catch {}
+
+    console.log("=========================");
+  }
+});
+  
+  page.on("response", async (response) => {
   const url = response.url();
 
   if (url.includes("/auth") || url.includes("/oauth")) {
