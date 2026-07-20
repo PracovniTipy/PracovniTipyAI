@@ -58,6 +58,12 @@ await page.screenshot({
 
 await emailInput.locator("xpath=following::button[1]").click();
 
+await page.waitForTimeout(3000);
+
+console.log("Počet password inputů:");
+  
+console.log(await page.locator('input[type="password"]').count());
+  
   await page.waitForTimeout(3000);
 
 await page.screenshot({
@@ -73,8 +79,13 @@ console.log("URL po 3 s:", page.url());
 
 console.log("Obsah stránky:");
 console.log(await page.locator("body").innerText());
-  await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
+  
+await page.locator('input[type="password"]').waitFor({
+  state: "visible",
+  timeout: 10000,
+});
 
+await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
 await page.locator("button").last().click();
 
 await page.waitForTimeout(5000);
