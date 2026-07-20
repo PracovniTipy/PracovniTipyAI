@@ -49,8 +49,9 @@ page.on("request", (request) => {
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
 
   // Pokračovat
-  await page.locator("button").last().click();
+  const emailInput = page.locator('input[type="email"]');
 
+await emailInput.locator("xpath=following::button[1]").click();
 console.log("URL po kliknutí:", page.url());
 
 await page.waitForTimeout(3000);
