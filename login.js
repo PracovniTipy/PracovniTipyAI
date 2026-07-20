@@ -10,13 +10,13 @@ const { chromium } = require("playwright");
 page.on("response", async (response) => {
   const url = response.url();
 
-  console.log(response.status(), response.request().method(), url);
+  if (url.includes("/auth") || url.includes("/oauth")) {
+    console.log("======== AUTH ========");
+    console.log(response.status(), response.request().method(), url);
 
-  if (
-    url.includes("/auth") ||
-    url.includes("/oauth") ||
-    url.includes("/graphql")
-  ) {
+    console.log("HEADERS:");
+    console.log(response.headers());
+
     try {
       console.log("BODY:");
       console.log(await response.text());
@@ -24,7 +24,7 @@ page.on("response", async (response) => {
       console.log("Body nelze přečíst");
     }
 
-    console.log("--------------------------------");
+    console.log("======================");
   }
 });
   
