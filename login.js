@@ -45,8 +45,10 @@ const { chromium } = require("playwright");
 
   // LOGIN
   await page.goto("https://herohero.co/login", {
-    waitUntil: "networkidle",
-  });
+  waitUntil: "domcontentloaded",
+});
+
+await page.waitForLoadState("domcontentloaded");
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
 
@@ -86,8 +88,8 @@ const { chromium } = require("playwright");
   // místo kliknutí odešli formulář Enterem
   await page.keyboard.press("Enter");
 
-  await page.waitForLoadState("networkidle");
-
+await page.waitForTimeout(5000);
+  
   console.log("URL po odeslání hesla:", page.url());
 
   await page.screenshot({
@@ -99,9 +101,11 @@ const { chromium } = require("playwright");
   console.log(await page.locator("body").innerText());
 
   // přejít na create
-  await page.goto("https://herohero.co/create", {
-    waitUntil: "networkidle",
-  });
+ await page.goto("https://herohero.co/create", {
+  waitUntil: "domcontentloaded",
+});
+
+await page.waitForLoadState("domcontentloaded");
 
   await page.waitForTimeout(3000);
 
