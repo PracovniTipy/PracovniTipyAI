@@ -51,6 +51,15 @@ page.on("request", (request) => {
   // Pokračovat
   await page.locator("button").last().click();
 
+console.log("URL po kliknutí:", page.url());
+
+await page.waitForTimeout(3000);
+
+console.log("URL po 3 s:", page.url());
+
+console.log("Obsah stránky:");
+console.log(await page.locator("body").innerText());
+  
   // Počkat na heslo
   await page.locator('input[type="password"]').waitFor({
     timeout: 10000,
