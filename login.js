@@ -80,12 +80,14 @@ await page.locator("button").last().click();
 await page.waitForTimeout(5000);
 
   // Otevřít editor příspěvku
- await page.goto("https://herohero.co/login", {
+ await page.goto("https://herohero.co/create", {
   waitUntil: "domcontentloaded",
 });
 
+await page.waitForTimeout(5000);
+
 await page.screenshot({
-  path: "01-login-page.png",
+  path: "create.png",
   fullPage: true,
 });
 
