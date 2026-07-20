@@ -34,7 +34,8 @@ function downloadImage(url, destination) {
 }
 
 module.exports = async function publishHeroHero(job) {
-
+try {
+    
     console.log("==================================");
     console.log("START HEROHERO");
     console.log("==================================");
@@ -45,8 +46,18 @@ module.exports = async function publishHeroHero(job) {
         `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
     );
 
-    const page = await browser.newPage();
-
+const context = await browser.newContext({
+    storageState: fs.existsSync("storageState.json")
+        ? "storageState.json"
+        : undefined
+});
+    
+const page = await context.newPage();
+await context.tracing.start({
+    screenshots: true,
+    snapshots: true
+});
+    
     page.setDefaultTimeout(30000);
 
     page.on("request", (request) => {
@@ -109,8 +120,14 @@ module.exports = async function publishHeroHero(job) {
     // LOGIN
     // ===========================
 
-    await page.goto("https://herohero.co/login", {
-        waitUntil: "domcontentloaded",
+await page.goto("https://herohero.co/create", {
+    waitUntil: "domcontentloaded",
+});
+
+if (!page.url().includes("/login")) {
+    console.log("Session je platná, login přeskakuji.");
+} else {
+    waitUntil: "domcontentloaded",
     });
 
     await page.waitForLoadState("domcontentloaded");
@@ -154,6 +171,20 @@ module.exports = async function publishHeroHero(job) {
         throw new Error("Login do HeroHero selhal.");
 
     }
+
+await context.storageState({
+    path: "storageState.json"
+});
+    
+console.log("storageState.json uložen");
+console.log("Session uložena.");}
+
+    await context.tracing.stop({
+    path: "trace.zip" 
+        
+});
+    
+console.log("trace.zip uložen");
 
     // ===========================
     // CREATE
@@ -340,19 +371,8 @@ module.exports = async function publishHeroHero(job) {
 
     console.log("Aktuální URL:", page.url());
 
+} finally {
+
     await browser.close();
 
-    return {
-
-        success: true,
-
-        title,
-
-        image,
-
-        url: page.url()
-
-    };
-
-};
-
+}
