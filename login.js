@@ -59,26 +59,11 @@ console.log("URL po 3 s:", page.url());
 
 console.log("Obsah stránky:");
 console.log(await page.locator("body").innerText());
-  
-  // Počkat na heslo
-  await page.locator('input[type="password"]').waitFor({
-    timeout: 10000,
-  });
-
-  // Přihlásit
-await page.locator("button").last().click();
-
-// Počkat po přihlášení
-await page.waitForTimeout(5000);
-  
-  // Vyplnit heslo
   await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
 
-  // Přihlásit
-  await page.locator("button").last().click();
+await page.locator("button").last().click();
 
-  // Počkat po přihlášení
-  await page.waitForTimeout(5000);
+await page.waitForTimeout(5000);
 
   // Otevřít editor příspěvku
   await page.goto("https://herohero.co/create");
