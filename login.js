@@ -6,116 +6,113 @@ const { chromium } = require("playwright");
   );
 
   const page = await browser.newPage();
-  
-page.on("request", (request) => {
-  const url = request.url();
 
-  if (url.includes("/auth") || url.includes("/oauth")) {
-    console.log("======== REQUEST ========");
-    console.log(request.method(), url);
+  page.on("request", (request) => {
+    const url = request.url();
 
-    try {
-      console.log(request.postData());
-    } catch {}
+    if (url.includes("/auth") || url.includes("/oauth")) {
+      console.log("======== REQUEST ========");
+      console.log(request.method(), url);
 
-    console.log("=========================");
-  }
-});
-  
-  page.on("response", async (response) => {
-  const url = response.url();
+      try {
+        console.log(request.postData());
+      } catch {}
 
-  if (url.includes("/auth") || url.includes("/oauth")) {
-    console.log("======== AUTH ========");
-    console.log(response.status(), response.request().method(), url);
-
-    console.log("HEADERS:");
-    console.log(response.headers());
-
-    try {
-      console.log("BODY:");
-      console.log(await response.text());
-    } catch (e) {
-      console.log("Body nelze přečíst");
+      console.log("=========================");
     }
+  });
 
-    console.log("======================");
-  }
-});
-  
-  // Login
-  await page.goto("https://herohero.co/login");
+  page.on("response", async (response) => {
+    const url = response.url();
+
+    if (url.includes("/auth") || url.includes("/oauth")) {
+      console.log("======== AUTH ========");
+      console.log(response.status(), response.request().method(), url);
+
+      console.log("HEADERS:");
+      console.log(response.headers());
+
+      try {
+        console.log("BODY:");
+        console.log(await response.text());
+      } catch {
+        console.log("Body nelze přečíst");
+      }
+
+      console.log("======================");
+    }
+  });
+
+  // LOGIN
+  await page.goto("https://herohero.co/login", {
+    waitUntil: "networkidle",
+  });
 
   await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
-  
-await page.screenshot({
-  path: "02-email-filled.png",
-  fullPage: true,
-});  
 
-  // Pokračovat
+  await page.screenshot({
+    path: "02-email-filled.png",
+    fullPage: true,
+  });
+
   const emailInput = page.locator('input[type="email"]');
 
-await emailInput.locator("xpath=following::button[1]").click();
+  await emailInput.locator("xpath=following::button[1]").click();
 
-await page.waitForTimeout(3000);
-
-console.log("Počet password inputů:");
-  
-console.log(await page.locator('input[type="password"]').count());
-  
   await page.waitForTimeout(3000);
 
-await page.screenshot({
-  path: "03-after-click.png",
-  fullPage: true,
-});
-  
-console.log("URL po kliknutí:", page.url());
+  console.log("Počet password inputů:");
+  console.log(await page.locator('input[type="password"]').count());
 
-await page.waitForTimeout(3000);
+  await page.screenshot({
+    path: "03-after-click.png",
+    fullPage: true,
+  });
 
-console.log("URL po 3 s:", page.url());
+  console.log("URL po kliknutí:", page.url());
 
-console.log("Obsah stránky:");
-console.log(await page.locator("body").innerText());
-  
-await page.locator('input[type="password"]').waitFor({
-  state: "visible",
-  timeout: 10000,
-});
-
-await page.locator('input[type="password"]').fill(process.env.HERO_PASSWORD);
+  console.log("Obsah stránky:");
+  console.log(await page.locator("body").innerText());
 
   const passwordInput = page.locator('input[type="password"]');
 
-await passwordInput.locator("xpath=following::button[1]").click();
+  await passwordInput.waitFor({
+    state: "visible",
+    timeout: 10000,
+  });
 
-  await page.waitForTimeout(5000);
+  await passwordInput.fill(process.env.HERO_PASSWORD);
 
-console.log("URL po odeslání hesla:", page.url());
+  // místo kliknutí odešli formulář Enterem
+  await page.keyboard.press("Enter");
 
-await page.waitForTimeout(5000);
+  await page.waitForLoadState("networkidle");
 
-  // Otevřít editor příspěvku
- await page.goto("https://herohero.co/create", {
-  waitUntil: "domcontentloaded",
-});
+  console.log("URL po odeslání hesla:", page.url());
 
-await page.waitForTimeout(5000);
+  await page.screenshot({
+    path: "04-after-password.png",
+    fullPage: true,
+  });
 
-await page.screenshot({
-  path: "create.png",
-  fullPage: true,
-});
+  console.log("Obsah stránky po zadání hesla:");
+  console.log(await page.locator("body").innerText());
 
-  await page.waitForTimeout(5000);
+  // přejít na create
+  await page.goto("https://herohero.co/create", {
+    waitUntil: "networkidle",
+  });
 
-  // Zjistit počet contenteditable prvků
+  await page.waitForTimeout(3000);
+
+  await page.screenshot({
+    path: "create.png",
+    fullPage: true,
+  });
+
   const editors = await page.locator('[contenteditable="true"]').count();
   console.log("Počet contenteditable:", editors);
 
-  // Vypsat všechny inputy a textarea
   const inputs = await page
     .locator("input, textarea")
     .evaluateAll((elements) =>
@@ -129,16 +126,9 @@ await page.screenshot({
 
   console.log(JSON.stringify(inputs, null, 2));
 
-  // Vypsat URL
-  console.log(await page.url());
+  console.log("Aktuální URL:", await page.url());
 
-  // Screenshot
-  await page.screenshot({
-    path: "create.png",
-    fullPage: true,
-  });
-
-  console.log("Přihlášení proběhlo.");
+  console.log("Přihlášení dokončeno.");
 
   await browser.close();
 })();
