@@ -538,9 +538,7 @@ console.dir(job, { depth: null });
 console.log("Titulek:", job.title);
     
    res.json({
-    success: true,
-    title,
-    hostname: require("os").hostname()
+    success: true
 });
 
     });
