@@ -384,3 +384,4 @@ console.log("trace.zip uložen");
     }
 
 }
+}
