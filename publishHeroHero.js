@@ -36,6 +36,9 @@ function downloadImage(url, destination) {
 }
 
 module.exports = async function publishHeroHero(job) {
+    
+    let browser;
+    
 try {
     
     console.log("==================================");
@@ -44,7 +47,7 @@ try {
 
     console.dir(job, { depth: null });
 
-let browser;
+
     
 browser = await chromium.connectOverCDP(
     `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
@@ -385,3 +388,5 @@ console.log("trace.zip uložen");
 
 }
 }
+
+console.log("PUBLISH HEROHERO FILE VERSION 2");
