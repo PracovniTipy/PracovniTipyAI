@@ -211,16 +211,16 @@ ctx.fillText((job.country || "").toUpperCase(), 90, 320);
 ctx.font = "104px Bebas Neue";
 ctx.lineWidth = 8;
 
-ctx.strokeText(job.job_title || "", 90, 430);
-ctx.fillText(job.job_title || "", 90, 430);
+ctx.strokeText(job.job_title || "", 90, 530);
+ctx.fillText(job.job_title || "", 90, 530);
     
 // MZDA (o 50 % větší)
 ctx.font = "78px Bebas Neue";
 ctx.lineWidth = 7;
 
 if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
-    ctx.strokeText(job.salary_czk_month, 90, 560);
-    ctx.fillText(job.salary_czk_month, 90, 560);
+    ctx.strokeText(job.salary_czk_month, 90, 640);
+    ctx.fillText(job.salary_czk_month, 90, 640);
 }
     
 // JAZYK
@@ -228,8 +228,8 @@ ctx.font = "52px Bebas Neue";
 ctx.lineWidth = 6;
 
 if (job.language && job.language !== "NEUVEDENO") {
-    ctx.strokeText(job.language, 90, 670);
-    ctx.fillText(job.language, 90, 670);
+    ctx.strokeText(job.language, 90, 750);
+    ctx.fillText(job.language, 90, 750);
 }
     
 return canvas.toBuffer("image/png");
