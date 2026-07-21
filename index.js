@@ -165,25 +165,21 @@ result.lines.forEach((line, index) => {
     ctx.strokeStyle = "#000000";
     ctx.strokeText(line, textX, textY);
 
-    // Jemný stín
-    ctx.shadowColor = "rgba(0,0,0,0.9)";
-    ctx.shadowBlur = 18;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
+   ctx.save();
 
-    // Bílý text
-    ctx.fillStyle = color;
-    ctx.fillText(line, textX, textY);
+ctx.lineJoin = "round";
+ctx.lineCap = "round";
+ctx.miterLimit = 2;
 
-    // Reset stínu
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-});
+ctx.strokeStyle = "#000000";
+ctx.lineWidth = 8;
+ctx.strokeText(line, textX, textY);
 
-}
+ctx.fillStyle = "#ffffff";
+ctx.fillText(line, textX, textY);
 
+ctx.restore();
+    
 async function createImage(job, templateFile) {
 
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
