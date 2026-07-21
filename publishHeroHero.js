@@ -88,7 +88,7 @@ await context.tracing.start({
     });
 
     page.on("response", async (response) => {
-
+   
         const url = response.url();
 
         if (url.includes("/auth") || url.includes("/oauth")) {
@@ -219,15 +219,12 @@ console.log("trace.zip uložen");
 
     });
 
-    const editable = page.locator('[contenteditable="true"]').first();
+  await page.screenshot({
+    path: "before-editor.png",
+    fullPage: true,
+});
 
-    await editable.waitFor({
-
-        state: "visible",
-
-        timeout: 20000,
-
-    });
+console.log(await page.content());
 
     await editable.click();
 
@@ -235,7 +232,6 @@ console.log("trace.zip uložen");
 
         await page.keyboard.type(title);
 
-        await page.keyboard.press("Enter");
         await page.keyboard.press("Enter");
 
     }
