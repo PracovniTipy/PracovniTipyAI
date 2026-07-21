@@ -211,8 +211,8 @@ ctx.fillText((job.country || "").toUpperCase(), 90, 320);
 ctx.font = "104px Bebas Neue";
 ctx.lineWidth = 8;
 
-ctx.strokeText(job.job_title || "", 90, 280);
-ctx.fillText(job.job_title || "", 90, 280);
+ctx.strokeText(job.job_title || "", 90, 430);
+ctx.fillText(job.job_title || "", 90, 430);
     
 // MZDA (o 50 % větší)
 ctx.font = "78px Bebas Neue";
