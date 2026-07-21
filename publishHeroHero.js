@@ -44,8 +44,10 @@ try {
 
     console.dir(job, { depth: null });
 
-    const browser = await chromium.connectOverCDP(
-        `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
+let browser;
+    
+browser = await chromium.connectOverCDP(
+    `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
     );
 
 const context = await browser.newContext({
