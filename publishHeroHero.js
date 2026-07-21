@@ -226,6 +226,13 @@ console.log("trace.zip uložen");
 
 console.log(await page.content());
 
+const editable = page.locator('[contenteditable="true"]').first();
+
+await editable.waitFor({
+    state: "visible",
+    timeout: 20000,
+});
+    
     await editable.click();
 
     if (title) {
