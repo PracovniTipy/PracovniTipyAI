@@ -380,3 +380,4 @@ console.log("trace.zip uložen");
     await browser.close();
 
 }
+}
