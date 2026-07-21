@@ -179,7 +179,9 @@ ctx.fillStyle = "#ffffff";
 ctx.fillText(line, textX, textY);
 
 ctx.restore();
-    
+        });
+
+}
 async function createImage(job, templateFile) {
 
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
@@ -194,8 +196,6 @@ async function createImage(job, templateFile) {
     const ctx = canvas.getContext("2d");
 
 ctx.drawImage(template, 0, 0);
-    
-   ctx.drawImage(template, 0, 0);
 
 // ZEMĚ (3× větší)
 ctx.font = "156px Bebas Neue";
@@ -233,7 +233,6 @@ if (job.language && job.language !== "NEUVEDENO") {
 }
     
 return canvas.toBuffer("image/png");
-    return canvas.toBuffer("image/png");
 
 }
 
