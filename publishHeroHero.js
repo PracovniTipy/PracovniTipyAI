@@ -228,6 +228,15 @@ console.log(await page.content());
 
 const editable = page.locator('[contenteditable="true"]').first();
 
+    console.log("URL:", page.url());
+
+console.log("Cookies:", await context.cookies());
+
+await page.screenshot({
+    path: "before-create.png",
+    fullPage: true,
+});
+
 await editable.waitFor({
     state: "visible",
     timeout: 20000,
