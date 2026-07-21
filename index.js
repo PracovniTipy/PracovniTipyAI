@@ -525,21 +525,27 @@ const browser = await chromium.launch({
 
     }
 });
-
+const publishHeroHero = require("./publishHeroHero");
 app.post("/publishHeroHero", async (req, res) => {
 
-    console.log("PUBLISH HEROHERO");
+    try {
 
-  const job = req.body;
+    await publishHeroHero(req.body);
 
-console.log("Publikuji:", job.title);
-console.dir(job, { depth: null });
-    
-console.log("Titulek:", job.title);
-    
-   res.json({
-    success: true
-});
+    res.json({
+        success: true
+    });
+
+} catch (e) {
+
+    console.error(e);
+
+    res.status(500).json({
+        success: false,
+        error: e.message
+    });
+
+}
 
     });
 
