@@ -132,10 +132,6 @@ if (!page.url().includes("/login")) {
     console.log("Session je platná, login přeskakuji.");
 } else {
 
-    await page.waitForLoadState("domcontentloaded");
-
-    await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
-
     // sem pokračuje tvůj stávající login kód...
 
     await page.waitForLoadState("domcontentloaded");
