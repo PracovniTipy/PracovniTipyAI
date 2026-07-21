@@ -379,7 +379,10 @@ console.log("trace.zip uložen");
 
 } finally {
 
-    await browser.close();
+   } finally {
 
-}
+    if (browser) {
+        await browser.close();
+    }
+
 }
