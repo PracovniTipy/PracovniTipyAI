@@ -1,3 +1,5 @@
+console.log("========== HEROHERO START ==========");
+
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -124,11 +126,17 @@ await page.goto("https://herohero.co/create", {
     waitUntil: "domcontentloaded",
 });
 
+console.log("URL:", page.url());
+    
 if (!page.url().includes("/login")) {
     console.log("Session je platná, login přeskakuji.");
 } else {
-    waitUntil: "domcontentloaded",
-    });
+
+    await page.waitForLoadState("domcontentloaded");
+
+    await page.locator('input[type="email"]').fill(process.env.HERO_EMAIL);
+
+    // sem pokračuje tvůj stávající login kód...
 
     await page.waitForLoadState("domcontentloaded");
 
