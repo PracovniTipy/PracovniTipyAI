@@ -245,8 +245,11 @@ await page.screenshot({
 
 console.log("URL:", page.url());
 console.log("TITLE:", await page.title());
-
-await page.waitForSelector('[contenteditable="true"]', {
+    
+console.log(await page.locator("body").innerHTML());
+throw new Error("STOP");
+    
+    await page.waitForSelector('[contenteditable="true"]', {
     timeout: 60000
 });
 
