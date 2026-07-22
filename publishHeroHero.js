@@ -237,9 +237,8 @@ await page.screenshot({
     fullPage: true,
 });
 
-await editable.waitFor({
-    state: "visible",
-    timeout: 20000,
+await page.waitForSelector('[contenteditable="true"]', {
+    timeout: 60000
 });
     
     await editable.click();
