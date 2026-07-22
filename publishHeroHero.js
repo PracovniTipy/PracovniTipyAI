@@ -224,7 +224,13 @@ console.log("trace.zip uložen");
     fullPage: true,
 });
 
-console.log(await page.content());
+await page.screenshot({
+    path: "debug.png",
+    fullPage: true,
+});
+
+console.log("URL:", page.url());
+console.log(await page.title());
 
 const editable = page.locator('[contenteditable="true"]').first();
 
@@ -237,10 +243,13 @@ await page.screenshot({
     fullPage: true,
 });
 
+console.log("URL:", page.url());
+console.log("TITLE:", await page.title());
+
 await page.waitForSelector('[contenteditable="true"]', {
     timeout: 60000
 });
-    
+
     await editable.click();
 
     if (title) {
