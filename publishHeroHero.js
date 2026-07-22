@@ -205,6 +205,12 @@ console.log("trace.zip uložen");
 
     });
 
+await page.waitForTimeout(3000);
+await page.screenshot({
+    path: "create-page.png",
+    fullPage: true,
+});
+    
     await page.waitForLoadState("domcontentloaded");
 
     await page.waitForTimeout(3000);
