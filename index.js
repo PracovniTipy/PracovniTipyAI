@@ -405,8 +405,7 @@ categoryId: job.categoryId,
                 
     title: job.job_title,
     text: job.description,
-    textHtml: `<p>${job.description.replace(/\n/g, "</p><p>")}</p>`,
-
+textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
     imageUrl,
 
     width: 1080,
