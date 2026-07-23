@@ -56,7 +56,10 @@ browser = await chromium.connectOverCDP(
 const context = browser.contexts()[0];
     
     await context.setExtraHTTPHeaders({
-  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
+  "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7",
+  "Referer": "https://herohero.co/",
+  "Upgrade-Insecure-Requests": "1"
 });
 
 if (fs.existsSync("storageState.json")) {
@@ -66,6 +69,13 @@ if (fs.existsSync("storageState.json")) {
 }
     
 const page = await context.newPage();
+
+    await page.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", {
+        get: () => undefined,
+    });
+});
+    
 await context.tracing.start({
     screenshots: true,
     snapshots: true
