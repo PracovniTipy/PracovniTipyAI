@@ -267,6 +267,9 @@ await page.screenshot({
 
 console.log("URL:", page.url());
 console.log("TITLE:", await page.title());
+
+const html = await page.content();
+console.log(html);
     
     await page.waitForSelector('[contenteditable="true"]', {
     timeout: 60000
