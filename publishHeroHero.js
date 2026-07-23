@@ -51,13 +51,19 @@ try {
     
 browser = await chromium.connectOverCDP(
     `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
-    );
+);
 
-const context = await browser.newContext({
-    storageState: fs.existsSync("storageState.json")
-        ? "storageState.json"
-        : undefined
+const context = browser.contexts()[0];
+    
+    await context.setExtraHTTPHeaders({
+  "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 });
+
+if (fs.existsSync("storageState.json")) {
+    await context.addCookies(
+        JSON.parse(fs.readFileSync("storageState.json", "utf8")).cookies
+    );
+}
     
 const page = await context.newPage();
 await context.tracing.start({
