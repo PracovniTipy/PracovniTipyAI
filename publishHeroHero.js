@@ -146,6 +146,20 @@ if (
 }
 
 console.log("✅ TEST 1 - PŘIHLÁŠENÍ OK");
+
+    console.log("CURRENT URL:", page.url());
+
+console.log(
+    "LOGIN MODAL:",
+    await page.getByText("Login or sign up").count()
+);
+
+console.log(
+    "ACCESS DENIED:",
+    await page.getByText("You don't have access to this page.").count()
+);
+
+throw new Error("STOP");
     
     console.log("JSEM PŘIHLÁŠENÝ");
     
