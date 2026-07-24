@@ -54,7 +54,9 @@ browser = await chromium.connectOverCDP(
     `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
 );
 
-context = browser.contexts()[0];
+    console.log("CONTEXTS:", browser.contexts().length);
+    
+context = await browser.newContext();
     
     await context.setExtraHTTPHeaders({
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
