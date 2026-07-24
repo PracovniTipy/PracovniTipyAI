@@ -142,8 +142,6 @@ await page.screenshot({
 
 console.log(await page.content());
 
-throw new Error("STOP");
-    
 if (!page.url().includes("/login")) {
     console.log("Session je platná, login přeskakuji.");
 } else {
