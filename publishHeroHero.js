@@ -226,7 +226,18 @@ console.log("AFTER CREATE BODY:");
 console.log(await page.locator("body").innerText());
     
 await page.waitForTimeout(3000);
-await page.screenshot({
+const allowCookies = page.getByRole("button", { name: "Allow all" });
+
+if (await allowCookies.count()) {
+    console.log("🍪 COOKIE OKNO NALEZENO");
+
+    await allowCookies.click();
+
+    console.log("🍪 COOKIES POTVRZENY");
+
+    await page.waitForTimeout(2000);
+}
+    await page.screenshot({
     path: "create-page.png",
     fullPage: true,
 });
