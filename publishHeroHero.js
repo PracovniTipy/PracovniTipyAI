@@ -302,6 +302,11 @@ console.log(html);
 
     }
 
+console.log("IMAGE URL:", image);
+console.log("LOCAL FILE:", downloadedImage);
+console.log("EXISTS:", fs.existsSync(downloadedImage));
+console.log("SIZE:", fs.statSync(downloadedImage).size);
+    
     // ===========================
     // IMAGE UPLOAD
     // ===========================
