@@ -71,6 +71,19 @@ if (fs.existsSync("storageState.json")) {
     
 const page = await context.newPage();
 
+    page.on("response", async (response) => {
+    const status = response.status();
+    const url = response.url();
+
+    if (status === 401 || status === 403) {
+        console.log("AUTH ERROR:", status, url);
+
+        try {
+            console.log(await response.text());
+        } catch {}
+    }
+});
+
     await page.addInitScript(() => {
     Object.defineProperty(navigator, "webdriver", {
         get: () => undefined,
@@ -419,15 +432,18 @@ console.log(html);
 
     console.log("Aktuální URL:", page.url());
     
-} finally {
+finally {
 
     if (browser) {
 
-        await context.tracing.stop({
-            path: "trace.zip"
-        });
-
-        console.log("trace.zip uložen");
+        try {
+            await context.tracing.stop({
+                path: "trace.zip"
+            });
+            console.log("trace.zip uložen");
+        } catch (e) {
+            console.log("TRACE ERROR:", e.message);
+        }
 
         await browser.close();
     }
