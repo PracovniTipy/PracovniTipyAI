@@ -431,6 +431,8 @@ console.log(html);
     }
 
     console.log("Aktuální URL:", page.url());
+
+} 
     
 finally {
 
