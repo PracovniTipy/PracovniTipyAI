@@ -132,8 +132,20 @@ await context.tracing.start({
 await page.goto("https://herohero.co/create", {
     waitUntil: "domcontentloaded",
 });
+    
+const body = await page.locator("body").innerText();
 
-console.log("URL:", page.url());
+console.log(body);
+
+if (
+    body.includes("Login or sign up") ||
+    body.includes("Continue with Google") ||
+    body.includes("Continue with Facebook")
+) {
+    throw new Error("NEJSEM PŘIHLÁŠENÝ");
+}
+
+console.log("JSEM PŘIHLÁŠENÝ");
     
 await page.screenshot({
     path: "po-create.png",
@@ -206,7 +218,11 @@ console.log("Session uložena.");}
         waitUntil: "domcontentloaded",
 
     });
-
+    
+console.log("AFTER CREATE URL:", page.url());
+console.log("AFTER CREATE BODY:");
+console.log(await page.locator("body").innerText());
+    
 await page.waitForTimeout(3000);
 await page.screenshot({
     path: "create-page.png",
