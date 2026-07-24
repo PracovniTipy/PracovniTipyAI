@@ -156,9 +156,10 @@ let downloadedImage = null;
             // ===========================
         // CREATE
         // ===========================
-
-        const createButton = page.getByText("Create").first();
-
+const allowCookies = page.getByRole("button", {
+    name: "Allow all",
+});
+        
         try {
 
             await allowCookies.waitFor({
@@ -173,13 +174,13 @@ let downloadedImage = null;
         } catch {
 
             console.log("🍪 Cookie okno nenalezeno.");
-
+            
         }
 
-        const createButton = page.getByRole("button", {
-            name: "Vytvořit",
-        });
 
+const createButton = page.getByText("Create").first();            
+
+        
         await createButton.waitFor({
             state: "visible",
             timeout: 15000,
