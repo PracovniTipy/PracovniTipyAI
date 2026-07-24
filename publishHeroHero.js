@@ -287,10 +287,9 @@ console.log("✅ TEST 3 - EDITOR NALEZEN");
 
     if (title) {
 
-        await page.keyboard.type(title);
-
         console.log("✅ TEST 4 - NADPIS VLOŽEN");
         
+        await page.keyboard.type(title);        
         await page.keyboard.press("Enter");
 
     }
