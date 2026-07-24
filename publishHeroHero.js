@@ -145,7 +145,9 @@ if (
     throw new Error("NEJSEM PŘIHLÁŠENÝ");
 }
 
-console.log("JSEM PŘIHLÁŠENÝ");
+console.log("✅ TEST 1 - PŘIHLÁŠENÍ OK");
+    
+    console.log("JSEM PŘIHLÁŠENÝ");
     
 await page.screenshot({
     path: "po-create.png",
@@ -233,8 +235,10 @@ await page.screenshot({
 
     await page.waitForTimeout(3000);
 
+    console.log("✅ TEST 2 - CREATE OTEVŘENO");
+    
     console.log("CREATE PAGE");
-
+        
     await page.screenshot({
 
         path: "03-create.png",
@@ -276,19 +280,25 @@ console.log(html);
     await page.waitForSelector('[contenteditable="true"]', {
     timeout: 60000
 });
-
+    
+console.log("✅ TEST 3 - EDITOR NALEZEN");
+    
     await editable.click();
 
     if (title) {
 
         await page.keyboard.type(title);
 
+        console.log("✅ TEST 4 - NADPIS VLOŽEN");
+        
         await page.keyboard.press("Enter");
 
     }
 
     if (text) {
 
+        console.log("✅ TEST 5 - POPISEK VLOŽEN");
+        
         await page.keyboard.type(text);
 
     }
@@ -337,6 +347,8 @@ console.log("SIZE:", fs.statSync(downloadedImage).size);
 
         });
 
+        console.log("✅ TEST 6 - FOTKA NAHRÁNA");
+        
         await fileInput.first().setInputFiles(downloadedImage);
 
         console.log("Soubor nahrán.");
