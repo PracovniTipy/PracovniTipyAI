@@ -157,9 +157,7 @@ let downloadedImage = null;
         // CREATE
         // ===========================
 
-        const allowCookies = page.getByRole("button", {
-            name: "Allow all",
-        });
+        const createButton = page.getByText("Create").first();
 
         try {
 
