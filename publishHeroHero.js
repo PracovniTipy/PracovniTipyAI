@@ -287,18 +287,18 @@ console.log("✅ TEST 3 - EDITOR NALEZEN");
 
     if (title) {
 
-        console.log("✅ TEST 4 - NADPIS VLOŽEN");
-        
         await page.keyboard.type(title);        
         await page.keyboard.press("Enter");
+        
+        console.log("✅ TEST 4 - NADPIS VLOŽEN");
 
     }
 
     if (text) {
 
-        console.log("✅ TEST 5 - POPISEK VLOŽEN");
-        
         await page.keyboard.type(text);
+        
+        console.log("✅ TEST 5 - POPISEK VLOŽEN");
 
     }
 
@@ -346,9 +346,9 @@ console.log("SIZE:", fs.statSync(downloadedImage).size);
 
         });
 
-        console.log("✅ TEST 6 - FOTKA NAHRÁNA");
-        
         await fileInput.first().setInputFiles(downloadedImage);
+        
+        console.log("✅ TEST 6 - FOTKA NAHRÁNA");
 
         console.log("Soubor nahrán.");
 
