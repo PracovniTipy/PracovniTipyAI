@@ -204,13 +204,6 @@ await context.storageState({
 console.log("storageState.json uložen");
 console.log("Session uložena.");}
 
-    await context.tracing.stop({
-    path: "trace.zip" 
-        
-});
-    
-console.log("trace.zip uložen");
-
     // ===========================
     // CREATE
     // ===========================
@@ -424,10 +417,17 @@ console.log(html);
     }
 
     console.log("Aktuální URL:", page.url());
-
+    
 } finally {
 
     if (browser) {
+
+        await context.tracing.stop({
+            path: "trace.zip"
+        });
+
+        console.log("trace.zip uložen");
+
         await browser.close();
     }
 
