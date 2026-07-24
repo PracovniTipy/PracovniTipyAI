@@ -302,8 +302,19 @@ console.log(html);
 
 console.log("CONTENTEDITABLE:", pocet);
 
-throw new Error("STOP");
-    
+console.log("FINAL URL:", page.url());
+
+console.log(
+    "LOGIN MODAL:",
+    await page.getByText("Login or sign up").count()
+);
+
+console.log(
+    "ACCESS DENIED:",
+    await page.getByText("You don't have access to this page.").count()
+);
+
+throw new Error("STOP");    
 console.log("✅ TEST 3 - EDITOR NALEZEN");
     
     await editable.click();
