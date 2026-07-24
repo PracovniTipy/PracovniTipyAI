@@ -48,12 +48,12 @@ try {
 
     console.dir(job, { depth: null });
 
+    browser = await chromium.connectOverCDP(
+    `wss://production-sfo.browserless.io/chromium?token=${process.env.BROWSERLESS_TOKEN}`
+);
 
-    
-browser = await chromium.connectOverCDP(
-`wss://production-sfo.browserless.io/chromium?token=${process.env.BROWSERLESS_TOKEN}`
-    console.log("CONTEXTS:", browser.contexts().length);
-    
+console.log("CONTEXTS:", browser.contexts().length);
+
 context = await browser.newContext();
     
     await context.setExtraHTTPHeaders({
@@ -162,6 +162,15 @@ await page.goto("https://herohero.co/create", {
 });
 
 console.log("URL:", page.url());
+    
+await page.screenshot({
+    path: "po-create.png",
+    fullPage: true,
+});
+
+console.log(await page.content());
+
+throw new Error("STOP");
     
 if (!page.url().includes("/login")) {
     console.log("Session je platná, login přeskakuji.");
