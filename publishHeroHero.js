@@ -37,7 +37,8 @@ function downloadImage(url, destination) {
 
 module.exports = async function publishHeroHero(job) {
     
-    let browser;
+let browser;
+let context;
     
 try {
     
@@ -53,7 +54,7 @@ browser = await chromium.connectOverCDP(
     `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
 );
 
-const context = browser.contexts()[0];
+context = browser.contexts()[0];
     
     await context.setExtraHTTPHeaders({
   "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
