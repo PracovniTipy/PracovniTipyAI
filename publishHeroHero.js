@@ -51,8 +51,7 @@ try {
 
     
 browser = await chromium.connectOverCDP(
-    `wss://production-sfo.browserless.io/stealth?token=${process.env.BROWSERLESS_TOKEN}`
-);
+`wss://production-sfo.browserless.io/chromium/stealth?token=${process.env.BROWSERLESS_TOKEN}`);
 
     console.log("CONTEXTS:", browser.contexts().length);
     
