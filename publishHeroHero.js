@@ -298,9 +298,11 @@ console.log("TITLE:", await page.title());
 const html = await page.content();
 console.log(html);
     
-    await page.waitForSelector('[contenteditable="true"]', {
-    timeout: 60000
-});
+    const pocet = await page.locator("[contenteditable]").count();
+
+console.log("CONTENTEDITABLE:", pocet);
+
+throw new Error("STOP");
     
 console.log("✅ TEST 3 - EDITOR NALEZEN");
     
