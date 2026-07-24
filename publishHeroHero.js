@@ -226,17 +226,27 @@ console.log("AFTER CREATE BODY:");
 console.log(await page.locator("body").innerText());
     
 await page.waitForTimeout(3000);
+
 const allowCookies = page.getByRole("button", { name: "Allow all" });
 
-if (await allowCookies.count()) {
+try {
+    await allowCookies.waitFor({
+        state: "visible",
+        timeout: 5000,
+    });
+
     console.log("🍪 COOKIE OKNO NALEZENO");
 
     await allowCookies.click();
 
     console.log("🍪 COOKIES POTVRZENY");
 
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
+
+} catch {
+    console.log("🍪 COOKIE OKNO NENALEZENO");
 }
+    
     await page.screenshot({
     path: "create-page.png",
     fullPage: true,
