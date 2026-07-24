@@ -83,12 +83,6 @@ const page = await context.newPage();
         } catch {}
     }
 });
-
-    await page.addInitScript(() => {
-    Object.defineProperty(navigator, "webdriver", {
-        get: () => undefined,
-    });
-});
     
 await context.tracing.start({
     screenshots: true,
@@ -112,28 +106,6 @@ await context.tracing.start({
             } catch {}
 
             console.log("=========================");
-
-        }
-
-    });
-
-    page.on("response", async (response) => {
-   
-        const url = response.url();
-
-        if (url.includes("/auth") || url.includes("/oauth")) {
-
-            console.log("======== AUTH ========");
-
-            console.log(response.status(), response.request().method(), url);
-
-            try {
-
-                console.log(await response.text());
-
-            } catch {}
-
-            console.log("======================");
 
         }
 
