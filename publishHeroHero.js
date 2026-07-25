@@ -182,20 +182,18 @@ const allowCookies = page.getByRole("button", {
             
         }
 
-        const editor = page.locator('[contenteditable="true"]').first();
+const createButton = page.getByRole("link", {
+    name: "Vytvořit",
+});
 
-console.log("Hledám editor...");
-console.log("Aktuální URL:", page.url());
-console.log("TITLE:", await page.title());
-        
-        await editor.waitFor({
-            state: "visible",
-            timeout: 30000,
-        });
+await createButton.waitFor({
+    state: "visible",
+    timeout: 30000,
+});
 
-        await editor.click();
+await createButton.click();
 
-        console.log("✅ Editor připraven.");
+console.log("✅ Kliknuto na Vytvořit.");
 
         if (title) {
 
