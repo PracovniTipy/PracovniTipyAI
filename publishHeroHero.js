@@ -295,6 +295,9 @@ const allowCookies = page.getByRole("button", {
 
         console.log("🎉 HeroHero příspěvek byl úspěšně publikován.");
 
+console.log("⏸️ Debug - čekám 120 sekund...");
+await page.waitForTimeout(120000);
+        
     } finally {
 
         if (downloadedImage && fs.existsSync(downloadedImage)) {
