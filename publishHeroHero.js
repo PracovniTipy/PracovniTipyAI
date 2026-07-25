@@ -103,6 +103,9 @@ let downloadedImage = null;
 
         await page.goto("https://herohero.co/create", {
             waitUntil: "domcontentloaded",
+
+            console.log("URL:", page.url());
+console.log("TITLE:", await page.title());
         });
 
         if (page.url().includes("/login")) {
@@ -151,6 +154,7 @@ let downloadedImage = null;
 
             console.log("✅ Session je platná.");
 
+            console.log("PO LOGIN URL:", page.url());
         }
 
             // ===========================
@@ -179,6 +183,10 @@ const allowCookies = page.getByRole("button", {
 
         const editor = page.locator('[contenteditable="true"]').first();
 
+console.log("Hledám editor...");
+console.log("Aktuální URL:", page.url());
+console.log("TITLE:", await page.title());
+        
         await editor.waitFor({
             state: "visible",
             timeout: 30000,
