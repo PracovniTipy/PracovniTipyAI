@@ -182,19 +182,45 @@ const allowCookies = page.getByRole("button", {
             
         }
 
-const createButton = page.getByRole("link", {
-    name: "Vytvořit",
+await page.waitForLoadState("networkidle");
+await page.waitForTimeout(3000);
+
+console.log("========== DIAGNOSTIKA ==========");
+
+console.log("URL:", page.url());
+console.log("TITLE:", await page.title());
+
+console.log("textarea:", await page.locator("textarea").count());
+console.log("input:", await page.locator("input").count());
+console.log("[contenteditable]:", await page.locator("[contenteditable]").count());
+
+        console.log("LINKY:");
+console.log(await page.getByRole("link").allTextContents());
+
+console.log("TLAČÍTKA:");
+console.log(await page.getByRole("button").allTextContents());
+        
+fs.writeFileSync(
+    "/tmp/herohero.html",
+    await page.content(),
+    "utf8"
+);
+
+await page.screenshot({
+    path: "/tmp/herohero.png",
+    fullPage: true,
 });
 
-await createButton.waitFor({
-    state: "visible",
-    timeout: 30000,
-});
+        console.log(await page.content());
+        
+console.log("✅ HTML uloženo.");
+console.log("✅ Screenshot uložen.");
 
-await createButton.click();
+console.log("================================");
 
-console.log("✅ Kliknuto na Vytvořit.");
-
+console.log("⏸️ Debug - čekám 120 sekund...");
+await page.waitForTimeout(120000);
+        
         if (title) {
 
             await page.keyboard.type(title);
