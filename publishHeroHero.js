@@ -161,14 +161,23 @@ if (
                 path: "storageState.json",
             });
 
-            console.log("✅ Přihlášení úspěšné.");
+console.log("✅ Přihlášení úspěšné.");
+    
+await page.goto("https://herohero.co/create", {
+    waitUntil: "networkidle",
+});
 
-        } else {
+console.log("CREATE PO LOGIN:", page.url());
+       } else {
 
-            console.log("✅ Session je platná.");
+    console.log("✅ Session je platná.");
 
-            console.log("PO LOGIN URL:", page.url());
-        }
+    await page.goto("https://herohero.co/create", {
+        waitUntil: "networkidle",
+    });
+
+    console.log("CREATE PO SESSION:", page.url());
+}
 
             // ===========================
         // CREATE
