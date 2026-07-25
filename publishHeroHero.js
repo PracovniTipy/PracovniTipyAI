@@ -104,10 +104,11 @@ let downloadedImage = null;
         await page.goto("https://herohero.co/create", {
             waitUntil: "domcontentloaded",
 
-            console.log("URL:", page.url());
-console.log("TITLE:", await page.title());
         });
 
+console.log("URL:", page.url());
+console.log("TITLE:", await page.title());
+        
         if (page.url().includes("/login")) {
 
             console.log("🔐 Přihlašování...");
