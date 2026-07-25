@@ -177,21 +177,6 @@ const allowCookies = page.getByRole("button", {
             
         }
 
-
-const createButton = page.getByText("Create").first();            
-
-        
-        await createButton.waitFor({
-            state: "visible",
-            timeout: 15000,
-        });
-
-        await createButton.click();
-
-        await page.waitForURL("**/create", {
-            timeout: 30000,
-        });
-
         const editor = page.locator('[contenteditable="true"]').first();
 
         await editor.waitFor({
