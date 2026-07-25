@@ -101,16 +101,28 @@ let downloadedImage = null;
         // LOGIN
         // ===========================
 
-        await page.goto("https://herohero.co/create", {
-            waitUntil: "domcontentloaded",
+       await page.goto("https://herohero.co", {
+    waitUntil: "networkidle",
+});
 
-        });
+console.log("DOMŮ:", page.url());
+
+await page.waitForTimeout(3000);
+
+await page.goto("https://herohero.co/create", {
+    waitUntil: "networkidle",
+});
+
+console.log("CREATE:", page.url());
+console.log("TITLE:", await page.title());
 
 console.log("URL:", page.url());
 console.log("TITLE:", await page.title());
         
-        if (page.url().includes("/login")) {
-
+if (
+    page.url().includes("/login") ||
+    await page.locator('input[type="email"]').count()
+) {
             console.log("🔐 Přihlašování...");
 
             const emailInput = page.locator('input[type="email"]');
