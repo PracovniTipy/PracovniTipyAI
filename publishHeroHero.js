@@ -58,11 +58,11 @@ let downloadedImage = null;
         console.log("START HEROHERO");
         console.log("==================================");
 
-        browser = await chromium.connectOverCDP(
-            `wss://production-sfo.browserless.io/chromium?token=${process.env.BROWSERLESS_TOKEN}`
-        );
+       browser = await chromium.launch({
+    headless: true
+});
 
-        context = await browser.newContext({
+context = await browser.newContext({
 
             userAgent:
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36",
