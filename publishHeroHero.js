@@ -4,18 +4,21 @@ const path = require("path");
 const https = require("https");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE");
+console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE (FIXED REV)");
 console.log("==========================================");
 
 // ============================================================================
-// 1. KONSTANTY A POJMENOVANÉ TIMEOUTY (NO MAGIC NUMBERS)
+// 1. KONSTANTY A POJMENOVANÉ TIMEOUTY
 // ============================================================================
 const CONFIG = {
     STORAGE_STATE_PATH: path.join(__dirname, "storageState.json"),
     MAX_RETRIES: 3,
     RETRY_DELAY_MS: 2500,
+    HEADLESS: process.env.HEADLESS !== "false",
+    DEBUG: process.env.DEBUG === "true" || process.env.DEBUG === "1",
     TIMEOUTS: {
         PAGE_NAVIGATION: 35000,
+        SPA_HYDRATION: 2500,
         ELEMENT_WAIT: 12000,
         LOGIN_WAIT: 25000,
         UPLOAD_WAIT: 45000,
@@ -31,6 +34,18 @@ const CONFIG = {
 // 2. CENTRALIZOVANÉ SELECTORY
 // ============================================================================
 const SELECTORS = {
+    NO_ACCESS: [
+        ':has-text("K této stránce nemáš přístup")',
+        ':has-text("Nemáš přístup")',
+        ':has-text("Nemáte přístup")',
+        ':has-text("NoAccessError")',
+        ':has-text("Access Denied")',
+        ':has-text("Forbidden")',
+        ':has-text("Unauthorized")',
+        '[class*="error" i]:has-text("403")',
+        '[class*="error" i]:has-text("401")',
+        '[data-testid*="error" i]'
+    ],
     LOGIN: {
         EMAIL_INPUTS: [
             'input[type="email"]',
@@ -69,17 +84,12 @@ const SELECTORS = {
     ],
     CREATE_TRIGGER: [
         'button:has-text("Nový příspěvek")',
-        'a:has-text("Nový příspěvek")',
         'button:has-text("Create")',
-        'a:has-text("Create")',
         'button:has-text("New post")',
-        'a:has-text("New post")',
         'button:has-text("Post")',
-        'a[href*="/create"]',
         'button[aria-label*="Create" i]',
         'button[title*="Create" i]',
-        '[data-testid*="create" i]',
-        'button:has(svg)'
+        '[data-testid*="create" i]'
     ],
     EDITOR: {
         TITLE: [
@@ -146,8 +156,14 @@ const SELECTORS = {
 };
 
 // ============================================================================
-// 3. HELPER FUNKCE (RETRY, UTILS, LOGGING)
+// 3. HELPER FUNKCE
 // ============================================================================
+
+function debugLog(...args) {
+    if (CONFIG.DEBUG) {
+        console.log(`[DEBUG ${new Date().toISOString()}]`, ...args);
+    }
+}
 
 function startTimer() {
     const start = Date.now();
@@ -158,6 +174,7 @@ function safeUnlink(filePath) {
     try {
         if (filePath && fs.existsSync(filePath)) {
             fs.unlinkSync(filePath);
+            debugLog(`Smazán dočasný soubor: ${filePath}`);
         }
     } catch (e) {
         console.warn(`[WARN] Nelze smazat dočasný soubor ${filePath}:`, e.message);
@@ -172,6 +189,39 @@ function isValidJson(filePath) {
     } catch {
         return false;
     }
+}
+
+async function waitForSpaLoad(page) {
+    await page.waitForLoadState("domcontentloaded").catch(() => {});
+    await page.waitForTimeout(CONFIG.TIMEOUTS.SPA_HYDRATION);
+}
+
+async function detectNoAccessError(page) {
+    for (const selector of SELECTORS.NO_ACCESS) {
+        const loc = page.locator(selector);
+        const count = await loc.count();
+        for (let i = 0; i < count; i++) {
+            const item = loc.nth(i);
+            if (await item.isVisible().catch(() => false)) {
+                const text = await item.innerText().catch(() => selector);
+                return { detected: true, selector, text: text.trim() };
+            }
+        }
+    }
+    return { detected: false, selector: null, text: null };
+}
+
+async function findFirstVisible(page, selectorsArray) {
+    for (const selector of selectorsArray) {
+        const loc = page.locator(selector);
+        const count = await loc.count();
+        for (let i = 0; i < count; i++) {
+            if (await loc.nth(i).isVisible().catch(() => false)) {
+                return { selector, locator: loc.nth(i) };
+            }
+        }
+    }
+    return null;
 }
 
 async function withRetry(actionFn, description, maxRetries = CONFIG.MAX_RETRIES, delayMs = CONFIG.RETRY_DELAY_MS) {
@@ -191,7 +241,7 @@ async function withRetry(actionFn, description, maxRetries = CONFIG.MAX_RETRIES,
             }
         }
     }
-    throw new Error(`❌ "${description}" selhalo i po ${maxRetries} pokusech. Poslední chyba: ${lastError.message}`);
+    throw new Error(`❌ "${description}" selhalo i po ${maxRetries} pokusech. Poslední chybný stav: ${lastError.message}`);
 }
 
 async function safeClick(page, locator, description = "element") {
@@ -213,23 +263,23 @@ async function safeClick(page, locator, description = "element") {
                 } catch (clickErr) {
                     console.warn(`[WARN] Standardní kliknutí na ${description} selhalo. Zkouším force click...`);
                     await item.click({ force: true, timeout: CONFIG.TIMEOUTS.SHORT_ACTION }).catch(async () => {
-                        console.warn(`[WARN] Force click selhal. Zkouším JS click...`);
+                        console.warn(`[WARN] Force click selhal. Zkouším JS DOM click...`);
                         await item.evaluate((el) => el.click());
                     });
                 }
 
-                console.log(`👉 [${timer()}] Kliknuto na ${description} (selector index: ${i})`);
+                console.log(`👉 [${timer()}] Kliknuto na ${description} (index: ${i})`);
                 return true;
             }
         } catch (e) {
-            // Ignorujeme neviditelné/neplatné elementy v seznamu
+            debugLog(`Prvek ${description} na indexu ${i} nebylo možné prokliknout:`, e.message);
         }
     }
     return false;
 }
 
 async function findAndClickFirst(page, selectorsArray, description) {
-    console.log(`🔍 Hledám a klikám na: ${description} (počet kandidátů: ${selectorsArray.length})`);
+    console.log(`🔍 Hledám a klikám na: ${description}`);
     for (const selector of selectorsArray) {
         const loc = page.locator(selector);
         if ((await loc.count()) > 0) {
@@ -251,26 +301,23 @@ async function safeType(page, locator, text, description = "editor") {
             await item.scrollIntoViewIfNeeded().catch(() => {});
             await item.click().catch(() => {});
 
-            // Pokus 1: fill()
             try {
                 await item.fill(text, { timeout: CONFIG.TIMEOUTS.SHORT_ACTION });
                 console.log(`✅ [${timer()}] Vyplněno pomocí fill() -> ${description}`);
                 return true;
             } catch (e) {
-                console.warn(`[WARN] fill() selhal pro ${description}. Pokouším se o keyboard.type()...`);
+                console.warn(`[WARN] fill() selhal pro ${description}. Zkouším keyboard.type()...`);
             }
 
-            // Pokus 2: click + keyboard.type()
             try {
                 await item.click();
                 await page.keyboard.type(text, { delay: 10 });
                 console.log(`✅ [${timer()}] Vyplněno pomocí keyboard.type() -> ${description}`);
                 return true;
             } catch (e) {
-                console.warn(`[WARN] keyboard.type() selhal. Pokouším se o pressSequentially()...`);
+                console.warn(`[WARN] keyboard.type() selhal. Zkouším pressSequentially()...`);
             }
 
-            // Pokus 3: pressSequentially()
             try {
                 await item.pressSequentially(text, { delay: 10 });
                 console.log(`✅ [${timer()}] Vyplněno pomocí pressSequentially() -> ${description}`);
@@ -303,28 +350,38 @@ async function downloadImage(url, destination) {
     });
 }
 
-async function generateDiagnostics(page, prefix = "error") {
+async function generateDiagnostics(page, context, prefix = `error_${Date.now()}`) {
     try {
         console.log(`📊 Vyvářím diagnostické soubory (${prefix}.html, ${prefix}.png)...`);
+        
+        const tracePath = path.join(__dirname, `${prefix}-trace.zip`);
+        if (context) {
+            await context.tracing.stop({ path: tracePath }).catch(() => {});
+            console.log(`📁 Playwright Trace uložen do: ${tracePath}`);
+        }
+
         if (!page) return;
 
         const currentUrl = page.url();
         const currentTitle = await page.title().catch(() => "N/A");
 
-        const textareas = await page.locator("textarea").count();
-        const inputs = await page.locator("input").count();
-        const editables = await page.locator('[contenteditable="true"]').count();
-        const textboxes = await page.locator('[role="textbox"]').count();
+        const hasLogin = !!(await findFirstVisible(page, SELECTORS.LOGIN.EMAIL_INPUTS));
+        const hasEditor = !!(await findFirstVisible(page, SELECTORS.EDITOR.BODY));
+        const hasCreateBtn = !!(await findFirstVisible(page, SELECTORS.CREATE_TRIGGER));
+        const noAccessInfo = await detectNoAccessError(page);
 
-        console.log(`📍 DIAGNOSTIKA URL: ${currentUrl}`);
-        console.log(`📍 DIAGNOSTIKA TITLE: ${currentTitle}`);
-        console.log(`📊 PRVKY STRÁNKY -> Inputs: ${inputs}, Textareas: ${textareas}, Contenteditable: ${editables}, Role Textbox: ${textboxes}`);
+        console.log(`================ DIAGNOSTICKÝ SOUHRN ================`);
+        console.log(`📍 URL: ${currentUrl}`);
+        console.log(`📍 TITLE: ${currentTitle}`);
+        console.log(`🔍 STATUS PRVKŮ -> Login input: ${hasLogin} | Editor: ${hasEditor} | Create Btn: ${hasCreateBtn}`);
+        console.log(`🔍 NO ACCESS HIT -> Detected: ${noAccessInfo.detected} | Selector: ${noAccessInfo.selector || "N/A"} | Text: "${noAccessInfo.text || "N/A"}"`);
+        console.log(`===================================================`);
 
         const htmlContent = await page.content().catch(() => "HTML content inaccessible");
-        fs.writeFileSync(`${prefix}.html`, htmlContent, "utf8");
+        fs.writeFileSync(path.join(__dirname, `${prefix}.html`), htmlContent, "utf8");
 
-        await page.screenshot({ path: `${prefix}.png`, fullPage: true }).catch(() => {});
-        console.log(`💾 Diagnostické soubory uloženy jako ${prefix}.html a ${prefix}.png`);
+        await page.screenshot({ path: path.join(__dirname, `${prefix}.png`), fullPage: true }).catch(() => {});
+        console.log(`💾 Diagnostika uložena pod prefixem: ${prefix}`);
     } catch (e) {
         console.error("⚠️ Nelze vytvořit diagnostiku:", e.message);
     }
@@ -344,11 +401,63 @@ module.exports = async function publishHeroHero(job) {
     let page = null;
     let downloadedImagePath = null;
 
+    const createNewContext = async (withStorageState = true) => {
+        if (context) {
+            await context.tracing.stop().catch(() => {});
+            await context.close().catch(() => {});
+        }
+
+        const contextOptions = {
+            userAgent: CONFIG.USER_AGENT,
+            locale: CONFIG.LOCALE,
+            viewport: CONFIG.VIEWPORT
+        };
+
+        if (withStorageState && isValidJson(CONFIG.STORAGE_STATE_PATH)) {
+            console.log("🔑 [SESSION] Načítám storageState.json do nového BrowserContext...");
+            contextOptions.storageState = CONFIG.STORAGE_STATE_PATH;
+        } else {
+            console.log("ℹ️ [SESSION] Vytvářím čistý BrowserContext bez uložené relace.");
+        }
+
+        context = await browser.newContext(contextOptions);
+
+        await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
+
+        await context.setExtraHTTPHeaders({
+            "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://herohero.co/"
+        });
+
+        const newPage = await context.newPage();
+
+        newPage.on("requestfailed", (req) => {
+            debugLog(`🌐 [NET FAIL] ${req.method()} ${req.url()} - ${req.failure()?.errorText}`);
+        });
+
+        newPage.on("response", (res) => {
+            if (res.status() >= 400) {
+                debugLog(`⚠️ [HTTP ${res.status()}] ${res.request().method()} ${res.url()}`);
+            }
+        });
+
+        newPage.on("pageerror", (err) => {
+            console.error(`🔥 [PAGE ERROR] ${err.message}`);
+        });
+
+        newPage.on("console", (msg) => {
+            if (msg.type() === "error") {
+                debugLog(`🖥️ [BROWSER CONSOLE ERROR] ${msg.text()}`);
+            }
+        });
+
+        return newPage;
+    };
+
     try {
-        // Inicializace prohlížeče
-        console.log("🖥️ Spouštím Chromium (Docker / Railway konfigurované)...");
+        console.log(`🖥️ Spouštím Chromium (Headless: ${CONFIG.HEADLESS})...`);
         browser = await chromium.launch({
-            headless: true,
+            headless: CONFIG.HEADLESS,
             args: [
                 "--no-sandbox",
                 "--disable-setuid-sandbox",
@@ -357,101 +466,80 @@ module.exports = async function publishHeroHero(job) {
             ]
         });
 
-        // Kontrola storageState
-        const contextOptions = {
-            userAgent: CONFIG.USER_AGENT,
-            locale: CONFIG.LOCALE,
-            viewport: CONFIG.VIEWPORT
-        };
-
         let hasValidStorageFile = isValidJson(CONFIG.STORAGE_STATE_PATH);
-        if (hasValidStorageFile) {
-            console.log("🔑 Nalezen platný JSON storageState.json. Načítám relaci...");
-            contextOptions.storageState = CONFIG.STORAGE_STATE_PATH;
-        } else {
-            console.log("ℹ️ storageState.json neexistuje nebo je neplatný. Začínám s novou relací.");
-            safeUnlink(CONFIG.STORAGE_STATE_PATH);
-        }
+        page = await createNewContext(hasValidStorageFile);
 
-        context = await browser.newContext(contextOptions);
-
-        await context.setExtraHTTPHeaders({
-            "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://herohero.co/",
-            "Upgrade-Insecure-Requests": "1"
-        });
-
-        page = await context.newPage();
-
-        // ---------------------------------------------------------------------
-        // ODCHYTÁVÁNÍ SÍŤOVÝCH A KONZOLOVÝCH CHYB PRO LOGGING
-        // ---------------------------------------------------------------------
-        page.on("requestfailed", (req) => {
-            console.warn(`🌐 [NET FAIL] ${req.method()} ${req.url()} - ${req.failure()?.errorText}`);
-        });
-
-        page.on("response", (res) => {
-            if (res.status() >= 400) {
-                console.warn(`⚠️ [HTTP ${res.status()}] ${res.request().method()} ${res.url()}`);
-            }
-        });
-
-        page.on("pageerror", (err) => {
-            console.error(`🔥 [PAGE ERROR] ${err.message}`);
-        });
-
-        page.on("console", (msg) => {
-            if (msg.type() === "error") {
-                console.error(`🖥️ [BROWSER CONSOLE ERROR] ${msg.text()}`);
-            }
-        });
-
-        // Extrakce dat z jobu
         const titleText = job.title || "";
         const bodyText = job.text || job.description || job.content || "";
         const imageUrl = job.image || job.imageUrl || job.image_url || "";
 
-        // ---------------------------------------------------------------------
-        // STEP 1: OTEVŘENÍ KREACE A OVĚŘENÍ PLATNOSTI SESSION
-        // ---------------------------------------------------------------------
+        // STEP 1: NAČTENÍ /CREATE
         await withRetry(async () => {
-            console.log("🌐 Otevírám https://herohero.co/create...");
+            console.log("🌐 Naviguji na https://herohero.co/create...");
             await page.goto("https://herohero.co/create", {
                 waitUntil: "domcontentloaded",
                 timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION
             });
+            await waitForSpaLoad(page);
         }, "Načtení /create stránky");
 
-        // Kontrola, zda vyžaduje přihlášení
-        const isEmailVisible = async () => {
-            for (const sel of SELECTORS.LOGIN.EMAIL_INPUTS) {
-                const loc = page.locator(sel);
-                if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                    return true;
-                }
+        const evaluateSessionStatus = async () => {
+            console.log("🔍 [DECISION] Vyhodnocuji stav relace na aktuální stránce...");
+
+            if (page.url().includes("/login")) {
+                console.warn("⚠️ [SESSION INVALID] URL obsahuje '/login'.");
+                return { valid: false, reason: "REDIRECT_LOGIN" };
             }
-            return false;
+
+            const loginInput = await findFirstVisible(page, SELECTORS.LOGIN.EMAIL_INPUTS);
+            if (loginInput) {
+                console.warn(`⚠️ [SESSION INVALID] Viditelné přihlašovací pole (${loginInput.selector}).`);
+                return { valid: false, reason: "LOGIN_FORM_PRESENT" };
+            }
+
+            const noAccessInfo = await detectNoAccessError(page);
+            if (noAccessInfo.detected) {
+                console.warn(`⚠️ [NO_ACCESS_DETECTED] Chyba přístupu: "${noAccessInfo.text}" (${noAccessInfo.selector})`);
+                return { valid: false, reason: `NO_ACCESS: ${noAccessInfo.text}` };
+            }
+
+            const editorFound = await findFirstVisible(page, SELECTORS.EDITOR.BODY);
+            if (editorFound) {
+                console.log(`✅ [SESSION VALID] Editor je již přímo zobrazen (${editorFound.selector}).`);
+                return { valid: true, editorReady: true, editorSelector: editorFound.selector };
+            }
+
+            const createBtnFound = await findFirstVisible(page, SELECTORS.CREATE_TRIGGER);
+            if (createBtnFound) {
+                console.log(`✅ [SESSION VALID] Tlačítko pro nový příspěvek je k dispozici (${createBtnFound.selector}).`);
+                return { valid: true, editorReady: false, createSelector: createBtnFound.selector };
+            }
+
+            console.warn("⚠️ [SESSION INVALID] Nenalezen editor ani tlačítko pro tvorbu.");
+            return { valid: false, reason: "NO_EDITOR_OR_CREATE_BTN" };
         };
 
-        let needsLogin = page.url().includes("/login") || (await isEmailVisible());
+        let sessionStatus = await evaluateSessionStatus();
 
-        if (hasValidStorageFile && needsLogin) {
-            console.warn("⚠️ Načtený storageState.json vypršel nebo je neplatný. Mažu starý soubor a zahajuji přihlášení.");
+        if (hasValidStorageFile && !sessionStatus.valid) {
+            console.warn(`⚠️ [SESSION EXPIRED] Uložená relace selhala (Důvod: ${sessionStatus.reason}). Ruším relaci a mažu storageState.json.`);
             safeUnlink(CONFIG.STORAGE_STATE_PATH);
             hasValidStorageFile = false;
         }
 
-        // ---------------------------------------------------------------------
-        // STEP 2: AUTOMATICKÉ PŘIHLÁŠENÍ (IF NEEDED)
-        // ---------------------------------------------------------------------
-        if (needsLogin) {
-            console.log("🔐 Vyžadováno přihlášení. Zahajuji proces přihlášení...");
+        // STEP 2: RE-LOGIN WORKFLOW
+        if (!sessionStatus.valid) {
+            console.log("🔐 [LOGIN REQUIRED] Relace neplatná. Vytvářím čistý kontext pro nové přihlášení...");
             if (!process.env.HERO_EMAIL || !process.env.HERO_PASSWORD) {
-                throw new Error("❌ Chybí HERO_EMAIL nebo HERO_PASSWORD v proměnných prostředí!");
+                throw new Error("❌ Chybí HERO_EMAIL nebo HERO_PASSWORD v enviromentu!");
             }
 
+            page = await createNewContext(false);
+
+            await page.goto("https://herohero.co/login", { waitUntil: "domcontentloaded", timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
+            await waitForSpaLoad(page);
+
             await withRetry(async () => {
-                // Email
                 let emailFilled = false;
                 for (const sel of SELECTORS.LOGIN.EMAIL_INPUTS) {
                     const loc = page.locator(sel);
@@ -462,75 +550,80 @@ module.exports = async function publishHeroHero(job) {
                 }
                 if (!emailFilled) throw new Error("Emailové pole nebylo nalezeno.");
 
-                // Pokračovat
-                const clickedContinue = await findAndClickFirst(page, SELECTORS.LOGIN.CONTINUE_BUTTONS, "Tlačítko po zadaní emailu");
+                const clickedContinue = await findAndClickFirst(page, SELECTORS.LOGIN.CONTINUE_BUTTONS, "Pokračovat tlačítko");
                 if (!clickedContinue) {
                     await page.keyboard.press("Enter");
                 }
 
-                // Heslo
                 const passLoc = page.locator(SELECTORS.LOGIN.PASSWORD_INPUTS.join(", "));
                 await passLoc.first().waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
                 const passwordFilled = await safeType(page, passLoc, process.env.HERO_PASSWORD, "Heslo input");
                 if (!passwordFilled) throw new Error("Heslové pole nebylo možné vyplnit.");
 
-                // Submit
                 const clickedSubmit = await findAndClickFirst(page, SELECTORS.LOGIN.SUBMIT_BUTTONS, "Přihlašovací tlačítko");
                 if (!clickedSubmit) {
                     await page.keyboard.press("Enter");
                 }
 
-                // Čekání na dokončení přihlášení
                 await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
-                await page.waitForLoadState("domcontentloaded");
+                await waitForSpaLoad(page);
             }, "Průběh přihlašovacího formuláře");
 
-            // Uložení nového storageState.json
-            await context.storageState({ path: CONFIG.STORAGE_STATE_PATH });
-            console.log("💾 Nová relace uložena do storageState.json");
-
-            // Návrat do /create
+            console.log("🌐 Návrat na https://herohero.co/create k ověření nové relace...");
             await page.goto("https://herohero.co/create", { waitUntil: "domcontentloaded", timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
-        } else {
-            console.log("✅ Session je plně platná, přihlášení nebylo nutné.");
+            await waitForSpaLoad(page);
+
+            sessionStatus = await evaluateSessionStatus();
+            if (!sessionStatus.valid) {
+                throw new Error(`❌ Přihlášení proběhlo, ale účet nemá oprávnění tvořit na /create (Důvod: ${sessionStatus.reason}). Session neukládám.`);
+            }
+
+            // ATOMICKÝ ZÁPIS STORAGE STATE
+            const tempStoragePath = `${CONFIG.STORAGE_STATE_PATH}.tmp`;
+            await context.storageState({ path: tempStoragePath });
+            fs.renameSync(tempStoragePath, CONFIG.STORAGE_STATE_PATH);
+            console.log("💾 [SESSION SAVED] Nová plně ověřená relace uložena do storageState.json");
         }
 
-        // ---------------------------------------------------------------------
-        // STEP 3: ODSTRAŇOVÁNÍ COOKIE BANNERS
-        // ---------------------------------------------------------------------
+        console.log("✅ [DECISION] Relace je ověřená a účet má oprávnění vytvářet příspěvky.");
+
+        // STEP 3: COOKIE BANNERS
         await findAndClickFirst(page, SELECTORS.COOKIES, "Cookie dialog").catch(() => {});
 
-        // ---------------------------------------------------------------------
-        // STEP 4: KONTROLA A OTEVŘENÍ EDITORU
-        // ---------------------------------------------------------------------
-        const checkEditorVisible = async () => {
-            for (const sel of SELECTORS.EDITOR.BODY) {
-                const loc = page.locator(sel);
-                if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                    return sel;
-                }
-            }
-            return null;
-        };
+        // STEP 4: OTEVŘENÍ EDITORU
+        let activeEditor = await findFirstVisible(page, SELECTORS.EDITOR.BODY);
 
-        let activeEditorSelector = await checkEditorVisible();
-
-        if (!activeEditorSelector) {
-            console.log("🔍 Editor není přímo aktivní. Hledám tlačítko pro nový příspěvek (+ / Create)...");
-            await findAndClickFirst(page, SELECTORS.CREATE_TRIGGER, "Tlačítko vytvořit příspěvek");
+        if (!activeEditor) {
+            console.log("🔍 [EDITOR] Editor není otevřený. Pokouším se jej aktivovat tlačítkem Create...");
             
-            // Čekáme, až se objeví editor
             await withRetry(async () => {
-                activeEditorSelector = await checkEditorVisible();
-                if (!activeEditorSelector) throw new Error("Editor se po kliknutí na Create neotevřel.");
-            }, "Čekání na otevření editoru");
+                const noAccess = await detectNoAccessError(page);
+                if (noAccess.detected) {
+                    throw new Error(`Detekována chyba přístupu před kliknutím na Create: ${noAccess.text}`);
+                }
+
+                const clicked = await findAndClickFirst(page, SELECTORS.CREATE_TRIGGER, "Tlačítko pro vytvoření příspěvku");
+                if (!clicked) {
+                    throw new Error("Tlačítko pro vytvoření příspěvku nebylo nalezeno.");
+                }
+
+                await page.waitForTimeout(1000);
+
+                const noAccessAfterClick = await detectNoAccessError(page);
+                if (noAccessAfterClick.detected) {
+                    throw new Error(`Po kliknutí na Create se objevila chyba přístupu: ${noAccessAfterClick.text}`);
+                }
+
+                activeEditor = await findFirstVisible(page, SELECTORS.EDITOR.BODY);
+                if (!activeEditor) {
+                    throw new Error("Kliknutí na Create nezměnilo stav a editor se neotevřel.");
+                }
+            }, "Aktivace a otevření editoru");
         }
 
-        console.log(`✅ Editor připraven (aktivní selector: ${activeEditorSelector})`);
+        console.log(`✅ [EDITOR READY] Editor připraven (${activeEditor.selector})`);
 
-        // ---------------------------------------------------------------------
-        // STEP 5: VYPLNĚNÍ NADPISU A TEXTU
-        // ---------------------------------------------------------------------
+        // STEP 5: VYPLNĚNÍ
         if (titleText) {
             console.log(`📝 Vkládám nadpis: "${titleText}"`);
             let titleFilled = false;
@@ -543,7 +636,7 @@ module.exports = async function publishHeroHero(job) {
             }
 
             if (!titleFilled) {
-                console.warn("⚠️ Nenalezeno dedikované pole pro nadpis. Vpisuji přes keyboard do hlavního editoru...");
+                console.warn("⚠️ Nenalezeno vyhrazené pole pro nadpis. Vkládám do editoru s odřádkováním...");
                 await page.keyboard.type(titleText);
                 await page.keyboard.press("Enter");
             }
@@ -561,139 +654,106 @@ module.exports = async function publishHeroHero(job) {
             }
 
             if (!bodyFilled) {
-                throw new Error("Nepodařilo se zapsat obsah příspěvku do žádného editoru.");
+                throw new Error("Nepodařilo se zapsat obsah příspěvku do žádného z editorů.");
             }
         }
 
-        // ---------------------------------------------------------------------
-        // STEP 6: STAŽENÍ A UPLOAD OBRÁZKU
-        // ---------------------------------------------------------------------
+        // STEP 6: UPLOAD OBRÁZKU
         if (imageUrl) {
             await withRetry(async () => {
-                console.log(`🖼️ Detekována URL obrázku: ${imageUrl}`);
+                console.log(`🖼️ Stahuji obrázek z URL: ${imageUrl}`);
                 downloadedImagePath = path.join(__dirname, `upload_temp_${Date.now()}.jpg`);
 
                 await downloadImage(imageUrl, downloadedImagePath);
                 if (!fs.existsSync(downloadedImagePath)) {
-                    throw new Error("Stažený soubor obrázku na disku neexistuje.");
+                    throw new Error("Soubor obrázku neexistuje na disku.");
                 }
-                console.log("✅ Obrázek byl stažen do dočasného souboru.");
 
                 let fileInput = page.locator(SELECTORS.UPLOAD.FILE_INPUT).first();
 
-                // Pokud input neexistuje v DOMu, otevřeme dialog tlačítkem
                 if ((await fileInput.count()) === 0) {
-                    console.log("🔍 Input pro upload není přítomen, otevírám dialog pro obrázky...");
-                    await findAndClickFirst(page, SELECTORS.UPLOAD.OPEN_DIALOG_BUTTONS, "Tlačítko dialogu obrázků");
+                    console.log("🔍 Input pro soubor chybí v DOMu. Klikám na ikonu obrázku...");
+                    await findAndClickFirst(page, SELECTORS.UPLOAD.OPEN_DIALOG_BUTTONS, "Tlačítko obrázku");
                 }
 
                 fileInput = page.locator(SELECTORS.UPLOAD.FILE_INPUT).first();
                 await fileInput.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
                 await fileInput.setInputFiles(downloadedImagePath);
-                console.log("📤 Soubor byl předán file inputu.");
+                console.log("📤 Soubor nastaven do file inputu.");
 
-                // Ověření dokončení uploadu pomocí indikátorů (preview / image / loader zmizel)
-                console.log("⏳ Ověřuji dokončení nahrávání obrázku na server...");
-                let uploadConfirmed = false;
-                const uploadTimer = Date.now();
-
-                while (Date.now() - uploadTimer < CONFIG.TIMEOUTS.UPLOAD_WAIT) {
-                    for (const ind of SELECTORS.UPLOAD.INDICATORS) {
-                        const loc = page.locator(ind);
-                        if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                            uploadConfirmed = true;
-                            console.log(`✅ Upload obrázku potvrzen přes indikátor: ${ind}`);
-                            break;
-                        }
-                    }
-                    if (uploadConfirmed) break;
-                    await page.waitForTimeout(1000);
+                console.log("⏳ Čekám na dokončení zpracování obrázku (detekce náhledu)...");
+                
+                // SAFE MULTI-SELECTOR WAIT BEZ PROMISE.RACE MEMORY LEAKU
+                const combinedSelector = SELECTORS.UPLOAD.INDICATORS.join(", ");
+                try {
+                    await page.locator(combinedSelector).first().waitFor({ 
+                        state: "visible", 
+                        timeout: CONFIG.TIMEOUTS.UPLOAD_WAIT 
+                    });
+                    console.log("✅ Obrázek byl nahrán a jeho náhled je viditelný.");
+                } catch (e) {
+                    console.warn("⚠️ Nebyl detekován explicitní indikátor obrázku v limitu, pokračuji...");
                 }
-
-                if (!uploadConfirmed) {
-                    console.warn("⚠️ Nebyl detekován explicitní indikátor náhledu obrázku, ale proces pokračuje.");
-                }
-            }, "Stažení a nahrání obrázku");
+            }, "Stažení a upload obrázku");
         }
 
-        // ---------------------------------------------------------------------
         // STEP 7: PUBLIKOVÁNÍ PŘÍSPĚVKU
-        // ---------------------------------------------------------------------
         await withRetry(async () => {
-            console.log("🚀 Zahajuji publikování...");
+            console.log("🚀 Zahajuji publikování příspěvku...");
             const initialUrl = page.url();
 
             const clickedPublish = await findAndClickFirst(page, SELECTORS.PUBLISH.BUTTONS, "Publikační tlačítko");
             if (!clickedPublish) {
-                throw new Error("Tlačítko pro publikování nebylo nalezeno nebo na něj nešlo kliknout.");
+                throw new Error("Tlačítko pro publikování nebylo nalezeno.");
             }
 
-            console.log("⏳ Čekám na potvrzení publikování (URL / Toast / zmizení editoru)...");
-            let publishConfirmed = false;
-            const publishTimer = Date.now();
+            console.log("⏳ Čekám na potvrzení publikace (URL přesměrování, toast nebo zmizení editoru)...");
 
-            while (Date.now() - publishTimer < CONFIG.TIMEOUTS.PUBLISH_WAIT) {
-                // Check A: Změna URL
-                if (page.url() !== initialUrl && !page.url().includes("/create")) {
-                    publishConfirmed = true;
-                    console.log(`✅ Publikace potvrzena přesměrováním na URL: ${page.url()}`);
-                    break;
+            const waitForUrlChange = page.waitForURL((url) => url.toString() !== initialUrl && !url.pathname.includes("/create"), {
+                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT
+            }).catch(() => false);
+
+            const toastSelector = SELECTORS.PUBLISH.CONFIRMATION_TOASTS.join(", ");
+            const waitForToast = page.locator(toastSelector).first().waitFor({ 
+                state: "visible", 
+                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT 
+            }).catch(() => false);
+
+            const waitForEditorDetach = activeEditor.locator.waitFor({ 
+                state: "detached", 
+                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT 
+            }).catch(() => false);
+
+            const result = await Promise.race([waitForUrlChange, waitForToast, waitForEditorDetach]);
+
+            if (result !== false) {
+                console.log("✅ [PUBLISH CONFIRMED] Publikování bylo úspěšně potvrzeno UI událostí!");
+            } else {
+                console.warn("⚠️ Žádný z přímých indikátorů nevrátil potvrzení v časovém limitu. Kontroluji chybu přístupu...");
+                const noAccess = await detectNoAccessError(page);
+                if (noAccess.detected) {
+                    throw new Error(`Publikování selhalo z důvodu chybějících oprávnění: ${noAccess.text}`);
                 }
-
-                // Check B: Potvrzovací toast
-                for (const toastSel of SELECTORS.PUBLISH.CONFIRMATION_TOASTS) {
-                    const loc = page.locator(toastSel);
-                    if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                        publishConfirmed = true;
-                        console.log(`✅ Publikace potvrzena zobrazením oznamovacího prvku: ${toastSel}`);
-                        break;
-                    }
-                }
-                if (publishConfirmed) break;
-
-                // Check C: Editor zmizel
-                const currentEditor = await checkEditorVisible();
-                if (!currentEditor) {
-                    publishConfirmed = true;
-                    console.log("✅ Publikace potvrzena: editor zmizel z obrazovky.");
-                    break;
-                }
-
-                await page.waitForTimeout(1000);
-            }
-
-            if (!publishConfirmed) {
-                console.warn("⚠️ Nepodařilo se zachytit 100% potvrzovací signál publikování, ale tlačítko bylo stisknuto.");
             }
         }, "Publikování příspěvku");
 
-        console.log("🎉 HEROHERO PŘÍSPĚVEK BYL ÚSPĚŠNĚ PUBLIKOVÁN!");
+        console.log("🎉 Příspěvek byl úspěšně zpracován a publikován!");
 
     } catch (error) {
-        console.error("==========================================");
-        console.error("❌ CHYBA PŘI PROVÁDĚNÍ PUBLISH HEROHERO:");
-        console.error(error.message);
-        console.error("==========================================");
-
-        if (page) {
-            await generateDiagnostics(page, "error");
+        console.error("❌ CRITICAL ERROR V WORKFLOW:", error.message);
+        if (page && context) {
+            await generateDiagnostics(page, context, `error_${Date.now()}`);
         }
-
         throw error;
-
     } finally {
-        console.log("🧹 Vyčištění dočasných souborů a zavírání prohlížeče...");
         safeUnlink(downloadedImagePath);
-
         if (context) {
+            await context.tracing.stop().catch(() => {});
             await context.close().catch(() => {});
         }
         if (browser) {
             await browser.close().catch(() => {});
         }
-
-        console.log("========== HEROHERO PUBLISHER END ==========");
+        console.log("🧹 Úklid zdrojů dokončen.");
     }
 };
-
-console.log("PUBLISH HEROHERO MODULE READY");
