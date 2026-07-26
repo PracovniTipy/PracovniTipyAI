@@ -4,7 +4,7 @@ const path = require("path");
 const https = require("https");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE (ROBUST LOGIN FIX)");
+console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE (FINAL LOGIN FIX)");
 console.log("==========================================");
 
 // ============================================================================
@@ -50,46 +50,35 @@ const SELECTORS = {
         EMAIL_INPUTS: [
             'input[type="email"]',
             'input[name="email" i]',
-            'input[name*="user" i]',
-            'input[name*="login" i]',
             'input[id*="email" i]',
             'input[placeholder*="email" i]',
             'input[placeholder*="e-mail" i]',
             'input[placeholder*="přihlaš" i]',
-            'input[placeholder*="jméno" i]',
-            'input[aria-label*="email" i]',
-            '[role="textbox"][name*="email" i]',
-            '[role="textbox"][aria-label*="email" i]',
-            'input:not([type="hidden"]):not([type="password"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])'
+            'input[aria-label*="email" i]'
+        ],
+        STEP1_CONTINUE_BUTTONS: [
+            'form button:has-text("Pokračovat")',
+            'form button:has-text("Continue")',
+            'button:has-text("Pokračovat"):not([class*="apple" i]):not([class*="social" i])',
+            'button:has-text("Continue"):not([class*="apple" i]):not([class*="social" i])',
+            '[data-testid*="continue" i]',
+            'input[type="email"] >> xpath=following::button[1]'
         ],
         PASSWORD_INPUTS: [
             'input[type="password"]',
             'input[name="password" i]',
-            'input[name*="pass" i]',
             'input[id*="password" i]',
             'input[placeholder*="heslo" i]',
             'input[placeholder*="password" i]',
             'input[aria-label*="password" i]',
             'input[aria-label*="heslo" i]'
         ],
-        CONTINUE_BUTTONS: [
-            'button[type="submit"]',
-            'button:has-text("Pokračovat")',
-            'button:has-text("Continue")',
-            'button:has-text("Dále")',
-            'button:has-text("Přihlásit")',
-            'button:has-text("Log in")',
-            'button:has-text("Sign in")',
-            '[data-testid*="continue" i]',
-            'input[type="email"] >> xpath=following::button[1]'
-        ],
-        SUBMIT_BUTTONS: [
-            'button[type="submit"]',
-            'button:has-text("Přihlásit")',
-            'button:has-text("Log in")',
-            'button:has-text("Sign in")',
-            'button:has-text("Pokračovat")',
-            'button:has-text("Continue")',
+        STEP2_SUBMIT_BUTTONS: [
+            'form button:has-text("Přihlásit")',
+            'form button:has-text("Log in")',
+            'form button:has-text("Sign in")',
+            'button:has-text("Přihlásit se")',
+            'button:has-text("Přihlásit"):not([class*="apple" i]):not([class*="google" i])',
             '[data-testid*="login" i]'
         ],
         EMAIL_LOGIN_TRIGGER: [
@@ -188,7 +177,7 @@ const SELECTORS = {
 };
 
 // ============================================================================
-// 3. HELPER FUNKCE
+// 3. HELPER FUNKCE A DIAGNOSTIKA
 // ============================================================================
 
 function debugLog(...args) {
@@ -220,6 +209,82 @@ function isValidJson(filePath) {
         return true;
     } catch {
         return false;
+    }
+}
+
+/**
+ * Atomický zápis stavu relace přes dočasný soubor .tmp
+ */
+async function saveStorageStateAtomically(context, targetPath) {
+    const tempPath = `${targetPath}.tmp`;
+    try {
+        await context.storageState({ path: tempPath });
+        fs.renameSync(tempPath, targetPath);
+        console.log(`💾 [SESSION SAVED ATOMICALLY] Relace uložena do: ${targetPath}`);
+    } catch (err) {
+        safeUnlink(tempPath);
+        console.error(`❌ Selhal atomický zápis relace do ${targetPath}:`, err.message);
+        throw err;
+    }
+}
+
+async function generateDiagnostics(page, context, prefix = `error_${Date.now()}`) {
+    try {
+        console.log(`📊 Vytvářím kompletní diagnostické soubory (${prefix}.html, ${prefix}.png, trace.zip)...`);
+        
+        const tracePath = path.join(__dirname, `${prefix}-trace.zip`);
+        if (context) {
+            await context.tracing.stop({ path: tracePath }).catch(() => {});
+            console.log(`📁 Playwright Trace uložen do: ${tracePath}`);
+        }
+
+        if (!page) return;
+
+        const currentUrl = page.url();
+        const currentTitle = await page.title().catch(() => "N/A");
+
+        const hasLogin = !!(await findFirstVisible(page, SELECTORS.LOGIN.EMAIL_INPUTS));
+        const hasEditor = !!(await findFirstVisible(page, SELECTORS.EDITOR.BODY));
+        const hasCreateBtn = !!(await findFirstVisible(page, SELECTORS.CREATE_TRIGGER));
+        const noAccessInfo = await detectNoAccessError(page);
+
+        console.log(`================ DIAGNOSTICKÝ SOUHRN ================`);
+        console.log(`📍 URL: ${currentUrl}`);
+        console.log(`📍 TITLE: ${currentTitle}`);
+        console.log(`🔍 STATUS PRVKŮ -> Login input: ${hasLogin} | Editor: ${hasEditor} | Create Btn: ${hasCreateBtn}`);
+        console.log(`🔍 NO ACCESS HIT -> Detected: ${noAccessInfo.detected} | Selector: ${noAccessInfo.selector || "N/A"} | Text: "${noAccessInfo.text || "N/A"}"`);
+        console.log(`===================================================`);
+
+        const htmlContent = await page.content().catch(() => "HTML content inaccessible");
+        fs.writeFileSync(path.join(__dirname, `${prefix}.html`), htmlContent, "utf8");
+
+        await page.screenshot({ path: path.join(__dirname, `${prefix}.png`), fullPage: true }).catch(() => {});
+        console.log(`💾 Diagnostika uložena pod prefixem: ${prefix}`);
+    } catch (e) {
+        console.error("⚠️ Nelze vytvořit diagnostiku:", e.message);
+    }
+}
+
+/**
+ * Kontroluje, zda došlo k přesměrování na externí doménu.
+ * Pokud ano, NEJPRVE vytvoří kompletní diagnostiku a až poté vyhodí chybu.
+ */
+async function assertNotThirdPartyDomain(page, context) {
+    const currentUrl = page.url();
+    const thirdPartyDomains = [
+        "appleid.apple.com",
+        "accounts.google.com",
+        "facebook.com",
+        "twitter.com"
+    ];
+
+    for (const domain of thirdPartyDomains) {
+        if (currentUrl.includes(domain)) {
+            const prefix = `redirect_${domain.replace(/\./g, "_")}_${Date.now()}`;
+            console.error(`⛔ Detekováno přesměrování na externí doménu (${domain}). Generuji diagnostiku...`);
+            await generateDiagnostics(page, context, prefix);
+            throw new Error(`⛔ [THIRD_PARTY_REDIRECT] Workflow zablokováno! Přesměrování na externí doménu: ${currentUrl} (Detekováno: ${domain}). Diagnostika uložena pod prefixem ${prefix}.`);
+        }
     }
 }
 
@@ -310,16 +375,41 @@ async function safeClick(page, locator, description = "element") {
     return false;
 }
 
-async function findAndClickFirst(page, selectorsArray, description) {
+async function findAndClickFirstLogged(page, context, selectorsArray, description) {
     console.log(`🔍 Hledám a klikám na: ${description}`);
+    const urlBefore = page.url();
+
     for (const selector of selectorsArray) {
         const loc = page.locator(selector);
-        if ((await loc.count()) > 0) {
-            const success = await safeClick(page, loc, `${description} [${selector}]`);
-            if (success) return selector;
+        const count = await loc.count();
+
+        for (let i = 0; i < count; i++) {
+            const item = loc.nth(i);
+            if (await item.isVisible().catch(() => false)) {
+                const btnText = await item.innerText().catch(() => "N/A");
+                const outerHtml = await item.evaluate((el) => el.outerHTML.slice(0, 200)).catch(() => "N/A");
+
+                console.log(`📌 [CLICK ACTION] Selektor: "${selector}" (index: ${i})`);
+                console.log(`   ├─ Text tlačítka: "${btnText.trim()}"`);
+                console.log(`   ├─ outerHTML: ${outerHtml}`);
+                console.log(`   └─ URL před kliknutím: ${urlBefore}`);
+
+                const clicked = await safeClick(page, item, `${description} [${selector}]`);
+                if (clicked) {
+                    await page.waitForTimeout(500);
+                    const urlAfter = page.url();
+                    console.log(`   └─ URL po kliknutí: ${urlAfter}`);
+                    await assertNotThirdPartyDomain(page, context);
+                    return { selector, text: btnText.trim(), outerHtml };
+                }
+            }
         }
     }
     return null;
+}
+
+async function findAndClickFirst(page, context, selectorsArray, description) {
+    return findAndClickFirstLogged(page, context, selectorsArray, description);
 }
 
 async function safeType(page, locator, text, description = "editor") {
@@ -362,78 +452,22 @@ async function safeType(page, locator, text, description = "editor") {
     return false;
 }
 
-async function downloadImage(url, destination) {
-    return new Promise((resolve, reject) => {
-        const file = fs.createWriteStream(destination);
-        https.get(url, (response) => {
-            if (response.statusCode !== 200) {
-                safeUnlink(destination);
-                return reject(new Error(`Stažení obrázku selhalo (HTTP ${response.statusCode})`));
-            }
-            response.pipe(file);
-            file.on("finish", () => {
-                file.close();
-                resolve(destination);
-            });
-        }).on("error", (error) => {
-            safeUnlink(destination);
-            reject(error);
-        });
-    });
-}
-
-async function generateDiagnostics(page, context, prefix = `error_${Date.now()}`) {
-    try {
-        console.log(`📊 Vytvářím diagnostické soubory (${prefix}.html, ${prefix}.png)...`);
-        
-        const tracePath = path.join(__dirname, `${prefix}-trace.zip`);
-        if (context) {
-            await context.tracing.stop({ path: tracePath }).catch(() => {});
-            console.log(`📁 Playwright Trace uložen do: ${tracePath}`);
-        }
-
-        if (!page) return;
-
-        const currentUrl = page.url();
-        const currentTitle = await page.title().catch(() => "N/A");
-
-        const hasLogin = !!(await findFirstVisible(page, SELECTORS.LOGIN.EMAIL_INPUTS));
-        const hasEditor = !!(await findFirstVisible(page, SELECTORS.EDITOR.BODY));
-        const hasCreateBtn = !!(await findFirstVisible(page, SELECTORS.CREATE_TRIGGER));
-        const noAccessInfo = await detectNoAccessError(page);
-
-        console.log(`================ DIAGNOSTICKÝ SOUHRN ================`);
-        console.log(`📍 URL: ${currentUrl}`);
-        console.log(`📍 TITLE: ${currentTitle}`);
-        console.log(`🔍 STATUS PRVKŮ -> Login input: ${hasLogin} | Editor: ${hasEditor} | Create Btn: ${hasCreateBtn}`);
-        console.log(`🔍 NO ACCESS HIT -> Detected: ${noAccessInfo.detected} | Selector: ${noAccessInfo.selector || "N/A"} | Text: "${noAccessInfo.text || "N/A"}"`);
-        console.log(`===================================================`);
-
-        const htmlContent = await page.content().catch(() => "HTML content inaccessible");
-        fs.writeFileSync(path.join(__dirname, `${prefix}.html`), htmlContent, "utf8");
-
-        await page.screenshot({ path: path.join(__dirname, `${prefix}.png`), fullPage: true }).catch(() => {});
-        console.log(`💾 Diagnostika uložena pod prefixem: ${prefix}`);
-    } catch (e) {
-        console.error("⚠️ Nelze vytvořit diagnostiku:", e.message);
-    }
-}
-
 // ============================================================================
-// 3b. ROBUSTNÍ LOGIN DIAGNOSTIKA & DETEKCE PŘEKÁŽEK
+// 3b. DIAGNOSTIKA A OBCHÁZENÍ PŘEKÁŽEK
 // ============================================================================
 
-async function runLoginDiagnostics(page) {
+async function runLoginDiagnostics(page, context) {
     const timestamp = Date.now();
     const prefix = `login_diag_${timestamp}`;
     
     console.log("🔍 ================= LOGIN DIAGNOSTIKA =================");
+    await assertNotThirdPartyDomain(page, context);
+
     const url = page.url();
     const title = await page.title().catch(() => "N/A");
     console.log(`📍 URL: ${url}`);
     console.log(`📍 TITLE: ${title}`);
 
-    // Kontrola Cloudflare / Turnstile
     const cloudflareHit = await page.evaluate(() => {
         const text = document.body ? document.body.innerText : "";
         return (
@@ -449,7 +483,6 @@ async function runLoginDiagnostics(page) {
         console.error("⛔ [ALERT] Detekována Cloudflare / Turnstile ochrana!");
     }
 
-    // Prohledání a logování všech input prvků v DOMu
     const inputDetails = await page.evaluate(() => {
         const inputs = Array.from(document.querySelectorAll("input"));
         return inputs.map((inp, idx) => {
@@ -474,7 +507,6 @@ async function runLoginDiagnostics(page) {
         debugLog(`      HTML: ${inp.outerHTML}`);
     });
 
-    // Prohledání tlačítkových prvků
     const buttonDetails = await page.evaluate(() => {
         const btns = Array.from(document.querySelectorAll("button, a, [role='button']"));
         return btns.map((b, idx) => {
@@ -496,7 +528,6 @@ async function runLoginDiagnostics(page) {
         console.log(`   [Button #${btn.idx}] <${btn.tag}> text="${btn.text}" | type="${btn.type}"`);
     });
 
-    // Uložení diagnostických souborů
     const htmlContent = await page.content().catch(() => "N/A");
     fs.writeFileSync(path.join(__dirname, `${prefix}.html`), htmlContent, "utf8");
     await page.screenshot({ path: path.join(__dirname, `${prefix}.png`), fullPage: true }).catch(() => {});
@@ -506,10 +537,9 @@ async function runLoginDiagnostics(page) {
     return { cloudflareHit, inputDetails, buttonDetails };
 }
 
-async function handleObstacles(page) {
-    // 1. Zkusit zavřít cookie bannery
+async function handleObstacles(page, context) {
     try {
-        const clickedCookie = await findAndClickFirst(page, SELECTORS.COOKIES, "Cookie lišta/dialog");
+        const clickedCookie = await findAndClickFirst(page, context, SELECTORS.COOKIES, "Cookie lišta/dialog");
         if (clickedCookie) {
             await page.waitForTimeout(1000);
         }
@@ -517,7 +547,6 @@ async function handleObstacles(page) {
         debugLog("Žádný cookie banner k zavření nebylo nutné odbavit.");
     }
 
-    // 2. Kontrola přítomnosti tlačítek typu "Přihlásit se e-mailem"
     try {
         for (const triggerSelector of SELECTORS.LOGIN.EMAIL_LOGIN_TRIGGER) {
             const loc = page.locator(triggerSelector);
@@ -533,6 +562,58 @@ async function handleObstacles(page) {
     }
 }
 
+/**
+ * Robustní čekání na změnu stavu formuláře (zmizení e-mailu, zobrazení hesla, změna DOM/URL).
+ */
+async function waitForStep1ToStep2Transition(page, context, usedEmailSelector) {
+    console.log("⏳ [LOGIN KROK 1 -> 2] Čekám na změnu stavu formuláře...");
+
+    const passLocatorsCombined = SELECTORS.LOGIN.PASSWORD_INPUTS.join(", ");
+    const emailSelectorToWait = usedEmailSelector || SELECTORS.LOGIN.EMAIL_INPUTS[0];
+
+    const waitForPassword = page.locator(passLocatorsCombined).first().waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT })
+        .then(() => "PASSWORD_VISIBLE");
+
+    const waitForEmailHidden = page.locator(emailSelectorToWait).first().waitFor({ state: "hidden", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT })
+        .then(() => "EMAIL_HIDDEN");
+
+    const waitForUrlChange = page.waitForURL((url) => !url.pathname.endsWith("/login"), { timeout: CONFIG.TIMEOUTS.LOGIN_WAIT })
+        .then(() => "URL_CHANGED");
+
+    const waitForDomMutation = page.evaluate(() => {
+        return new Promise((resolve) => {
+            const observer = new MutationObserver(() => {
+                const pass = document.querySelector('input[type="password"]');
+                if (pass && pass.offsetWidth > 0 && pass.offsetHeight > 0) {
+                    observer.disconnect();
+                    resolve("DOM_MUTATION_PASS_FOUND");
+                }
+            });
+            observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+        });
+    });
+
+    try {
+        const winner = await Promise.race([
+            waitForPassword,
+            waitForEmailHidden,
+            waitForUrlChange,
+            waitForDomMutation
+        ]);
+
+        console.log(`⚡ Detekována změna stavu formuláře -> Důvod: [${winner}]`);
+        await assertNotThirdPartyDomain(page, context);
+
+        // Ujištění, že je pole pro heslo připraveno
+        await page.locator(passLocatorsCombined).first().waitFor({ state: "visible", timeout: 5000 });
+        return true;
+    } catch (err) {
+        console.warn(`⚠️ Čekání na změnu formuláře vypršelo nebo selhalo: ${err.message}`);
+        await assertNotThirdPartyDomain(page, context);
+        return false;
+    }
+}
+
 // ============================================================================
 // 4. HLAVNÍ PUBLIKAČNÍ WORKFLOW
 // ============================================================================
@@ -545,7 +626,6 @@ module.exports = async function publishHeroHero(job) {
     let browser = null;
     let context = null;
     let page = null;
-    let downloadedImagePath = null;
 
     const createNewContext = async (withStorageState = true) => {
         if (context) {
@@ -567,7 +647,6 @@ module.exports = async function publishHeroHero(job) {
         }
 
         context = await browser.newContext(contextOptions);
-
         await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
         const newPage = await context.newPage();
@@ -610,10 +689,6 @@ module.exports = async function publishHeroHero(job) {
         let hasValidStorageFile = isValidJson(CONFIG.STORAGE_STATE_PATH);
         page = await createNewContext(hasValidStorageFile);
 
-        const titleText = job.title || "";
-        const bodyText = job.text || job.description || job.content || "";
-        const imageUrl = job.image || job.imageUrl || job.image_url || "";
-
         // STEP 1: NAČTENÍ /CREATE
         await withRetry(async () => {
             console.log("🌐 Naviguji na https://herohero.co/create...");
@@ -626,6 +701,8 @@ module.exports = async function publishHeroHero(job) {
 
         const evaluateSessionStatus = async () => {
             console.log("🔍 [DECISION] Vyhodnocuji stav relace na aktuální stránce...");
+
+            await assertNotThirdPartyDomain(page, context);
 
             if (page.url().includes("/login")) {
                 console.warn("⚠️ [SESSION INVALID] URL obsahuje '/login'.");
@@ -668,11 +745,11 @@ module.exports = async function publishHeroHero(job) {
             hasValidStorageFile = false;
         }
 
-        // STEP 2: RE-LOGIN WORKFLOW (MAXIMÁLNĚ ROBUSTNÍ)
+        // STEP 2: RE-LOGIN WORKFLOW (OPRAVENÉ DVOUKROKOVÉ PŘIHLÁŠENÍ E-MAILEM)
         if (!sessionStatus.valid) {
             console.log("🔐 [LOGIN REQUIRED] Relace neplatná. Vytvářím čistý kontext pro nové přihlášení...");
             if (!process.env.HERO_EMAIL || !process.env.HERO_PASSWORD) {
-                throw new Error("❌ Chybí HERO_EMAIL nebo HERO_PASSWORD v enviromentu!");
+                throw new Error("❌ Chybí HERO_EMAIL nebo HERO_PASSWORD v environmentu!");
             }
 
             page = await createNewContext(false);
@@ -681,16 +758,17 @@ module.exports = async function publishHeroHero(job) {
             await waitForSpaLoad(page);
 
             await withRetry(async () => {
-                // 1. Diagnostika před začátkem přihlašovacího pokusu
-                const diagResult = await runLoginDiagnostics(page);
+                // 1. Diagnostika před přihlášením
+                const diagResult = await runLoginDiagnostics(page, context);
                 if (diagResult.cloudflareHit) {
                     throw new Error("Přihlášení zablokováno Cloudflare / Turnstile ochranou.");
                 }
 
-                // 2. Odbavení překážek (Cookie lišty, přepínače na email login)
-                await handleObstacles(page);
+                // 2. Odbavení cookie lišt a přepínačů
+                await handleObstacles(page, context);
 
-                // 3. Hledání a vyplnění emailu
+                // --- KROK 1: VYPLNĚNÍ E-MAILU ---
+                console.log("📧 [LOGIN KROK 1] Zadávání e-mailové adresy...");
                 let emailFilled = false;
                 let usedEmailSelector = null;
 
@@ -713,98 +791,66 @@ module.exports = async function publishHeroHero(job) {
                     if (emailFilled) break;
                 }
 
-                // Fallback 1: Pokud žádný selektor neuspěl, zkusit vyhledat první viditelný editable input přímo přes JS
-                if (!emailFilled) {
-                    console.warn("⚠️ Standardní selektory pro email neuspěly. Zkouším JS DOM fallback...");
-                    const jsFilled = await page.evaluate((emailValue) => {
-                        const inputs = Array.from(document.querySelectorAll("input"));
-                        const target = inputs.find((i) => {
-                            const rect = i.getBoundingClientRect();
-                            const isVis = rect.width > 0 && rect.height > 0 && window.getComputedStyle(i).display !== "none";
-                            const type = (i.type || "").toLowerCase();
-                            return isVis && type !== "hidden" && type !== "password" && type !== "submit" && type !== "checkbox";
-                        });
-
-                        if (target) {
-                            target.focus();
-                            target.value = emailValue;
-                            target.dispatchEvent(new Event("input", { bubbles: true }));
-                            target.dispatchEvent(new Event("change", { bubbles: true }));
-                            return true;
-                        }
-                        return false;
-                    }, process.env.HERO_EMAIL).catch(() => false);
-
-                    if (jsFilled) {
-                        console.log("✅ Email úspěšně vyplněn pomocí JS DOM fallbacku!");
-                        emailFilled = true;
-                    }
-                }
-
                 if (!emailFilled) {
                     await generateDiagnostics(page, context, `email_not_found_${Date.now()}`);
-                    throw new Error("Emailové pole nebylo nalezeno. Zkontrolujte přiložený log/screenshot.");
+                    throw new Error("E-mailové pole nebylo nalezeno.");
                 }
 
-                // 4. Odeslání e-mailu / Pokračovat
-                const clickedContinue = await findAndClickFirst(page, SELECTORS.LOGIN.CONTINUE_BUTTONS, "Pokračovat tlačítko");
+                // Kliknutí na "Pokračovat" (1. krok)
+                const clickedContinue = await findAndClickFirstLogged(page, context, SELECTORS.LOGIN.STEP1_CONTINUE_BUTTONS, "Krok 1: Tlačítko Pokračovat");
                 if (!clickedContinue) {
-                    console.log("ℹ️ Tlačítko 'Pokračovat' nenalezeno, odesílám stiskem Enter...");
+                    console.log("ℹ️ Tlačítko 'Pokračovat' nenalezeno přes striktní selektory, odesílám stiskem Enter...");
                     await page.keyboard.press("Enter");
                 }
 
-                await page.waitForTimeout(1500);
+                // --- ROBUSTNÍ ČEKÁNÍ NA ZMĚNU STAVU FORMULÁŘE (KROK 1 -> KROK 2) ---
+                const transitionSuccess = await waitForStep1ToStep2Transition(page, context, usedEmailSelector);
 
-                // 5. Hledání a vyplnění hesla
+                if (!transitionSuccess) {
+                    await generateDiagnostics(page, context, `step1_transition_failed_${Date.now()}`);
+                    throw new Error("Formulář ne přešel do druhého kroku (pole pro heslo se nezobrazilo).");
+                }
+
+                // --- KROK 2: VYPLNĚNÍ HESLA A FINÁLNÍ PŘIHLÁŠENÍ ---
+                console.log("🔑 [LOGIN KROK 2] Zadávání hesla...");
                 let passwordFilled = false;
-                const passLocators = SELECTORS.LOGIN.PASSWORD_INPUTS;
 
-                try {
-                    const passVisible = await page.locator(passLocators.join(", ")).first().waitFor({
-                        state: "visible",
-                        timeout: CONFIG.TIMEOUTS.LOGIN_WAIT
-                    }).then(() => true).catch(() => false);
-
-                    if (passVisible) {
-                        for (const sel of passLocators) {
-                            const loc = page.locator(sel);
-                            if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                                passwordFilled = await safeType(page, loc.first(), process.env.HERO_PASSWORD, `Password input [${sel}]`);
-                                if (passwordFilled) break;
-                            }
-                        }
+                for (const sel of SELECTORS.LOGIN.PASSWORD_INPUTS) {
+                    const loc = page.locator(sel);
+                    if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
+                        passwordFilled = await safeType(page, loc.first(), process.env.HERO_PASSWORD, `Password input [${sel}]`);
+                        if (passwordFilled) break;
                     }
-                } catch (e) {
-                    debugLog("Čekání na viditelný password input vypršelo.");
                 }
 
                 if (!passwordFilled) {
-                    await generateDiagnostics(page, context, `password_not_found_${Date.now()}`);
-                    throw new Error("Heslové pole nebylo nalezeno po odeslání emailu.");
+                    await generateDiagnostics(page, context, `password_fill_failed_${Date.now()}`);
+                    throw new Error("Heslové pole bylo detekováno, ale selhalo jeho vyplnění.");
                 }
 
-                // 6. Odeslání přihlašovacího formuláře
-                const clickedSubmit = await findAndClickFirst(page, SELECTORS.LOGIN.SUBMIT_BUTTONS, "Přihlásit tlačítko");
+                // Kliknutí na finální tlačítko
+                const clickedSubmit = await findAndClickFirstLogged(page, context, SELECTORS.LOGIN.STEP2_SUBMIT_BUTTONS, "Krok 2: Tlačítko Přihlásit");
                 if (!clickedSubmit) {
-                    console.log("ℹ️ Tlačítko 'Přihlásit' nenalezeno, odesílám stiskem Enter...");
+                    console.log("ℹ️ Tlačítko 'Přihlásit' nenalezeno přes striktní selektory, odesílám stiskem Enter...");
                     await page.keyboard.press("Enter");
                 }
 
                 await waitForSpaLoad(page);
+                await assertNotThirdPartyDomain(page, context);
 
-                // 7. Ověření úspěšného přihlášení
+                // --- FINÁLNÍ OVĚŘENÍ PŘIHLÁŠENÍ ---
+                console.log("🔍 [LOGIN VERIFY] Ověřuji úspěšný průchod přihlášením...");
                 sessionStatus = await evaluateSessionStatus();
+
                 if (!sessionStatus.valid) {
-                    throw new Error(`Přihlášení nebylo úspěšné. Stav relace po přihlášení: ${sessionStatus.reason}`);
+                    throw new Error(`Přihlášení nebylo úspěšné. Uživatel zůstal na login/neautorizované stránce (Stav: ${sessionStatus.reason}).`);
                 }
 
-                // 8. Uložení platného storageState.json
-                await context.storageState({ path: CONFIG.STORAGE_STATE_PATH });
-                console.log("💾 [SESSION SAVED] Nové relace úspěšně uložena do storageState.json");
-            }, "Průchod přihlašovacím formulářem");
+                // Atomické uložení platného storageState.json přes dočasný soubor .tmp
+                await saveStorageStateAtomically(context, CONFIG.STORAGE_STATE_PATH);
+            }, "Dvoukrokový přihlašovací proces");
         }
 
-        // Konec přípravy a další kroky publikace...
     } catch (err) {
         console.error("❌ Chyba při zpracování příspěvku:", err.message);
         if (page && context) {
