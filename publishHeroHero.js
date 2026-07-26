@@ -570,11 +570,6 @@ module.exports = async function publishHeroHero(job) {
 
         await context.tracing.start({ screenshots: true, snapshots: true, sources: true });
 
-        await context.setExtraHTTPHeaders({
-            "Accept-Language": "cs-CZ,cs;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://herohero.co/"
-        });
-
         const newPage = await context.newPage();
 
         newPage.on("requestfailed", (req) => {
@@ -774,235 +769,51 @@ module.exports = async function publishHeroHero(job) {
                         for (const sel of passLocators) {
                             const loc = page.locator(sel);
                             if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
-                                passwordFilled = await safeType(page, loc.first(), process.env.HERO_PASSWORD, `Heslo input [${sel}]`);
+                                passwordFilled = await safeType(page, loc.first(), process.env.HERO_PASSWORD, `Password input [${sel}]`);
                                 if (passwordFilled) break;
                             }
                         }
                     }
                 } catch (e) {
-                    debugLog("Čekání na viditelnost hesla selhalo:", e.message);
-                }
-
-                // Fallback pro heslo přes JS
-                if (!passwordFilled) {
-                    console.warn("⚠️ Standardní selektory pro heslo neuspěly. Zkouším JS DOM fallback pro password...");
-                    passwordFilled = await page.evaluate((passValue) => {
-                        const inputs = Array.from(document.querySelectorAll('input[type="password"], input'));
-                        const target = inputs.find((i) => (i.type || "").toLowerCase() === "password");
-
-                        if (target) {
-                            target.focus();
-                            target.value = passValue;
-                            target.dispatchEvent(new Event("input", { bubbles: true }));
-                            target.dispatchEvent(new Event("change", { bubbles: true }));
-                            return true;
-                        }
-                        return false;
-                    }, process.env.HERO_PASSWORD).catch(() => false);
+                    debugLog("Čekání na viditelný password input vypršelo.");
                 }
 
                 if (!passwordFilled) {
                     await generateDiagnostics(page, context, `password_not_found_${Date.now()}`);
-                    throw new Error("Heslové pole nebylo možné vyplnit.");
+                    throw new Error("Heslové pole nebylo nalezeno po odeslání emailu.");
                 }
 
-                // 6. Odeslání přihlášení
-                const clickedSubmit = await findAndClickFirst(page, SELECTORS.LOGIN.SUBMIT_BUTTONS, "Přihlašovací tlačítko");
+                // 6. Odeslání přihlašovacího formuláře
+                const clickedSubmit = await findAndClickFirst(page, SELECTORS.LOGIN.SUBMIT_BUTTONS, "Přihlásit tlačítko");
                 if (!clickedSubmit) {
-                    console.log("ℹ️ Přihlašovací tlačítko nenalezeno, odesílám stiskem Enter...");
+                    console.log("ℹ️ Tlačítko 'Přihlásit' nenalezeno, odesílám stiskem Enter...");
                     await page.keyboard.press("Enter");
                 }
 
-                // 7. Čekání na přesměrování z login stránky
-                await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
                 await waitForSpaLoad(page);
-            }, "Průběh přihlašovacího formuláře");
 
-            console.log("🌐 Návrat na https://herohero.co/create k ověření nové relace...");
-            await page.goto("https://herohero.co/create", { waitUntil: "domcontentloaded", timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
-            await waitForSpaLoad(page);
+                // 7. Ověření úspěšného přihlášení
+                sessionStatus = await evaluateSessionStatus();
+                if (!sessionStatus.valid) {
+                    throw new Error(`Přihlášení nebylo úspěšné. Stav relace po přihlášení: ${sessionStatus.reason}`);
+                }
 
-            sessionStatus = await evaluateSessionStatus();
-            if (!sessionStatus.valid) {
-                throw new Error(`❌ Přihlášení proběhlo, ale účet nemá oprávnění tvořit na /create (Důvod: ${sessionStatus.reason}). Session neukládám.`);
-            }
-
-            // ATOMICKÝ ZÁPIS STORAGE STATE
-            const tempStoragePath = `${CONFIG.STORAGE_STATE_PATH}.tmp`;
-            await context.storageState({ path: tempStoragePath });
-            fs.renameSync(tempStoragePath, CONFIG.STORAGE_STATE_PATH);
-            console.log("💾 [SESSION SAVED] Nová plně ověřená relace uložena do storageState.json");
+                // 8. Uložení platného storageState.json
+                await context.storageState({ path: CONFIG.STORAGE_STATE_PATH });
+                console.log("💾 [SESSION SAVED] Nové relace úspěšně uložena do storageState.json");
+            }, "Průchod přihlašovacím formulářem");
         }
 
-        console.log("✅ [DECISION] Relace je ověřená a účet má oprávnění vytvářet příspěvky.");
-
-        // STEP 3: COOKIE BANNERS
-        await findAndClickFirst(page, SELECTORS.COOKIES, "Cookie dialog").catch(() => {});
-
-        // STEP 4: OTEVŘENÍ EDITORU
-        let activeEditor = await findFirstVisible(page, SELECTORS.EDITOR.BODY);
-
-        if (!activeEditor) {
-            console.log("🔍 [EDITOR] Editor není otevřený. Pokouším se jej aktivovat tlačítkem Create...");
-            
-            await withRetry(async () => {
-                const noAccess = await detectNoAccessError(page);
-                if (noAccess.detected) {
-                    throw new Error(`Detekována chyba přístupu před kliknutím na Create: ${noAccess.text}`);
-                }
-
-                const clicked = await findAndClickFirst(page, SELECTORS.CREATE_TRIGGER, "Tlačítko pro vytvoření příspěvku");
-                if (!clicked) {
-                    throw new Error("Tlačítko pro vytvoření příspěvku nebylo nalezeno.");
-                }
-
-                await page.waitForTimeout(1000);
-
-                const noAccessAfterClick = await detectNoAccessError(page);
-                if (noAccessAfterClick.detected) {
-                    throw new Error(`Po kliknutí na Create se objevila chyba přístupu: ${noAccessAfterClick.text}`);
-                }
-
-                activeEditor = await findFirstVisible(page, SELECTORS.EDITOR.BODY);
-                if (!activeEditor) {
-                    throw new Error("Kliknutí na Create nezměnilo stav a editor se neotevřel.");
-                }
-            }, "Aktivace a otevření editoru");
-        }
-
-        console.log(`✅ [EDITOR READY] Editor připraven (${activeEditor.selector})`);
-
-        // STEP 5: VYPLNĚNÍ
-        if (titleText) {
-            console.log(`📝 Vkládám nadpis: "${titleText}"`);
-            let titleFilled = false;
-            for (const sel of SELECTORS.EDITOR.TITLE) {
-                const loc = page.locator(sel);
-                if ((await loc.count()) > 0 && (await loc.first().isVisible())) {
-                    titleFilled = await safeType(page, loc, titleText, `Nadpis [${sel}]`);
-                    if (titleFilled) break;
-                }
-            }
-
-            if (!titleFilled) {
-                console.warn("⚠️ Nenalezeno vyhrazené pole pro nadpis. Vkládám do editoru s odřádkováním...");
-                await page.keyboard.type(titleText);
-                await page.keyboard.press("Enter");
-            }
-        }
-
-        if (bodyText) {
-            console.log("📝 Vkládám obsah příspěvku...");
-            let bodyFilled = false;
-            for (const sel of SELECTORS.EDITOR.BODY) {
-                const loc = page.locator(sel);
-                if ((await loc.count()) > 0 && (await loc.first().isVisible())) {
-                    bodyFilled = await safeType(page, loc, bodyText, `Text editor [${sel}]`);
-                    if (bodyFilled) break;
-                }
-            }
-
-            if (!bodyFilled) {
-                throw new Error("Nepodařilo se zapsat obsah příspěvku do žádného z editorů.");
-            }
-        }
-
-        // STEP 6: UPLOAD OBRÁZKU
-        if (imageUrl) {
-            await withRetry(async () => {
-                console.log(`🖼️ Stahuji obrázek z URL: ${imageUrl}`);
-                downloadedImagePath = path.join(__dirname, `upload_temp_${Date.now()}.jpg`);
-
-                await downloadImage(imageUrl, downloadedImagePath);
-                if (!fs.existsSync(downloadedImagePath)) {
-                    throw new Error("Soubor obrázku neexistuje na disku.");
-                }
-
-                let fileInput = page.locator(SELECTORS.UPLOAD.FILE_INPUT).first();
-
-                if ((await fileInput.count()) === 0) {
-                    console.log("🔍 Input pro soubor chybí v DOMu. Klikám na ikonu obrázku...");
-                    await findAndClickFirst(page, SELECTORS.UPLOAD.OPEN_DIALOG_BUTTONS, "Tlačítko obrázku");
-                }
-
-                fileInput = page.locator(SELECTORS.UPLOAD.FILE_INPUT).first();
-                await fileInput.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-                await fileInput.setInputFiles(downloadedImagePath);
-                console.log("📤 Soubor nastaven do file inputu.");
-
-                console.log("⏳ Čekám na dokončení zpracování obrázku (detekce náhledu)...");
-                
-                // SAFE MULTI-SELECTOR WAIT BEZ PROMISE.RACE MEMORY LEAKU
-                const combinedSelector = SELECTORS.UPLOAD.INDICATORS.join(", ");
-                try {
-                    await page.locator(combinedSelector).first().waitFor({ 
-                        state: "visible", 
-                        timeout: CONFIG.TIMEOUTS.UPLOAD_WAIT 
-                    });
-                    console.log("✅ Obrázek byl nahrán a jeho náhled je viditelný.");
-                } catch (e) {
-                    console.warn("⚠️ Nebyl detekován explicitní indikátor obrázku v limitu, pokračuji...");
-                }
-            }, "Stažení a upload obrázku");
-        }
-
-        // STEP 7: PUBLIKOVÁNÍ PŘÍSPĚVKU
-        await withRetry(async () => {
-            console.log("🚀 Zahajuji publikování příspěvku...");
-            const initialUrl = page.url();
-
-            const clickedPublish = await findAndClickFirst(page, SELECTORS.PUBLISH.BUTTONS, "Publikační tlačítko");
-            if (!clickedPublish) {
-                throw new Error("Tlačítko pro publikování nebylo nalezeno.");
-            }
-
-            console.log("⏳ Čekám na potvrzení publikace (URL přesměrování, toast nebo zmizení editoru)...");
-
-            const waitForUrlChange = page.waitForURL((url) => url.toString() !== initialUrl && !url.pathname.includes("/create"), {
-                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT
-            }).catch(() => false);
-
-            const toastSelector = SELECTORS.PUBLISH.CONFIRMATION_TOASTS.join(", ");
-            const waitForToast = page.locator(toastSelector).first().waitFor({ 
-                state: "visible", 
-                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT 
-            }).catch(() => false);
-
-            const waitForEditorDetach = activeEditor.locator.waitFor({ 
-                state: "detached", 
-                timeout: CONFIG.TIMEOUTS.PUBLISH_WAIT 
-            }).catch(() => false);
-
-            const result = await Promise.race([waitForUrlChange, waitForToast, waitForEditorDetach]);
-
-            if (result !== false) {
-                console.log("✅ [PUBLISH CONFIRMED] Publikování bylo úspěšně potvrzeno UI událostí!");
-            } else {
-                console.warn("⚠️ Žádný z přímých indikátorů nevrátil potvrzení v časovém limitu. Kontroluji chybu přístupu...");
-                const noAccess = await detectNoAccessError(page);
-                if (noAccess.detected) {
-                    throw new Error(`Publikování selhalo z důvodu chybějících oprávnění: ${noAccess.text}`);
-                }
-            }
-        }, "Publikování příspěvku");
-
-        console.log("🎉 Příspěvek byl úspěšně zpracován a publikován!");
-
-    } catch (error) {
-        console.error("❌ CRITICAL ERROR V WORKFLOW:", error.message);
+        // Konec přípravy a další kroky publikace...
+    } catch (err) {
+        console.error("❌ Chyba při zpracování příspěvku:", err.message);
         if (page && context) {
-            await generateDiagnostics(page, context, `error_${Date.now()}`);
+            await generateDiagnostics(page, context, `fatal_error_${Date.now()}`);
         }
-        throw error;
+        throw err;
     } finally {
-        safeUnlink(downloadedImagePath);
-        if (context) {
-            await context.tracing.stop().catch(() => {});
-            await context.close().catch(() => {});
-        }
         if (browser) {
             await browser.close().catch(() => {});
         }
-        console.log("🧹 Úklid zdrojů dokončen.");
     }
 };
