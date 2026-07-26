@@ -697,8 +697,8 @@ async function handleCookieBannerIfPresent(page) {
     'button[data-testid="cookie-modal-agree"]',
     '[data-testid="cookie-modal-agree"]',
     'button[title="Povolit vše"]',
-    'button("Povolit vše")',
-    'button("Accept")',
+    'button:has-text("Povolit vše")',
+    'button:has-text("Accept")',
   ];
 
   let targetLocator = null;
