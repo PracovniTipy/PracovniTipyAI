@@ -4,7 +4,7 @@ const path = require("path");
 const https = require("https");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE (FIXED REV)");
+console.log("🚀 HEROHERO PUBLISHER - PRODUCTION MODULE (ROBUST LOGIN FIX)");
 console.log("==========================================");
 
 // ============================================================================
@@ -49,19 +49,37 @@ const SELECTORS = {
     LOGIN: {
         EMAIL_INPUTS: [
             'input[type="email"]',
-            'input[name="email"]',
+            'input[name="email" i]',
+            'input[name*="user" i]',
+            'input[name*="login" i]',
+            'input[id*="email" i]',
             'input[placeholder*="email" i]',
-            '[role="textbox"][name*="email" i]'
+            'input[placeholder*="e-mail" i]',
+            'input[placeholder*="přihlaš" i]',
+            'input[placeholder*="jméno" i]',
+            'input[aria-label*="email" i]',
+            '[role="textbox"][name*="email" i]',
+            '[role="textbox"][aria-label*="email" i]',
+            'input:not([type="hidden"]):not([type="password"]):not([type="submit"]):not([type="checkbox"]):not([type="radio"])'
         ],
         PASSWORD_INPUTS: [
             'input[type="password"]',
-            'input[name="password"]'
+            'input[name="password" i]',
+            'input[name*="pass" i]',
+            'input[id*="password" i]',
+            'input[placeholder*="heslo" i]',
+            'input[placeholder*="password" i]',
+            'input[aria-label*="password" i]',
+            'input[aria-label*="heslo" i]'
         ],
         CONTINUE_BUTTONS: [
             'button[type="submit"]',
             'button:has-text("Pokračovat")',
             'button:has-text("Continue")',
             'button:has-text("Dále")',
+            'button:has-text("Přihlásit")',
+            'button:has-text("Log in")',
+            'button:has-text("Sign in")',
             '[data-testid*="continue" i]',
             'input[type="email"] >> xpath=following::button[1]'
         ],
@@ -70,7 +88,16 @@ const SELECTORS = {
             'button:has-text("Přihlásit")',
             'button:has-text("Log in")',
             'button:has-text("Sign in")',
+            'button:has-text("Pokračovat")',
+            'button:has-text("Continue")',
             '[data-testid*="login" i]'
+        ],
+        EMAIL_LOGIN_TRIGGER: [
+            'button:has-text("E-mail")',
+            'button:has-text("Email")',
+            'button:has-text("Přihlásit se e-mailem")',
+            'a:has-text("E-mail")',
+            '[data-testid*="email-login" i]'
         ]
     },
     COOKIES: [
@@ -79,8 +106,13 @@ const SELECTORS = {
         'button:has-text("Přijmout vše")',
         'button:has-text("Povolit vše")',
         'button:has-text("Souhlasím")',
+        'button:has-text("Rozumím")',
+        'button:has-text("Accept")',
+        'button:has-text("OK")',
         '[aria-label*="accept" i]',
-        '#onetrust-accept-btn-handler'
+        '#onetrust-accept-btn-handler',
+        '.cookie-banner button',
+        '[class*="cookie" i] button'
     ],
     CREATE_TRIGGER: [
         'button:has-text("Nový příspěvek")',
@@ -352,7 +384,7 @@ async function downloadImage(url, destination) {
 
 async function generateDiagnostics(page, context, prefix = `error_${Date.now()}`) {
     try {
-        console.log(`📊 Vyvářím diagnostické soubory (${prefix}.html, ${prefix}.png)...`);
+        console.log(`📊 Vytvářím diagnostické soubory (${prefix}.html, ${prefix}.png)...`);
         
         const tracePath = path.join(__dirname, `${prefix}-trace.zip`);
         if (context) {
@@ -384,6 +416,120 @@ async function generateDiagnostics(page, context, prefix = `error_${Date.now()}`
         console.log(`💾 Diagnostika uložena pod prefixem: ${prefix}`);
     } catch (e) {
         console.error("⚠️ Nelze vytvořit diagnostiku:", e.message);
+    }
+}
+
+// ============================================================================
+// 3b. ROBUSTNÍ LOGIN DIAGNOSTIKA & DETEKCE PŘEKÁŽEK
+// ============================================================================
+
+async function runLoginDiagnostics(page) {
+    const timestamp = Date.now();
+    const prefix = `login_diag_${timestamp}`;
+    
+    console.log("🔍 ================= LOGIN DIAGNOSTIKA =================");
+    const url = page.url();
+    const title = await page.title().catch(() => "N/A");
+    console.log(`📍 URL: ${url}`);
+    console.log(`📍 TITLE: ${title}`);
+
+    // Kontrola Cloudflare / Turnstile
+    const cloudflareHit = await page.evaluate(() => {
+        const text = document.body ? document.body.innerText : "";
+        return (
+            text.includes("Just a moment") ||
+            text.includes("Verify you are human") ||
+            text.includes("Cloudflare") ||
+            !!document.querySelector('iframe[src*="cloudflare"]') ||
+            !!document.querySelector('iframe[src*="turnstile"]')
+        );
+    }).catch(() => false);
+
+    if (cloudflareHit) {
+        console.error("⛔ [ALERT] Detekována Cloudflare / Turnstile ochrana!");
+    }
+
+    // Prohledání a logování všech input prvků v DOMu
+    const inputDetails = await page.evaluate(() => {
+        const inputs = Array.from(document.querySelectorAll("input"));
+        return inputs.map((inp, idx) => {
+            const rect = inp.getBoundingClientRect();
+            const style = window.getComputedStyle(inp);
+            return {
+                idx,
+                type: inp.type || "text",
+                name: inp.name || "",
+                id: inp.id || "",
+                placeholder: inp.placeholder || "",
+                ariaLabel: inp.getAttribute("aria-label") || "",
+                isVisible: !!(rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none"),
+                outerHTML: inp.outerHTML.slice(0, 150)
+            };
+        });
+    }).catch(() => []);
+
+    console.log(`📋 Nalezeno <input> prvků v DOMu: ${inputDetails.length}`);
+    inputDetails.forEach((inp) => {
+        console.log(`   [Input #${inp.idx}] type="${inp.type}" | name="${inp.name}" | id="${inp.id}" | placeholder="${inp.placeholder}" | visible=${inp.isVisible}`);
+        debugLog(`      HTML: ${inp.outerHTML}`);
+    });
+
+    // Prohledání tlačítkových prvků
+    const buttonDetails = await page.evaluate(() => {
+        const btns = Array.from(document.querySelectorAll("button, a, [role='button']"));
+        return btns.map((b, idx) => {
+            const rect = b.getBoundingClientRect();
+            const style = window.getComputedStyle(b);
+            const isVis = !!(rect.width > 0 && rect.height > 0 && style.visibility !== "hidden" && style.display !== "none");
+            return {
+                idx,
+                tag: b.tagName.toLowerCase(),
+                text: b.innerText ? b.innerText.trim().replace(/\s+/g, " ").slice(0, 50) : "",
+                type: b.getAttribute("type") || "",
+                isVisible: isVis
+            };
+        }).filter(b => b.isVisible);
+    }).catch(() => []);
+
+    console.log(`📋 Viditelná tlačítka/odkazy v DOMu (${buttonDetails.length}):`);
+    buttonDetails.slice(0, 15).forEach((btn) => {
+        console.log(`   [Button #${btn.idx}] <${btn.tag}> text="${btn.text}" | type="${btn.type}"`);
+    });
+
+    // Uložení diagnostických souborů
+    const htmlContent = await page.content().catch(() => "N/A");
+    fs.writeFileSync(path.join(__dirname, `${prefix}.html`), htmlContent, "utf8");
+    await page.screenshot({ path: path.join(__dirname, `${prefix}.png`), fullPage: true }).catch(() => {});
+    console.log(`💾 Uložena diagnostika: ${prefix}.html a ${prefix}.png`);
+    console.log("=======================================================");
+
+    return { cloudflareHit, inputDetails, buttonDetails };
+}
+
+async function handleObstacles(page) {
+    // 1. Zkusit zavřít cookie bannery
+    try {
+        const clickedCookie = await findAndClickFirst(page, SELECTORS.COOKIES, "Cookie lišta/dialog");
+        if (clickedCookie) {
+            await page.waitForTimeout(1000);
+        }
+    } catch (e) {
+        debugLog("Žádný cookie banner k zavření nebylo nutné odbavit.");
+    }
+
+    // 2. Kontrola přítomnosti tlačítek typu "Přihlásit se e-mailem"
+    try {
+        for (const triggerSelector of SELECTORS.LOGIN.EMAIL_LOGIN_TRIGGER) {
+            const loc = page.locator(triggerSelector);
+            if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
+                console.log(`💡 Detekován přepínač na e-mailové přihlášení: ${triggerSelector}. Klikám...`);
+                await safeClick(page, loc.first(), "Email login switch");
+                await page.waitForTimeout(1500);
+                break;
+            }
+        }
+    } catch (e) {
+        debugLog("Přepínač e-mailového přihlášení nebyl potřeba.");
     }
 }
 
@@ -527,7 +673,7 @@ module.exports = async function publishHeroHero(job) {
             hasValidStorageFile = false;
         }
 
-        // STEP 2: RE-LOGIN WORKFLOW
+        // STEP 2: RE-LOGIN WORKFLOW (MAXIMÁLNĚ ROBUSTNÍ)
         if (!sessionStatus.valid) {
             console.log("🔐 [LOGIN REQUIRED] Relace neplatná. Vytvářím čistý kontext pro nové přihlášení...");
             if (!process.env.HERO_EMAIL || !process.env.HERO_PASSWORD) {
@@ -540,31 +686,134 @@ module.exports = async function publishHeroHero(job) {
             await waitForSpaLoad(page);
 
             await withRetry(async () => {
+                // 1. Diagnostika před začátkem přihlašovacího pokusu
+                const diagResult = await runLoginDiagnostics(page);
+                if (diagResult.cloudflareHit) {
+                    throw new Error("Přihlášení zablokováno Cloudflare / Turnstile ochranou.");
+                }
+
+                // 2. Odbavení překážek (Cookie lišty, přepínače na email login)
+                await handleObstacles(page);
+
+                // 3. Hledání a vyplnění emailu
                 let emailFilled = false;
+                let usedEmailSelector = null;
+
                 for (const sel of SELECTORS.LOGIN.EMAIL_INPUTS) {
                     const loc = page.locator(sel);
-                    if ((await loc.count()) > 0 && (await loc.first().isVisible())) {
-                        emailFilled = await safeType(page, loc, process.env.HERO_EMAIL, "Email input");
-                        if (emailFilled) break;
+                    const count = await loc.count();
+                    if (count > 0) {
+                        for (let i = 0; i < count; i++) {
+                            const singleLoc = loc.nth(i);
+                            if (await singleLoc.isVisible().catch(() => false)) {
+                                console.log(`🎯 Nalezeno e-mailové pole přes selektor: "${sel}" (index: ${i})`);
+                                emailFilled = await safeType(page, singleLoc, process.env.HERO_EMAIL, `Email input [${sel}]`);
+                                if (emailFilled) {
+                                    usedEmailSelector = sel;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (emailFilled) break;
+                }
+
+                // Fallback 1: Pokud žádný selektor neuspěl, zkusit vyhledat první viditelný editable input přímo přes JS
+                if (!emailFilled) {
+                    console.warn("⚠️ Standardní selektory pro email neuspěly. Zkouším JS DOM fallback...");
+                    const jsFilled = await page.evaluate((emailValue) => {
+                        const inputs = Array.from(document.querySelectorAll("input"));
+                        const target = inputs.find((i) => {
+                            const rect = i.getBoundingClientRect();
+                            const isVis = rect.width > 0 && rect.height > 0 && window.getComputedStyle(i).display !== "none";
+                            const type = (i.type || "").toLowerCase();
+                            return isVis && type !== "hidden" && type !== "password" && type !== "submit" && type !== "checkbox";
+                        });
+
+                        if (target) {
+                            target.focus();
+                            target.value = emailValue;
+                            target.dispatchEvent(new Event("input", { bubbles: true }));
+                            target.dispatchEvent(new Event("change", { bubbles: true }));
+                            return true;
+                        }
+                        return false;
+                    }, process.env.HERO_EMAIL).catch(() => false);
+
+                    if (jsFilled) {
+                        console.log("✅ Email úspěšně vyplněn pomocí JS DOM fallbacku!");
+                        emailFilled = true;
                     }
                 }
-                if (!emailFilled) throw new Error("Emailové pole nebylo nalezeno.");
 
+                if (!emailFilled) {
+                    await generateDiagnostics(page, context, `email_not_found_${Date.now()}`);
+                    throw new Error("Emailové pole nebylo nalezeno. Zkontrolujte přiložený log/screenshot.");
+                }
+
+                // 4. Odeslání e-mailu / Pokračovat
                 const clickedContinue = await findAndClickFirst(page, SELECTORS.LOGIN.CONTINUE_BUTTONS, "Pokračovat tlačítko");
                 if (!clickedContinue) {
+                    console.log("ℹ️ Tlačítko 'Pokračovat' nenalezeno, odesílám stiskem Enter...");
                     await page.keyboard.press("Enter");
                 }
 
-                const passLoc = page.locator(SELECTORS.LOGIN.PASSWORD_INPUTS.join(", "));
-                await passLoc.first().waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
-                const passwordFilled = await safeType(page, passLoc, process.env.HERO_PASSWORD, "Heslo input");
-                if (!passwordFilled) throw new Error("Heslové pole nebylo možné vyplnit.");
+                await page.waitForTimeout(1500);
 
+                // 5. Hledání a vyplnění hesla
+                let passwordFilled = false;
+                const passLocators = SELECTORS.LOGIN.PASSWORD_INPUTS;
+
+                try {
+                    const passVisible = await page.locator(passLocators.join(", ")).first().waitFor({
+                        state: "visible",
+                        timeout: CONFIG.TIMEOUTS.LOGIN_WAIT
+                    }).then(() => true).catch(() => false);
+
+                    if (passVisible) {
+                        for (const sel of passLocators) {
+                            const loc = page.locator(sel);
+                            if ((await loc.count()) > 0 && (await loc.first().isVisible().catch(() => false))) {
+                                passwordFilled = await safeType(page, loc.first(), process.env.HERO_PASSWORD, `Heslo input [${sel}]`);
+                                if (passwordFilled) break;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    debugLog("Čekání na viditelnost hesla selhalo:", e.message);
+                }
+
+                // Fallback pro heslo přes JS
+                if (!passwordFilled) {
+                    console.warn("⚠️ Standardní selektory pro heslo neuspěly. Zkouším JS DOM fallback pro password...");
+                    passwordFilled = await page.evaluate((passValue) => {
+                        const inputs = Array.from(document.querySelectorAll('input[type="password"], input'));
+                        const target = inputs.find((i) => (i.type || "").toLowerCase() === "password");
+
+                        if (target) {
+                            target.focus();
+                            target.value = passValue;
+                            target.dispatchEvent(new Event("input", { bubbles: true }));
+                            target.dispatchEvent(new Event("change", { bubbles: true }));
+                            return true;
+                        }
+                        return false;
+                    }, process.env.HERO_PASSWORD).catch(() => false);
+                }
+
+                if (!passwordFilled) {
+                    await generateDiagnostics(page, context, `password_not_found_${Date.now()}`);
+                    throw new Error("Heslové pole nebylo možné vyplnit.");
+                }
+
+                // 6. Odeslání přihlášení
                 const clickedSubmit = await findAndClickFirst(page, SELECTORS.LOGIN.SUBMIT_BUTTONS, "Přihlašovací tlačítko");
                 if (!clickedSubmit) {
+                    console.log("ℹ️ Přihlašovací tlačítko nenalezeno, odesílám stiskem Enter...");
                     await page.keyboard.press("Enter");
                 }
 
+                // 7. Čekání na přesměrování z login stránky
                 await page.waitForURL((url) => !url.pathname.includes("/login"), { timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
                 await waitForSpaLoad(page);
             }, "Průběh přihlašovacího formuláře");
