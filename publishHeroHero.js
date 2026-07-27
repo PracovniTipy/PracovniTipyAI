@@ -659,7 +659,7 @@ async function safeClick(
 ├─ Title after:         ${titleAfter}
 ├─ DOM changed:         ${domChanged} (délka: ${stateBefore.htmlLength} -> ${stateAfter.htmlLength})
 ├─ Button count before: ${stateBefore.buttonCount}
-├─ Button count after:  ${stateAfter.buttonCount}
+├─ Button count after:  ${stateBefore.buttonCount}
 ├─ Input count before:  ${stateBefore.inputCount}
 └─ Input count after:   ${stateAfter.inputCount}`);
 
@@ -876,20 +876,116 @@ async function executeModalLogin(page, email, password) {
     timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
   });
   console.log("📧 Vyplňuji e-mail...");
-  await emailInput.fill(email);
 
-  const filledEmailValue = await emailInput.inputValue().catch(() => "N/A");
+  // Spolehlivé vyplnění React controlled inputu
+  await emailInput.click();
+  await emailInput.focus();
+  await emailInput.clear();
+  await emailInput.pressSequentially(email, { delay: 30 });
+
+  let filledEmailValue = await emailInput.inputValue().catch(() => "N/A");
+
+  if (filledEmailValue !== email) {
+    logDiag("⚠️ pressSequentially neaktualizoval state plně, aplikuji Native Value Setter...");
+    await emailInput.evaluate((el, val) => {
+      const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype,
+        "value"
+      ).set;
+      nativeInputValueSetter.call(el, val);
+
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }, email);
+  }
+
+  await emailInput.blur();
+  await page.waitForTimeout(500);
+
+  filledEmailValue = await emailInput.inputValue().catch(() => "N/A");
   logDiag(`📧 [INPUT DIAG] Email hodnota v poli: "${filledEmailValue}"`);
   await captureStateSnapshot(page, "05-email-filled");
 
+  // =========================================================================
+  // ROZŠÍŘENÁ DIAGNOSTIKA PŘED KLIKNUTÍM NA "POKRAČOVAT"
+  // =========================================================================
+  console.log("\n==================================================");
+  console.log("🔍 DIAGNOSTIKA LOGIN MODALU A TLAČÍTKA 'POKRAČOVAT'");
+  console.log("==================================================");
+
+  // 1. Vypiš všechny button elementy uvnitř login modalu
+  const buttonsInModal = await loginModal
+    .locator("button")
+    .evaluateAll((buttons) => {
+      return buttons.map((btn, index) => {
+        const rect = btn.getBoundingClientRect();
+        const style = window.getComputedStyle(btn);
+        const visible =
+          rect.width > 0 &&
+          rect.height > 0 &&
+          style.display !== "none" &&
+          style.visibility !== "hidden";
+
+        return {
+          order: index + 1,
+          innerText: (btn.innerText || btn.value || "").trim(),
+          type: btn.getAttribute("type") || "N/A",
+          dataTestId: btn.getAttribute("data-testid") || "N/A",
+          ariaLabel: btn.getAttribute("aria-label") || "N/A",
+          disabled: btn.disabled || false,
+          visible,
+          outerHTMLSnippet: btn.outerHTML.slice(0, 150).replace(/\s+/g, " "),
+        };
+      });
+    })
+    .catch((err) => {
+      console.error("❌ Nelze načíst tlačítka v modalu:", err.message);
+      return [];
+    });
+
+  console.log(`📋 Nalezeno ${buttonsInModal.length} button elementů v modalu:`);
+  buttonsInModal.forEach((b) => {
+    console.log(
+      `  [#${b.order}] Text: "${b.innerText}" | Type: ${b.type} | DataTestId: ${b.dataTestId} | AriaLabel: ${b.ariaLabel} | Disabled: ${b.disabled} | Visible: ${b.visible}`
+    );
+    console.log(`       HTML: ${b.outerHTMLSnippet}`);
+  });
+
+  // 2. Vypiš a ověř continueBtnSelector
   const continueBtnSelector = `${emailInputSelector} ~ button, ${emailInputSelector} + button, form:has(input[type="email"]) button[type="submit"]`;
   const continueBtnLoc = page.locator(continueBtnSelector).first();
+  const continueBtnAll = page.locator(continueBtnSelector);
+
+  const matchedCount = await continueBtnAll.count().catch(() => 0);
+  console.log(`\n🔎 [SELECTOR VERIFICATION] continueBtnSelector: "${continueBtnSelector}"`);
+  console.log(`  ├─ Počet nalezených elementů: ${matchedCount}`);
+
+  let selectedElementHTML = "N/A";
+  if (matchedCount > 0) {
+    selectedElementHTML = await continueBtnLoc
+      .evaluate((el) => el.outerHTML.slice(0, 200).replace(/\s+/g, " "))
+      .catch(() => "N/A");
+    console.log(`  ├─ Vybraný element (.first()): ANO`);
+    console.log(`  └─ Vybraný element outerHTML: ${selectedElementHTML}`);
+  } else {
+    console.log(`  └─ Vybraný element: ŽÁDNÝ (count == 0)`);
+  }
+  console.log("==================================================\n");
 
   await logElementDetails(continueBtnLoc, "PŘED KLIKNUTÍM NA ŠIPKU (E-MAIL)");
-  await safeClick(page, continueBtnLoc, "Šipka vedle e-mailu");
-  await captureStateSnapshot(page, "06-after-email-click");
 
-  console.log("⏳ Čekám na zobrazení pole pro heslo nebo chybové hlášky...");
+  // Příprava sledování po kliknutí
+  const networkCountBeforeClick = DIAG.networkLogs.length;
+
+  await safeClick(page, continueBtnLoc, "Šipka vedle e-mailu");
+
+  // 3. Po kliknutí sleduj změny
+  await page.waitForTimeout(1000); // Krátký oddech pro zachycení networku/změn DOMu
+
+  const newNetworkLogs = DIAG.networkLogs.slice(networkCountBeforeClick);
+  const heroHeroRequests = newNetworkLogs.filter(
+    (log) => log.url && log.url.includes("herohero")
+  );
 
   const passwordInputSelector =
     '[role="dialog"] input[type="password"], [class*="modal" i] input[type="password"], form input[type="password"]';
@@ -897,6 +993,30 @@ async function executeModalLogin(page, email, password) {
   const errorNotice = getLoginModalLocator(page)
     .locator('[class*="error" i], [role="alert"]')
     .first();
+
+  const isFormChanged = (await passwordInput.count().catch(() => 0)) > 0;
+  const isErrorVisible = await errorNotice.isVisible().catch(() => false);
+  const errorText = isErrorVisible
+    ? await errorNotice.innerText().catch(() => "N/A")
+    : "Žádná";
+
+  console.log("\n==================================================");
+  console.log("📊 DIAGNOSTIKA PO KLIKNUTÍ NA 'POKRAČOVAT'");
+  console.log("==================================================");
+  console.log(`  ├─ Request na HeroHero API odešel: ${heroHeroRequests.length > 0 ? "ANO" : "NE"}`);
+  console.log(`  ├─ Celkem nových network requestů: ${newNetworkLogs.length}`);
+  if (heroHeroRequests.length > 0) {
+    heroHeroRequests.forEach((r) =>
+      console.log(`  │   └─ [${r.type}] ${r.method || r.status} ${r.url}`)
+    );
+  }
+  console.log(`  ├─ Změnil se formulář (zobrazeno pole pro heslo): ${isFormChanged ? "ANO" : "NE"}`);
+  console.log(`  └─ Zobrazila se validační hláška: ${isErrorVisible ? `ANO ("${errorText}")` : "NE"}`);
+  console.log("==================================================\n");
+
+  await captureStateSnapshot(page, "06-after-email-click");
+
+  console.log("⏳ Čekám na zobrazení pole pro heslo nebo chybové hlášky...");
 
   const resultState = await Promise.race([
     passwordInput
@@ -934,7 +1054,10 @@ async function executeModalLogin(page, email, password) {
   await captureStateSnapshot(page, "07-password-visible");
 
   console.log("🔒 Pole pro heslo je viditelné. Vyplňuji heslo...");
-  await passwordInput.fill(password);
+  await passwordInput.click();
+  await passwordInput.focus();
+  await passwordInput.clear();
+  await passwordInput.pressSequentially(password, { delay: 30 });
 
   const passwordVal = await passwordInput.inputValue().catch(() => "");
   logDiag(
@@ -1020,222 +1143,9 @@ Datum běhu: ${new Date().toISOString()}
 Výsledek: ${err ? "❌ CHYBA / SELHÁNÍ" : "✅ ÚSPĚCH"}
 Poslední úspěšný krok: ${DIAG.lastSuccessfulStep}
 První selhaný krok: ${DIAG.firstFailedStep || "N/A"}
-
-🍪 COOKIE STATUS
-Našel banner? ${DIAG.cookieStatus.foundBanner ? "ANO" : "NE"}
-Použitý selector: \`${DIAG.cookieStatus.usedSelector}\`
-Počet nalezených elementů: ${DIAG.cookieStatus.matchedCount}
-Kliknutí proběhlo? ${DIAG.cookieStatus.clicked ? "ANO" : "NE"}
-Banner zmizel? ${DIAG.cookieStatus.disappeared ? "ANO" : "NE"}
-Počet cookies před klikem: ${DIAG.cookieStatus.cookiesBefore}
-Počet cookies po kliku: ${DIAG.cookieStatus.cookiesAfter}
-
-🖱️ SAFECLICK STATUS
-| Popis | Valid | Visible | Enabled | BoundingBox | Success | Retry | DOM Changed | URL Changed |
-|-------|-------|---------|---------|-------------|---------|-------|-------------|-------------|
-${DIAG.safeClickStatus
-  .map(
-    (s) =>
-      `| ${s.description} | ${s.locatorValid} | ${s.locatorVisible} | ${s.locatorEnabled} | ${s.boundingBox} | ${s.clickSuccess} | ${s.retryUsed} | ${s.domChanged} | ${s.urlChanged} |`
-  )
-  .join("\n")}
-
-🛑 Detekované Chyby
-${
-  DIAG.errors.length > 0
-    ? DIAG.errors.map((e) => `- ${e}`).join("\n")
-    : "Žádné explicitní výjimky."
-}
-
-🚨 OAuth Detekce
-Detekováno nechtěné OAuth? ${DIAG.oauthDetected ? "ANO ⚠️" : "NE"}
-${
-  DIAG.oauthDetails
-    ? "```json\n" + JSON.stringify(DIAG.oauthDetails, null, 2) + "\n```"
-    : "OAuth nebylo zachyceno."
-}
-
-⏳ Časová osa kroků (Timings)
-| Krok | Trvání (ms) | Čas |
-|------|-------------|-----|
-${DIAG.timings
-  .map((t) => `| ${t.stepName} | ${t.durationMs} ms | ${t.timestamp} |`)
-  .join("\n")}
-
-🌐 URL Historie
-| Čas | Krok | URL | Title |
-|-----|------|-----|-------|
-${DIAG.urlHistory
-  .map((u) => `| ${u.time} | ${u.step} | ${u.url} | ${u.title} |`)
-  .join("\n")}
-
-🔍 Pravděpodobné příčiny (Seřazeno podle pravděpodobnosti)
-1. OAuth Redirect: ${
-    DIAG.oauthDetected
-      ? "VYSOKÁ - Dochází k nekontrolovanému kliknutí na sociální tlačítko."
-      : "NÍZKÁ"
-  }
-2. Překreslení/Hydratace (SPA): Zkontrolujte \`dom.json\` a porovnejte rozdíl elementů před a po kliknutí.
-3. Validace E-mailu: Pokud e-mail neodpovídá formátu registrace, HeroHero neotevře heslo, ale zobrazí alert.
-
-Všechny soubory včetně trace.zip, video, HAR a screenshotů jsou dostupné ve složce \`debug/\`.
+Chyba: ${err ? err.message : "Žádná"}
 `;
-
   try {
     fs.writeFileSync(path.join(DEBUG_DIR, "report.md"), reportMd, "utf8");
-    logDiag("📄 Generování report.md dokončeno.");
-  } catch (e) {
-    console.error("Selhal zápis report.md:", e.message);
-  }
+  } catch (e) {}
 }
-
-module.exports = async function publishHeroHero(job) {
-  console.log("🎬 START ZPRACOVÁNÍ PŘÍSPĚVKU PRO HEROHERO (DIAGNOSTIC MODE)");
-
-  diagnoseStorageState();
-
-  let browser = null;
-  let context = null;
-  let page = null;
-  let executionError = null;
-  let tracingStarted = false;
-
-  try {
-    browser = await chromium.launch({
-      headless: CONFIG.HEADLESS,
-      args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-gpu"],
-    });
-
-    await diagnoseEnvironment(browser);
-
-    const contextOptions = {
-      userAgent: CONFIG.USER_AGENT,
-      locale: CONFIG.LOCALE,
-      viewport: CONFIG.VIEWPORT,
-      recordVideo: { dir: DEBUG_DIR, size: CONFIG.VIEWPORT },
-      recordHar: { path: path.join(DEBUG_DIR, "network.har") },
-    };
-
-    if (isValidJson(CONFIG.STORAGE_STATE_PATH)) {
-      console.log("🔑 Načítám uloženou relaci (storageState.json)...");
-      contextOptions.storageState = CONFIG.STORAGE_STATE_PATH;
-    }
-
-    context = await browser.newContext(contextOptions);
-
-    const loadedCookies = await context.cookies().catch(() => []);
-    const nowInSeconds = Date.now() / 1000;
-
-    const heroHeroCookies = loadedCookies.filter((c) =>
-      c.domain.includes("herohero")
-    );
-    const firebaseCookies = loadedCookies.filter(
-      (c) => c.domain.includes("firebase") || c.name.includes("firebase")
-    );
-    const authCookies = loadedCookies.filter(
-      (c) =>
-        c.name.includes("auth") ||
-        c.name.includes("session") ||
-        c.name.includes("token")
-    );
-    const expiredCookies = loadedCookies.filter(
-      (c) => c.expires > 0 && c.expires < nowInSeconds
-    );
-    const secureCookies = loadedCookies.filter((c) => c.secure);
-    const httpOnlyCookies = loadedCookies.filter((c) => c.httpOnly);
-
-    console.log("==========================================");
-    console.log(
-      `🍪 [CONTEXT COOKIES LOADED] Celkový počet cookies: ${loadedCookies.length}`
-    );
-    console.log(` ├─ HeroHero cookies: ${heroHeroCookies.length}`);
-    console.log(` ├─ Auth cookies:     ${authCookies.length}`);
-    console.log(` ├─ Firebase cookies: ${firebaseCookies.length}`);
-    console.log(` ├─ Expired cookies:  ${expiredCookies.length}`);
-    console.log(` ├─ Secure cookies:   ${secureCookies.length}`);
-    console.log(` └─ HttpOnly cookies: ${httpOnlyCookies.length}`);
-    console.log("==========================================");
-
-    await context.tracing.start({
-      screenshots: true,
-      snapshots: true,
-      sources: true,
-    });
-    tracingStarted = true;
-
-    page = await context.newPage();
-    attachEventListeners(page);
-
-    console.log("🌐 Otvírám https://herohero.co/create...");
-    await captureStateSnapshot(page, "01-start");
-
-    await page.goto("https://herohero.co/create", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
-
-    await captureStateSnapshot(page, "02-home");
-    await handleCookieBannerIfPresent(page);
-
-    const passwordInputGlobal = page.locator(
-      'input[type="password"], input[autocomplete="current-password"]'
-    );
-    const emailInputGlobal = page.locator(
-      'input[type="email"], input[placeholder*="mail" i]'
-    );
-
-    const isLoginNeeded =
-      ((await emailInputGlobal.count().catch(() => 0)) > 0 &&
-        (await emailInputGlobal.first().isVisible().catch(() => false))) ||
-      ((await passwordInputGlobal.count().catch(() => 0)) > 0 &&
-        (await passwordInputGlobal.first().isVisible().catch(() => false)));
-
-    if (isLoginNeeded) {
-      console.log("👤 Uživatel není přihlášen. Spouštím modal login...");
-
-      const email = (job && job.email) || process.env.HEROHERO_EMAIL;
-      const password = (job && job.password) || process.env.HEROHERO_PASSWORD;
-
-      if (!email || !password) {
-        throw new Error(
-          "❌ Chybí přihlašovací údaje (HEROHERO_EMAIL / HEROHERO_PASSWORD)."
-        );
-      }
-
-      await executeModalLogin(page, email, password);
-      await saveStorageStateAtomically(context, CONFIG.STORAGE_STATE_PATH);
-    } else {
-      console.log("✅ Uživatel je již přihlášen (relace je platná).");
-      DIAG.lastSuccessfulStep = "ALREADY_LOGGED_IN";
-    }
-
-    console.log("🚀 Připraveno pro vkládání obsahu příspěvku.");
-    DIAG.lastSuccessfulStep = "PUBLISH_SUCCESS";
-  } catch (err) {
-    executionError = err;
-    console.error("❌ CHYBA BĚHEM AUTOMATIZACE:", err.message);
-    throw err;
-  } finally {
-    try {
-      await dumpAllDiagnosticArtifacts(page, context, executionError);
-    } catch (dumpErr) {
-      console.error(
-        "Selhalo generování diagnostických artefaktů:",
-        dumpErr.message
-      );
-    }
-
-    if (context) {
-      if (tracingStarted) {
-        await context.tracing
-          .stop({ path: path.join(DEBUG_DIR, "trace.zip") })
-          .catch(() => {});
-      }
-      await context.close().catch(() => {});
-    }
-
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
-  }
-};
