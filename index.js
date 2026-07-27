@@ -528,8 +528,8 @@ app.post("/publishHeroHero", async (req, res) => {
 
 const publishHeroHero = require("./publishHeroHero");
 
-console.log("typeof publishHeroHero =", typeof publishHeroHero);
-console.dir(publishHeroHero);
+console.log("EXPORT =", publishHeroHero);
+console.log("KEYS =", Object.keys(publishHeroHero));
     
     try {
 
