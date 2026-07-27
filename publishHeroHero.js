@@ -1,4 +1,3 @@
-console.log("PUBLISH VERSION 2026-07-27");
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
@@ -1151,71 +1150,84 @@ Chyba: ${err ? err.message : "Žádná"}
   } catch (e) {}
 }
 
-/**
- * Hlavní funkce publishHeroHero
- */
 async function publishHeroHero(job) {
-  logDiag("🚀 Spouštím publishHeroHero...", { job });
-  let browser = null;
-  let context = null;
-  let page = null;
-  let errorOccurred = null;
+  let browser;
+  let context;
+  let page;
 
   try {
     browser = await chromium.launch({
       headless: CONFIG.HEADLESS,
-      args: ["--disable-dev-shm-usage", "--no-sandbox"],
     });
 
-    await diagnoseEnvironment(browser);
-    diagnoseStorageState();
-
-    const launchOptions = {
+    context = await browser.newContext({
       viewport: CONFIG.VIEWPORT,
       userAgent: CONFIG.USER_AGENT,
       locale: CONFIG.LOCALE,
-    };
+    });
 
-    if (fs.existsSync(CONFIG.STORAGE_STATE_PATH) && isValidJson(CONFIG.STORAGE_STATE_PATH)) {
-      try {
-        launchOptions.storageState = CONFIG.STORAGE_STATE_PATH;
-        logDiag("📂 Načítám existující storageState relaci.");
-      } catch (e) {
-        logDiag("⚠️ Nelze aplikovat storageState:", e.message);
-      }
-    }
-
-    context = await browser.newContext(launchOptions);
     page = await context.newPage();
+
+    diagnoseStorageState();
+    await diagnoseEnvironment(browser);
     attachEventListeners(page);
 
-    logDiag("🌐 Otevírám HeroHero stránku...");
-    await page.goto("https://www.herohero.co/", {
+    await page.goto("https://herohero.co/login", {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
 
     await handleCookieBannerIfPresent(page);
-    await captureStateSnapshot(page, "02-homepage-loaded");
 
-    const email = process.env.HEROHERO_EMAIL;
-    const password = process.env.HEROHERO_PASSWORD;
+    const HEROHERO_EMAIL = process.env.HEROHERO_EMAIL;
+    const HEROHERO_PASSWORD = process.env.HEROHERO_PASSWORD;
 
-    if (!email || !password) {
-      throw new Error("❌ Chybí přihlašovací údaje HEROHERO_EMAIL nebo HEROHERO_PASSWORD v prostředí.");
+    if (!HEROHERO_EMAIL || !HEROHERO_PASSWORD) {
+      throw new Error("Chybí HEROHERO_EMAIL nebo HEROHERO_PASSWORD v prostředí.");
     }
 
-    await executeModalLogin(page, email, password);
+    const existingLoginModal = getLoginModalLocator(page);
+
+    if (!(await existingLoginModal.isVisible().catch(() => false))) {
+      const loginButtonCandidates = [
+        page.getByRole("button", { name: /přihlásit se/i }),
+        page.getByRole("button", { name: /log in/i }),
+        page.getByRole("button", { name: /login/i }),
+        page.getByText("Přihlásit se", { exact: true }),
+        page.getByText("Log in", { exact: true }),
+      ];
+
+      let clickedLoginButton = false;
+
+      for (const loginButton of loginButtonCandidates) {
+        if (await loginButton.first().isVisible().catch(() => false)) {
+          await loginButton.first().click();
+          clickedLoginButton = true;
+          break;
+        }
+      }
+
+      if (!clickedLoginButton) {
+        throw new Error("Nelze najít tlačítko Přihlásit se / Log in pro otevření login modalu.");
+      }
+    }
+
+    await getLoginModalLocator(page).waitFor({
+      state: "visible",
+      timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
+    });
+
+    await executeModalLogin(page, HEROHERO_EMAIL, HEROHERO_PASSWORD);
     await saveStorageStateAtomically(context, CONFIG.STORAGE_STATE_PATH);
 
-    logDiag("✅ publishHeroHero úspěšně dokončeno.");
-    return { success: true };
+    return {
+      success: true,
+      job,
+    };
   } catch (err) {
-    errorOccurred = err;
-    logDiag(`❌ Chyba v publishHeroHero: ${err.message}`);
+    await dumpAllDiagnosticArtifacts(page, context, err);
     throw err;
   } finally {
-    await dumpAllDiagnosticArtifacts(page, context, errorOccurred);
     if (browser) {
       await browser.close().catch(() => {});
     }
