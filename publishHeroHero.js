@@ -608,15 +608,14 @@ async function safeClick(
     await locator.click();
   } catch (err) {
     console.warn(
-      `⚠️ První pokus o kliknutí na "${description}" selhal: ${err.message}. Opakuji kliknutí čerstvým odkazem...`
+      `⚠️ První pokus o kliknutí na "${description}" selhal: ${err.message}. Opakuji kliknutí...`
     );
     retryUsed = true;
-    const freshLocator = locator.first();
-    await freshLocator.waitFor({
+    await locator.waitFor({
       state: "visible",
       timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
     });
-    await freshLocator.click();
+    await locator.click();
   }
 
   if (options && options.expectDisappear) {
@@ -951,21 +950,24 @@ async function executeModalLogin(page, email, password) {
     console.log(`       HTML: ${b.outerHTMLSnippet}`);
   });
 
-  // 2. Vypiš a ověř continueBtnSelector
-  const continueBtnSelector = `${emailInputSelector} ~ button, ${emailInputSelector} + button, form:has(input[type="email"]) button[type="submit"]`;
-  const continueBtnLoc = page.locator(continueBtnSelector).first();
-  const continueBtnAll = page.locator(continueBtnSelector);
+  // 2. Vyhledání skutečného <button> uvnitř aktuálního modalu nebo formuláře
+  const continueBtnLoc = loginModal.locator('button[type="submit"], button').last();
 
-  const matchedCount = await continueBtnAll.count().catch(() => 0);
-  console.log(`\n🔎 [SELECTOR VERIFICATION] continueBtnSelector: "${continueBtnSelector}"`);
+  const matchedCount = await continueBtnLoc.count().catch(() => 0);
+  console.log(`\n🔎 [SELECTOR VERIFICATION] Vyhledávám tlačítko uvnitř login modalu`);
   console.log(`  ├─ Počet nalezených elementů: ${matchedCount}`);
 
   let selectedElementHTML = "N/A";
   if (matchedCount > 0) {
+    const tagName = await continueBtnLoc.evaluate((el) => el.tagName.toLowerCase()).catch(() => "");
+    if (tagName !== "button") {
+      throw new Error(`⛔ [DIAGNOSTIC ERROR] Vybraný element není <button>, ale <${tagName}>.`);
+    }
+
     selectedElementHTML = await continueBtnLoc
       .evaluate((el) => el.outerHTML.slice(0, 200).replace(/\s+/g, " "))
       .catch(() => "N/A");
-    console.log(`  ├─ Vybraný element (.first()): ANO`);
+    console.log(`  ├─ Vybraný element: OK (tagName === "button")`);
     console.log(`  └─ Vybraný element outerHTML: ${selectedElementHTML}`);
   } else {
     console.log(`  └─ Vybraný element: ŽÁDNÝ (count == 0)`);
@@ -1065,10 +1067,13 @@ async function executeModalLogin(page, email, password) {
   );
   await captureStateSnapshot(page, "08-password-filled");
 
-  const submitBtnSelector = `${passwordInputSelector} ~ button, ${passwordInputSelector} + button, form:has(input[type="password"]) button[type="submit"]`;
-  const submitBtnLoc = page.locator(submitBtnSelector).first();
+  const submitBtnLoc = loginModal.locator('button[type="submit"], button').last();
+  const submitBtnTagName = await submitBtnLoc.evaluate((el) => el.tagName.toLowerCase()).catch(() => "");
+  if (submitBtnTagName !== "button") {
+    throw new Error(`⛔ [DIAGNOSTIC ERROR] Vybraný element pro přihlášení není <button>, ale <${submitBtnTagName}>.`);
+  }
 
-  await logElementDetails(submitBtnLoc, "PŘED KLIKNUTÍM NA PŘIHLÁSIT (HESLO)");
+  await logElementDetails(submitBtnLoc, "PŘED KLIKNUTÍM NA PŘIHLÁŠIT (HESLO)");
   await safeClick(page, submitBtnLoc, "Přihlašovací tlačítko hesla");
   await captureStateSnapshot(page, "09-after-login-click");
 
@@ -1101,137 +1106,3 @@ async function executeModalLogin(page, email, password) {
 
   console.log("🎉 Přihlášení úspěšně proběhlo.");
 }
-
-// FINÁLNÍ REPORT & DUMP
-async function dumpAllDiagnosticArtifacts(page, context, err = null) {
-  logDiag("--- GENEROVÁNÍ FINÁLNÍCH DIAGNOSTICKÝCH ARTEFAKTŮ ---");
-
-  if (err) {
-    DIAG.errors.push(err.message);
-    if (page && !page.isClosed()) {
-      await captureStateSnapshot(page, "11-failed").catch(() => {});
-    }
-  }
-
-  if (page && context && !page.isClosed()) {
-    const allCookies = await context.cookies().catch(() => []);
-    writeJsonDebug("cookies.json", allCookies);
-
-    const storageDump = await page
-      .evaluate(() => {
-        try {
-          return {
-            localStorage: { ...localStorage },
-            sessionStorage: { ...sessionStorage },
-          };
-        } catch (e) {
-          return { localStorage: {}, sessionStorage: {} };
-        }
-      })
-      .catch(() => ({ localStorage: {}, sessionStorage: {} }));
-
-    writeJsonDebug("localStorage.json", storageDump.localStorage);
-    writeJsonDebug("sessionStorage.json", storageDump.sessionStorage);
-  }
-
-  writeJsonDebug("network.json", DIAG.networkLogs);
-  writeJsonDebug("url-history.json", DIAG.urlHistory);
-  writeJsonDebug("timings.json", DIAG.timings);
-
-  const reportMd = `# 📊 DIAGNOSTICKÝ REPORT HEROHERO AUTOLOGIN
-Datum běhu: ${new Date().toISOString()}
-Výsledek: ${err ? "❌ CHYBA / SELHÁNÍ" : "✅ ÚSPĚCH"}
-Poslední úspěšný krok: ${DIAG.lastSuccessfulStep}
-První selhaný krok: ${DIAG.firstFailedStep || "N/A"}
-Chyba: ${err ? err.message : "Žádná"}
-`;
-  try {
-    fs.writeFileSync(path.join(DEBUG_DIR, "report.md"), reportMd, "utf8");
-  } catch (e) {}
-}
-
-async function publishHeroHero(job) {
-  let browser;
-  let context;
-  let page;
-
-  try {
-    browser = await chromium.launch({
-      headless: CONFIG.HEADLESS,
-    });
-
-    context = await browser.newContext({
-      viewport: CONFIG.VIEWPORT,
-      userAgent: CONFIG.USER_AGENT,
-      locale: CONFIG.LOCALE,
-    });
-
-    page = await context.newPage();
-
-    diagnoseStorageState();
-    await diagnoseEnvironment(browser);
-    attachEventListeners(page);
-
-    await page.goto("https://herohero.co/login", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
-
-    await handleCookieBannerIfPresent(page);
-
-    const HEROHERO_EMAIL = process.env.HEROHERO_EMAIL;
-    const HEROHERO_PASSWORD = process.env.HEROHERO_PASSWORD;
-
-    if (!HEROHERO_EMAIL || !HEROHERO_PASSWORD) {
-      throw new Error("Chybí HEROHERO_EMAIL nebo HEROHERO_PASSWORD v prostředí.");
-    }
-
-    const existingLoginModal = getLoginModalLocator(page);
-
-    if (!(await existingLoginModal.isVisible().catch(() => false))) {
-      const loginButtonCandidates = [
-        page.getByRole("button", { name: /přihlásit se/i }),
-        page.getByRole("button", { name: /log in/i }),
-        page.getByRole("button", { name: /login/i }),
-        page.getByText("Přihlásit se", { exact: true }),
-        page.getByText("Log in", { exact: true }),
-      ];
-
-      let clickedLoginButton = false;
-
-      for (const loginButton of loginButtonCandidates) {
-        if (await loginButton.first().isVisible().catch(() => false)) {
-          await loginButton.first().click();
-          clickedLoginButton = true;
-          break;
-        }
-      }
-
-      if (!clickedLoginButton) {
-        throw new Error("Nelze najít tlačítko Přihlásit se / Log in pro otevření login modalu.");
-      }
-    }
-
-    await getLoginModalLocator(page).waitFor({
-      state: "visible",
-      timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
-    });
-
-    await executeModalLogin(page, HEROHERO_EMAIL, HEROHERO_PASSWORD);
-    await saveStorageStateAtomically(context, CONFIG.STORAGE_STATE_PATH);
-
-    return {
-      success: true,
-      job,
-    };
-  } catch (err) {
-    await dumpAllDiagnosticArtifacts(page, context, err);
-    throw err;
-  } finally {
-    if (browser) {
-      await browser.close().catch(() => {});
-    }
-  }
-}
-
-module.exports = publishHeroHero;
