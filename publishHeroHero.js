@@ -449,7 +449,7 @@ function attachEventListeners(page) {
 navigationCaptureRunning = true;
 
 try {
-   ...
+
 } finally {
    navigationCaptureRunning = false;
 }
