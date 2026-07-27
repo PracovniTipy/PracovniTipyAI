@@ -1150,3 +1150,76 @@ Chyba: ${err ? err.message : "Žádná"}
     fs.writeFileSync(path.join(DEBUG_DIR, "report.md"), reportMd, "utf8");
   } catch (e) {}
 }
+
+/**
+ * Hlavní funkce publishHeroHero
+ */
+async function publishHeroHero(job) {
+  logDiag("🚀 Spouštím publishHeroHero...", { job });
+  let browser = null;
+  let context = null;
+  let page = null;
+  let errorOccurred = null;
+
+  try {
+    browser = await chromium.launch({
+      headless: CONFIG.HEADLESS,
+      args: ["--disable-dev-shm-usage", "--no-sandbox"],
+    });
+
+    await diagnoseEnvironment(browser);
+    diagnoseStorageState();
+
+    const launchOptions = {
+      viewport: CONFIG.VIEWPORT,
+      userAgent: CONFIG.USER_AGENT,
+      locale: CONFIG.LOCALE,
+    };
+
+    if (fs.existsSync(CONFIG.STORAGE_STATE_PATH) && isValidJson(CONFIG.STORAGE_STATE_PATH)) {
+      try {
+        launchOptions.storageState = CONFIG.STORAGE_STATE_PATH;
+        logDiag("📂 Načítám existující storageState relaci.");
+      } catch (e) {
+        logDiag("⚠️ Nelze aplikovat storageState:", e.message);
+      }
+    }
+
+    context = await browser.newContext(launchOptions);
+    page = await context.newPage();
+    attachEventListeners(page);
+
+    logDiag("🌐 Otevírám HeroHero stránku...");
+    await page.goto("https://www.herohero.co/", {
+      waitUntil: "domcontentloaded",
+      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+    });
+
+    await handleCookieBannerIfPresent(page);
+    await captureStateSnapshot(page, "02-homepage-loaded");
+
+    const email = process.env.HEROHERO_EMAIL;
+    const password = process.env.HEROHERO_PASSWORD;
+
+    if (!email || !password) {
+      throw new Error("❌ Chybí přihlašovací údaje HEROHERO_EMAIL nebo HEROHERO_PASSWORD v prostředí.");
+    }
+
+    await executeModalLogin(page, email, password);
+    await saveStorageStateAtomically(context, CONFIG.STORAGE_STATE_PATH);
+
+    logDiag("✅ publishHeroHero úspěšně dokončeno.");
+    return { success: true };
+  } catch (err) {
+    errorOccurred = err;
+    logDiag(`❌ Chyba v publishHeroHero: ${err.message}`);
+    throw err;
+  } finally {
+    await dumpAllDiagnosticArtifacts(page, context, errorOccurred);
+    if (browser) {
+      await browser.close().catch(() => {});
+    }
+  }
+}
+
+module.exports = publishHeroHero;
