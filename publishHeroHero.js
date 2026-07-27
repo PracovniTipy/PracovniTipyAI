@@ -1,3 +1,4 @@
+console.log("PUBLISH VERSION 2026-07-27");
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
