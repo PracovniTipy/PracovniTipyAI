@@ -526,7 +526,13 @@ const browser = await chromium.launch({
 
 app.post("/publishHeroHero", async (req, res) => {
 
-const publishHeroHero = require("./publishHeroHero");
+const mod = require("./publishHeroHero");
+
+console.log("EXPORT =", mod);
+console.log("KEYS =", Object.keys(mod));
+console.log("CACHE =", require.resolve("./publishHeroHero"));
+    
+    const publishHeroHero = require("./publishHeroHero");
 
 console.log("EXPORT =", publishHeroHero);
 console.log("KEYS =", Object.keys(publishHeroHero));
