@@ -523,9 +523,14 @@ const browser = await chromium.launch({
 
     }
 });
-const publishHeroHero = require("./publishHeroHero");
+
 app.post("/publishHeroHero", async (req, res) => {
 
+const publishHeroHero = require("./publishHeroHero");
+
+console.log("typeof publishHeroHero =", typeof publishHeroHero);
+console.dir(publishHeroHero);
+    
     try {
 
     await publishHeroHero(req.body);
