@@ -178,13 +178,16 @@ function formatJobPost(job) {
 
 async function createHeroHeroPost(page, job) {
   console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
-  await page.goto("https://herohero.co/create", {
-    waitUntil: "domcontentloaded",
-    timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-  });
+  
+  if (!page.url().includes("/create")) {
+    await page.goto("https://herohero.co/create", {
+      waitUntil: "domcontentloaded",
+      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+    });
+  }
 
-  // Počkáme, až se editor plně načte
-  await page.waitForTimeout(5000);
+  console.log("Čekám na načtení editoru...");
+  await page.waitForTimeout(6000);
   await nukeOverlays(page);
 
   // 1. Nahrání obrázku (pokud je k dispozici)
@@ -193,40 +196,44 @@ async function createHeroHeroPost(page, job) {
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
       await fileInput.setInputFiles(job.imageUrl).catch(() => {});
-      // Důležitá prodleva, aby Herohero stihlo zpracovat obrázek v UI
       await page.waitForTimeout(4000);
     }
   }
 
   await nukeOverlays(page);
 
-  // 2. Vyplnění nadpisu (vyzkoušíme vícero možných selektorů pro nadpis)
-  console.log("Vyplňuji nadpis...");
+  // 2. Vyplnění nadpisu
+  console.log("Hledám políčko pro nadpis...");
   const titleSelectors = [
     'textarea#post-title-input',
+    'input#post-title-input',
     'textarea[placeholder*="Nadpis" i]',
     'input[placeholder*="Nadpis" i]',
-    'textarea.post-title-input',
-    'div[contenteditable="true"]',
-    'textarea'
+    'textarea[placeholder*="Napište" i]',
+    'textarea',
+    'input[type="text"]',
+    'div[contenteditable="true"]'
   ];
 
   let titleInput = null;
   for (const sel of titleSelectors) {
     const loc = page.locator(sel).first();
-    if (await loc.count().catch(() => 0) > 0) {
+    const count = await loc.count().catch(() => 0);
+    if (count > 0) {
       try {
-        await loc.waitFor({ state: "visible", timeout: 5000 });
+        await loc.waitFor({ state: "visible", timeout: 3000 });
         titleInput = loc;
-        console.log(`✅ Nadpis nalezen pomocí selektoru: ${sel}`);
+        console.log(`✅ Nadpis/pole nalezeno pomocí selektoru: ${sel}`);
         break;
       } catch (e) {
-        // Zkoušíme další
+        // Pokračujeme dalším selektorem
       }
     }
   }
 
   if (!titleInput) {
+    const bodySnippet = await page.evaluate(() => document.body.innerHTML.slice(0, 300));
+    console.log("DEBUG - Obsah stránky začíná:", bodySnippet);
     throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
   }
 
@@ -240,7 +247,6 @@ async function createHeroHeroPost(page, job) {
   
   await nukeOverlays(page);
   
-  // Editor pro tělo příspěvku bývá obvykle poslední textarea nebo contenteditable div
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
   await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await editorArea.scrollIntoViewIfNeeded();
@@ -251,7 +257,6 @@ async function createHeroHeroPost(page, job) {
 }
 
 async function publishHeroHero(inputJob) {
-  // Pokud Make pošle prázdná data, automaticky použijeme pevnou testovací šablonu
   const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title) 
     ? DEFAULT_TEST_JOB 
     : inputJob;
