@@ -444,15 +444,7 @@ function attachEventListeners(page) {
         lastUrl = newUrl;
         logDiag(`🌐 [URL CHANGED] ${newUrl}`);
         await captureStateSnapshotWithConsole(page, "024-url-changed");
-
-        if (navigationCaptureRunning) return;
-navigationCaptureRunning = true;
-
-try {
-
-} finally {
-   navigationCaptureRunning = false;
-}
+        
       }
     }
   });
