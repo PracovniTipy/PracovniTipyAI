@@ -1314,31 +1314,55 @@ async function publishHeroHero(job) {
       throw new Error("Chybí HEROHERO_EMAIL nebo HEROHERO_PASSWORD v prostředí.");
     }
 
-    const existingLoginModal = await getLoginModal(page);
+    let existingLoginModal = await getLoginModal(page);
 
     if (!existingLoginModal) {
-      const loginButtonCandidates = [
-        page.getByRole("button", { name: /přihlásit se/i }),
-        page.getByRole("button", { name: /log in/i }),
-        page.getByRole("button", { name: /login/i }),
-        page.getByText("Přihlásit se", { exact: true }),
-        page.getByText("Log in", { exact: true }),
+      console.log("🔍 Login modal není otevřen, hledám přihlašovací tlačítko / odkaz...");
+
+      const loginCandidateLocators = [
+        page.locator('a[href*="login"]'),
+        page.locator('button:has-text("Přihlásit")'),
+        page.locator('button:has-text("Log in")'),
+        page.locator('a:has-text("Přihlásit")'),
+        page.locator('a:has-text("Log in")'),
+        page.getByRole("button", { name: /přihlásit|log in/i }),
+        page.getByRole("link", { name: /přihlásit|log in/i }),
+        page.locator('[data-testid*="login"]'),
+        page.locator('[class*="login" i]')
       ];
 
       let clickedLoginButton = false;
 
-      for (const loginButton of loginButtonCandidates) {
-        const handles = await loginButton.all();
-        for (const h of handles) {
-          if (await h.isVisible().catch(() => false)) {
-            await safeClick(page, h, "Open Login Modal");
+      for (const candidateLocator of loginCandidateLocators) {
+        if (page.isClosed()) break;
+        const count = await candidateLocator.count().catch(() => 0);
+        
+        for (let i = 0; i < count; i++) {
+          const loc = candidateLocator.nth(i);
+          const isVis = await loc.isVisible().catch(() => false);
+          
+          if (isVis) {
+            console.log(`🎯 Nalezeno přihlašovací tlačítko/odkaz (index ${i}). Pokouším se kliknout...`);
+            await safeClick(page, loc, "Open Login Modal");
             clickedLoginButton = true;
+            await page.waitForTimeout(1000);
             break;
           }
         }
         if (clickedLoginButton) break;
       }
 
+      existingLoginModal = await getLoginModal(page);
+      
+      if (!clickedLoginButton && !existingLoginModal) {
+        console.warn("⚠️ Tlačítko nenalezeno v DOMu, zkouším přímé vyvolání /login URL...");
+        await page.goto("https://herohero.co/login", {
+          waitUntil: "networkidle",
+          timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+        });
+        await page.waitForTimeout(1500);
+      }
+    }
       if (!clickedLoginButton) {
         await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
         throw new Error("Nelze najít tlačítko Přihlásit se / Log in pro otevření login modalu.");
