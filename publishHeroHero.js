@@ -234,7 +234,7 @@ async function createHeroHeroPost(page, job) {
 
   // KROK 1 -> 2: Kliknutí na šipku vpravo nahoře pro přechod na kategorie
   console.log("Přecházím na další krok (kategorie)...");
-  await page.mouse.click(945, 180); // Klik na šipku vpravo nahoře
+  await page.mouse.click(945, 180);
   await page.waitForTimeout(3000);
 
   // KROK 2: Výběr kategorie, pokud je zadaná
@@ -249,7 +249,7 @@ async function createHeroHeroPost(page, job) {
 
   // KROK 2 -> 3: Kliknutí na šipku pro přechod do náhledu
   console.log("Přecházím do náhledu...");
-  await page.mouse.click(945, 180); // Klik na šipku vpravo nahoře
+  await page.mouse.click(945, 180);
   await page.waitForTimeout(3000);
 
   // KROK 3: Finální publikování – kliknutí na tlačítko "Sdílet" vpravo nahoře
@@ -260,9 +260,9 @@ async function createHeroHeroPost(page, job) {
     await shareBtn.click({ force: true });
     console.log("✅ Tlačítko Sdílet úspěšně stisknuto.");
   } else {
-    // Přímý klik na souřadnice tlačítka Sdílet v horní liště
+    // Přímý klik na přesné souřadnice tlačítka Sdílet v horní liště
     console.log("Tlačítko Sdílet nenalezeno přes text, klikám na jeho souřadnice...");
-    await page.mouse.click(945, 180);
+    await page.mouse.click(1200, 180);
   }
 
   await page.waitForTimeout(2000);
