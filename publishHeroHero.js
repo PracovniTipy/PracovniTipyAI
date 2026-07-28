@@ -115,7 +115,6 @@ async function saveStorageStateAtomically(context, targetPath) {
   }
 }
 
-// POMOCNÁ FUNKCE PRO DIAGNOSTICKÝ VÝPIS DO KONZOLE DLE ZADÁNÍ
 async function printDetailedStateToConsole(page, stepName) {
   if (!page || page.isClosed()) return;
 
@@ -129,7 +128,7 @@ async function printDetailedStateToConsole(page, stepName) {
     .catch(() => ({ readyState: "error", visibilityState: "error" }));
 
   const cookies = await page.context().cookies().catch(() => []);
-  const cookieString = cookies.map(c => `${c.name}=${c.value}`).join("; ");
+  const cookieString = cookies.map((c) => `${c.name}=${c.value}`).join("; ");
 
   const storageKeys = await page
     .evaluate(() => {
@@ -175,13 +174,11 @@ async function printDetailedStateToConsole(page, stepName) {
   console.log("==========================================");
 }
 
-// ROZŠÍŘENÁ FUNKCE PRO SCREENSHOT A VÝPIS STAVU
 async function captureStateSnapshotWithConsole(page, stepName) {
   await printDetailedStateToConsole(page, stepName);
   return await captureStateSnapshot(page, stepName);
 }
 
-// 1. STORAGE STATE DIAGNOSTIKA
 function diagnoseStorageState() {
   logDiag("--- DIAGNOSTIKA STORAGE STATE ---");
   const exists = fs.existsSync(CONFIG.STORAGE_STATE_PATH);
@@ -223,7 +220,6 @@ function diagnoseStorageState() {
   return info;
 }
 
-// 2. BROWSER ENVIRONMENT DIAGNOSTIKA
 async function diagnoseEnvironment(browser) {
   logDiag("--- DIAGNOSTIKA PROSTŘEDÍ ---");
   let playwrightVer = "N/A";
@@ -248,7 +244,6 @@ async function diagnoseEnvironment(browser) {
   logDiag("Environment Info:", envInfo);
 }
 
-// SPOLEČNÝ DIAGNOSTICKÝ SNÍMEK STAVU
 async function captureStateSnapshot(page, stepName) {
   if (!page || page.isClosed()) {
     logDiag(
@@ -372,7 +367,6 @@ async function captureStateSnapshot(page, stepName) {
   return snapshotData;
 }
 
-// DOM ANALÝZA MODALU
 async function analyzeModalDOM(page) {
   if (!page || page.isClosed()) return [];
   logDiag("--- PROVÁDÍM KOMPLETNÍ ANALÝZU DOM (LOGIN MODAL) ---");
@@ -432,7 +426,6 @@ async function analyzeModalDOM(page) {
   return domData;
 }
 
-// EVENT LISTENERS
 function attachEventListeners(page) {
   if (!page || page.isClosed()) return;
 
@@ -526,9 +519,6 @@ function attachEventListeners(page) {
   }
 }
 
-/**
- * Pomocná diagnostika pro podrobné logování elementu před a po kliknutí
- */
 async function logElementDetails(locator, stageDescription) {
   try {
     const count = await locator.count().catch(() => 0);
@@ -591,7 +581,8 @@ async function logElementDetails(locator, stageDescription) {
 }
 
 /**
- * Univerzální safeClick funkce.
+ * ODOLNÁ FUNKCE SAFECLICK
+ * Obsahuje záložní strategie (force click a JS click) pro případ překrytí prvků overlayem.
  */
 async function safeClick(
   page,
@@ -627,23 +618,6 @@ async function safeClick(
     )}`
   );
 
-  if (boundingBox === null) {
-    console.warn(
-      `⚠️ [SAFECLICK CANCELLED] BoundingBox je null pro "${description}". Kliknutí se neprovede.`
-    );
-    DIAG.safeClickStatus.push({
-      description,
-      locatorValid: true,
-      locatorVisible: isVisible,
-      locatorEnabled: isEnabled,
-      boundingBox: "null",
-      clickSuccess: false,
-      retryUsed: false,
-      reason: "BoundingBox is null",
-    });
-    return false;
-  }
-
   await logElementDetails(locator, `PŘED KLIKEM (${description})`);
 
   const urlBefore = page.url();
@@ -657,48 +631,46 @@ async function safeClick(
     .catch(() => ({ htmlLength: 0, buttonCount: 0, inputCount: 0 }));
 
   let retryUsed = false;
+  let clickSuccess = false;
+
+  // 1. Pokus: Běžný klik
   try {
     await locator.waitFor({
       state: "visible",
       timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
     });
     await captureStateSnapshotWithConsole(page, "019-po-kazdem-safeclick");
-    await locator.click();
+    await locator.click({ timeout: 5000 });
+    clickSuccess = true;
     await captureStateSnapshotWithConsole(page, "020-po-kazdem-locator-click");
   } catch (err) {
     console.warn(
-      `⚠️ První pokus o kliknutí na "${description}" selhal: ${err.message}. Opakuji kliknutí...`
+      `⚠️ Běžný klik na "${description}" selhal (${err.message}). Zkouším FORCED CLICK...`
     );
     retryUsed = true;
-    await captureStateSnapshotWithConsole(page, "cookie-click-failed-before-retry");
-    const box = await locator.boundingBox();
-    if (box) {
-      const x = box.x + box.width / 2;
-      const y = box.y + box.height / 2;
-      const topElement = await page.evaluate(({x,y}) => {
-        const el = document.elementFromPoint(x, y);
-        if (!el) return null;
-        return {
-          tag: el.tagName,
-          id: el.id,
-          class: el.className,
-          text: (el.innerText || "").slice(0,150),
-          html: el.outerHTML.slice(0,500)
-        };
-      }, {x,y});
-      console.log("TOP ELEMENT:", JSON.stringify(topElement,null,2));
+    
+    // 2. Pokus: Forced Click (obchází interception check)
+    try {
+      await locator.click({ force: true, timeout: 5000 });
+      clickSuccess = true;
+      console.log(`✅ Forced click na "${description}" byl úspěšný.`);
+    } catch (forceErr) {
+      console.warn(
+        `⚠️ Forced click na "${description}" selhal (${forceErr.message}). Zkouším EVALUATE JS CLICK...`
+      );
+
+      // 3. Pokus: Direct JavaScript click v DOMu
+      try {
+        await locator.evaluate((el) => el.click());
+        clickSuccess = true;
+        console.log(`✅ Direct JS click na "${description}" byl úspěšný.`);
+      } catch (jsErr) {
+        console.error(`❌ Všechny metody kliknutí na "${description}" selhaly: ${jsErr.message}`);
+      }
     }
-    await captureStateSnapshotWithConsole(page, "cookie-click-after-elementFromPoint");
-    await locator.waitFor({
-      state: "visible",
-      timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
-    });
-    await captureStateSnapshotWithConsole(page, "019-po-kazdem-safeclick");
-    await locator.click();
-    await captureStateSnapshotWithConsole(page, "020-po-kazdem-locator-click");
   }
 
-  if (options && options.expectDisappear) {
+  if (options && options.expectDisappear && clickSuccess) {
     try {
       await Promise.race([
         locator.waitFor({
@@ -731,46 +703,35 @@ async function safeClick(
   const domChanged = stateBefore.htmlLength !== stateAfter.htmlLength;
   const urlChanged = urlBefore !== urlAfter;
 
-  logDiag(`👈 [AFTER CLICK DIAG] "${description}":
-├─ URL before:          ${urlBefore}
-├─ URL after:           ${urlAfter}
-├─ Title before:        ${titleBefore}
-├─ Title after:         ${titleAfter}
-├─ DOM changed:         ${domChanged} (délka: ${stateBefore.htmlLength} -> ${stateAfter.htmlLength})
-├─ Button count before: ${stateBefore.buttonCount}
-├─ Button count after:  ${stateAfter.buttonCount}
-├─ Input count before:  ${stateBefore.inputCount}
-└─ Input count after:   ${stateAfter.inputCount}`);
-
   DIAG.safeClickStatus.push({
     description,
     locatorValid: true,
     locatorVisible: isVisible,
     locatorEnabled: isEnabled,
     boundingBox: JSON.stringify(boundingBox),
-    clickSuccess: true,
+    clickSuccess,
     retryUsed,
     domChanged,
     urlChanged,
     urlBefore,
     urlAfter,
-    buttonCountBefore: stateBefore.buttonCount,
-    buttonCountAfter: stateAfter.buttonCount,
-    inputCountBefore: stateBefore.inputCount,
-    inputCountAfter: stateAfter.inputCount,
   });
 
-  return true;
+  return clickSuccess;
 }
 
 /**
- * Zpracování a verifikace cookie modalu (bez zakázaných metod)
+ * Zpracování cookie modalu s ošetřením překrývání
  */
 async function handleCookieBannerIfPresent(page) {
   console.log("🍪 Vyhledávám tlačítko pro přijetí cookies...");
   DIAG.cookieStatus.cookiesBefore = (
     await page.context().cookies().catch(() => [])
   ).length;
+
+  // Zkusíme nejprve poslat Escape, pokud je zobrazen jakýkoliv jiný modal/overlay
+  await page.keyboard.press("Escape").catch(() => {});
+  await page.waitForTimeout(500);
 
   const candidateSelectors = [
     'button[data-testid="cookie-modal-agree"]',
@@ -803,25 +764,7 @@ async function handleCookieBannerIfPresent(page) {
       break;
     } else if (count > 1) {
       console.warn(
-        `⚠️ Selector "${selector}" vrací více elementů (${count}). Nevolám safeClick, vypisuji diagnostiku:`
-      );
-      const elementsDetails = await loc
-        .evaluateAll((els) =>
-          els.map((el) => ({
-            tagName: el.tagName.toLowerCase(),
-            dataTestId: el.getAttribute("data-testid") || "N/A",
-            className: el.className || "N/A",
-            text: (el.innerText || el.value || "").trim(),
-          }))
-        )
-        .catch(() => []);
-      console.warn(JSON.stringify(elementsDetails, null, 2));
-      logDiag(
-        `Selector "${selector}" přeskočen kvůli násobnému výskytu (${count}).`
-      );
-    } else {
-      console.log(
-        `ℹ️ Selector "${selector}" nenalezl žádný element (count == 0).`
+        `⚠️ Selector "${selector}" vrací více elementů (${count}).`
       );
     }
   }
@@ -835,6 +778,7 @@ async function handleCookieBannerIfPresent(page) {
   }
 
   await captureStateSnapshotWithConsole(page, "007-tesne-pred-kliknutim-na-cookie-tlacitko");
+  
   const clicked = await safeClick(
     page,
     targetLocator,
@@ -875,32 +819,8 @@ async function handleCookieBannerIfPresent(page) {
         DIAG.cookieStatus.disappeared = true;
         await captureStateSnapshotWithConsole(page, "009-po-zmizeni-cookie-banneru");
       } catch (err) {
-        console.error("❌ Cookie modal still visible");
+        console.warn("⚠️ Cookie modal je stále v DOMu, pokračujeme dál v přihlašovacím workflow...");
         DIAG.cookieStatus.disappeared = false;
-
-        const errScreenshot = path.join(
-          DEBUG_DIR,
-          "cookie-modal-failed-disappear.png"
-        );
-        const errHtml = path.join(
-          DEBUG_DIR,
-          "cookie-modal-failed-disappear.html"
-        );
-
-        if (!page.isClosed()) {
-          await page
-            .screenshot({ path: errScreenshot, fullPage: true })
-            .catch(() => {});
-          const htmlContent = await page.content().catch(() => "");
-          try {
-            fs.writeFileSync(errHtml, htmlContent, "utf8");
-          } catch (e) {}
-        }
-
-        await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
-        throw new Error(
-          "⛔ [COOKIE BANNER ERROR] Cookie modal still visible po kliknutí na akceptační tlačítko!"
-        );
       }
     }
 
@@ -911,9 +831,6 @@ async function handleCookieBannerIfPresent(page) {
   }
 }
 
-/**
- * Pomocný locator pro vrácení aktuálního login modalu (využívá all() loop místo zakázaných metod)
- */
 async function getLoginModal(page) {
   const modalHandles = await page.locator('[role="dialog"], [class*="modal" i]').all();
   for (const handle of modalHandles) {
@@ -923,7 +840,7 @@ async function getLoginModal(page) {
       return handle;
     }
   }
-  // Fallback na form
+
   const formHandles = await page.locator("form").all();
   for (const handle of formHandles) {
     const hasInputs = (await handle.locator('input[type="email"], input[type="password"]').count().catch(() => 0)) > 0;
@@ -935,9 +852,6 @@ async function getLoginModal(page) {
   return null;
 }
 
-/**
- * Jednotná a plně vyhovující funkce findLoginButton dle specifikace
- */
 async function findLoginButton(page, loginModal, mode) {
   console.log("\n==================================================");
   console.log(`🔍 DYNAMICKÝ VÝBĚR TLAČÍTKA V LOGIN MODALU (mode: ${mode})`);
@@ -1019,10 +933,6 @@ async function findLoginButton(page, loginModal, mode) {
     throw new Error(`⛔ [STRICT ERROR] Nebyl nalezen žádný vhodný kandidát pro tlačítko (mode: ${mode}).`);
   }
 
-  // Seřazení podle priorit:
-  // 1. button[type="submit"]
-  // 2. tlačítko uvnitř aktuálního form
-  // 3. největší plocha elementu (width × height)
   validCandidates.sort((a, b) => {
     const aIsSubmit = a.info.type === "submit" ? 1 : 0;
     const bIsSubmit = b.info.type === "submit" ? 1 : 0;
@@ -1035,10 +945,6 @@ async function findLoginButton(page, loginModal, mode) {
     return b.info.area - a.info.area;
   });
 
-  if (validCandidates.length > 1) {
-    console.warn(`⚠️ [WARNING] Nalezeno více platných kandidátů (${validCandidates.length}) pro mode "${mode}". Vybírám nejlepšího na základě prioritní strategie.`);
-  }
-
   const bestCandidate = validCandidates[0];
   console.log(`🎯 Vybrán nejlepší kandidát: text="${bestCandidate.info.text}", testId="${bestCandidate.info.testId}", area=${bestCandidate.info.area}`);
   console.log("==================================================\n");
@@ -1046,9 +952,6 @@ async function findLoginButton(page, loginModal, mode) {
   return bestCandidate.handle;
 }
 
-/**
- * PŘIHLAŠOVACÍ WORKFLOW - POUZE UVNITŘ MODALU
- */
 async function executeModalLogin(page, email, password) {
   console.log("🔑 [LOGIN] Zahajuji modal přihlášení...");
   DIAG.lastSuccessfulStep = "LOGIN_STARTED";
@@ -1091,7 +994,6 @@ async function executeModalLogin(page, email, password) {
   console.log("📧 Vyplňuji e-mail...");
 
   await captureStateSnapshotWithConsole(page, "012-pred-vyplnenim-emailu");
-  // Spolehlivé vyplnění React controlled inputu
   await emailInput.click();
   await captureStateSnapshotWithConsole(page, "013-po-kliknuti-do-emailoveho-pole");
   await emailInput.focus();
@@ -1124,17 +1026,14 @@ async function executeModalLogin(page, email, password) {
   logDiag(`📧 [INPUT DIAG] Email hodnota v poli: "${filledEmailValue}"`);
   await captureStateSnapshotWithConsole(page, "014-po-vyplneni-emailu");
 
-  // Dynamický výběr tlačítka po zadání e-mailu pomocí sdílené funkce
   const targetContinueButton = await findLoginButton(page, loginModal, "continue");
 
-  // Příprava sledování po kliknutí
   const networkCountBeforeClick = DIAG.networkLogs.length;
 
   await captureStateSnapshotWithConsole(page, "015-pred-kliknutim-na-pokracovat");
   await safeClick(page, targetContinueButton, "Login modal button");
   await captureStateSnapshotWithConsole(page, "016-ihned-po-kliknuti-na-pokracovat");
 
-  // Sledování změn po kliknutí
   await page.waitForTimeout(1000);
   await captureStateSnapshotWithConsole(page, "018-po-kazdem-page-waitfortimeout");
 
@@ -1260,14 +1159,12 @@ async function executeModalLogin(page, email, password) {
   await captureStateSnapshotWithConsole(page, "028-po-vyplneni-hesla");
   await captureStateSnapshotWithConsole(page, "08-password-filled");
 
-  // Získání aktuálního login modalu pro finální krok
   const finalLoginModal = await getLoginModal(page);
   if (!finalLoginModal) {
     await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
     throw new Error("❌ Login modal pro finální přihlášení nebyl nalezen.");
   }
 
-  // Dynamický výběr finálního přihlašovacího tlačítka pomocí sdílené funkce
   const targetSubmitButton = await findLoginButton(page, finalLoginModal, "submit");
 
   await captureStateSnapshotWithConsole(page, "029-pred-finalnim-kliknutim-na-prihlasit");
@@ -1324,7 +1221,6 @@ async function executeModalLogin(page, email, password) {
   console.log("🎉 Přihlášení úspěšně proběhlo.");
 }
 
-// FINÁLNÍ REPORT & DUMP
 async function dumpAllDiagnosticArtifacts(page, context, err = null) {
   logDiag("--- GENEROVÁNÍ FINÁLNÍCH DIAGNOSTICKÝCH ARTEFAKTŮ ---");
 
