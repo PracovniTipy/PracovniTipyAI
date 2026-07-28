@@ -48,47 +48,17 @@ async function getLoginModal(page) {
   return null;
 }
 
-async function findLoginButton(page, loginModal, mode) {
-  console.log(`Hledám tlačítko v režimu: ${mode}`);
-  
-  if (mode === "continue") {
-    const arrowButtons = await loginModal.locator('button:has(svg), button[type="submit"], button').all();
-    for (const btn of arrowButtons) {
-      const info = await btn.evaluate((el) => {
-        const text = (el.innerText || "").trim();
-        const rect = el.getBoundingClientRect();
-        const style = window.getComputedStyle(el);
-        const isVisible = rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
-        const hasSvg = el.querySelector("svg") !== null;
-        return { isVisible, hasSvg, text };
-      }).catch(() => null);
-
-      if (info && info.isVisible && (info.hasSvg || info.text === "")) {
-        return btn;
-      }
-    }
-  }
-
-  const keywords = mode === "continue" ? ["pokračovat", "continue", "next"] : ["přihlásit", "login", "sign in"];
-  const buttons = await loginModal.locator("button").all();
-  
-  for (const btn of buttons) {
-    const matches = await btn.evaluate((el, kws) => {
-      const text = (el.innerText || "").toLowerCase();
-      return kws.some(kw => text.includes(kw));
-    }, keywords).catch(() => false);
-
-    if (matches && (await btn.isVisible().catch(() => false))) {
-      return btn;
-    }
-  }
-
-  throw new Error(`Tlačítko pro režim ${mode} nebylo nalezeno.`);
-}
-
 async function executeModalLogin(page, email, password) {
-  console.log("Zahajuji přihlašovací formulář...");
+  console.log("Klikám na levé menu na 'Profil' pro otevření přihlášení...");
+  
+  // Kliknutí na tlačítko profilu v levém bočním panelu
+  const profileNavBtn = page.locator('aside, nav, div').filter({ hasText: /^Profil$/ }).first();
+  await profileNavBtn.click({ timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT }).catch(async () => {
+    // Záložní pokus podle běžného selektoru pro profil v levém menu
+    await page.locator('a[href*="profile"], button:has-text("Profil")').first().click();
+  });
 
+  console.log("Zahajuji přihlašovací formulář...");
   let loginModal = await getLoginModal(page);
   if (!loginModal) throw new Error("Login modal nebyl nalezen.");
 
@@ -99,10 +69,11 @@ async function executeModalLogin(page, email, password) {
   await emailInput.click();
   await emailInput.fill(email);
 
-  const continueBtn = await findLoginButton(page, loginModal, "continue");
-  await continueBtn.click();
+  console.log("Odesílám e-mail šipkou...");
+  const arrowBtn = loginModal.locator('button:has(svg), button[type="submit"]').last();
+  await arrowBtn.click();
 
-  console.log("Čekám na pole pro heslo...");
+  console.log("Čekám na pole pro heslo v novém formuláři...");
   const passwordInput = loginModal.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
 
@@ -110,11 +81,12 @@ async function executeModalLogin(page, email, password) {
   await passwordInput.click();
   await passwordInput.fill(password);
 
-  const submitBtn = await findLoginButton(page, loginModal, "submit");
+  console.log("Klikám na tlačítko pro odeslání hesla...");
+  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]');
   await submitBtn.click();
 
-  console.log("Čekám na načtení editoru po přihlášení...");
-  await page.waitForTimeout(3000);
+  console.log("Čekám na načtení po přihlášení...");
+  await page.waitForTimeout(4000);
   console.log("Přihlášení proběhlo úspěšně.");
 }
 
@@ -130,8 +102,8 @@ async function publishHeroHero(job) {
 
     const page = await context.newPage();
     
-    console.log("Otevírám herohero.co/login...");
-    await page.goto("https://herohero.co/login", {
+    console.log("Otevírám herohero.co...");
+    await page.goto("https://herohero.co/", {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
