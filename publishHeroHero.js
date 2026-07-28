@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ROBUST RUNNER");
+console.log("🚀 HEROHERO PUBLISHER - ULTIMATE RUNNER");
 console.log("==========================================");
 
 const CONFIG = {
@@ -35,6 +35,26 @@ async function handleCookieBannerIfPresent(page) {
       console.log(`✅ Cookies potvrzeny přes selector: ${selector}`);
       break;
     }
+  }
+}
+
+async function nukeOverlays(page) {
+  try {
+    console.log("🧹 Úklid případných modálních oken a overlayů...");
+    await page.evaluate(() => {
+      document.querySelectorAll('.modal-overlay, [role="dialog"], div[class*="modal"], div[class*="overlay"]').forEach(el => {
+        // Nechceme smazat celou stránku, jen prvky s fixed/absolute pozicí přes celou obrazovku
+        const style = window.getComputedStyle(el);
+        if (style.position === 'fixed' || style.position === 'absolute') {
+          el.remove();
+        }
+      });
+    });
+    // Zkusíme poslat Escape pro zavření případných tooltipů/guided tour
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+  } catch (e) {
+    // Ignorujeme
   }
 }
 
@@ -145,8 +165,10 @@ async function createHeroHeroPost(page, job) {
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
 
-  // Delší pauza na vykreslení React/Vue editoru po přechodu na /create
-  await page.waitForTimeout(5000);
+  await page.waitForTimeout(4000);
+
+  // Důkladný úklid překryvných vrstev před interakcí
+  await nukeOverlays(page);
 
   // 1. Nahrání obrázku, pokud je k dispozici
   if (job.imageUrl) {
@@ -157,21 +179,25 @@ async function createHeroHeroPost(page, job) {
     }
   }
 
-  // 2. Vyplnění nadpisu (flexibilnější selektory pro vstupní pole)
+  // Před vyplněním nadpisu ještě jednou smeteme případné overlaye
+  await nukeOverlays(page);
+
   console.log("Vyplňuji nadpis...");
-  const titleInput = page.locator('input[type="text"], input:not([type]), textarea').first();
+  const titleInput = page.locator('#post-title-input, textarea[placeholder="Nadpis"], input[type="text"]').first();
   await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await titleInput.click();
+  
+  // Použijeme kliknutí s force: true a rovnou vyplníme text
+  await titleInput.click({ force: true });
   await titleInput.fill(job.title || "Nová pracovní nabídka");
 
   // 3. Vložení formátovaného textu
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
   
-  // Zkusíme najít hlavní editor (obsahové pole / textarea)
+  await nukeOverlays(page);
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
   await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await editorArea.click();
+  await editorArea.click({ force: true });
   await editorArea.fill(formattedText);
 
   console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
