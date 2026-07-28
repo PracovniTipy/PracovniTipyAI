@@ -38,21 +38,6 @@ async function handleCookieBannerIfPresent(page) {
   }
 }
 
-async function closeAnyBlockingModal(page) {
-  try {
-    const overlay = page.locator('.modal-overlay');
-    if (await overlay.isVisible().catch(() => false)) {
-      console.log("⚠️ Nalezen překážející modal overlay, odstraňuji přes DOM...");
-      await page.evaluate(() => {
-        document.querySelectorAll('.modal-overlay, [role="dialog"]').forEach(el => el.remove());
-      });
-      await page.waitForTimeout(500);
-    }
-  } catch (e) {
-    // Ignorujeme, pokud tam nic není
-  }
-}
-
 async function getLoginModal(page) {
   const modalHandles = await page.locator('[role="dialog"], [class*="modal" i]').all();
   for (const handle of modalHandles) {
@@ -60,28 +45,23 @@ async function getLoginModal(page) {
     const isVisible = await handle.isVisible().catch(() => false);
     if (hasInputs && isVisible) return handle;
   }
+  // Pojistka: pokud není ve formálním modalu, zkusíme najít přímo formulář na stránce
+  const directForm = page.locator('form, div').filter({ has: page.locator('input[type="email"]') }).first();
+  if (await directForm.isVisible().catch(() => false)) return directForm;
+  
   return null;
 }
 
 async function executeModalLogin(page, email, password) {
-  await closeAnyBlockingModal(page);
-
-  console.log("Klikám na levé menu na 'Profil' pro otevření přihlášení...");
-  
-  // Spolehlivé kliknutí přímo na text "Profil"
-  const profileButton = page.locator('text=Profil').first();
-  await profileButton.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await profileButton.click({ force: true });
-
-  console.log("Čekám na přihlašovací modal...");
+  console.log("Čekám na přihlašovací formulář...");
   let loginModal = null;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 15; i++) {
     loginModal = await getLoginModal(page);
     if (loginModal) break;
     await page.waitForTimeout(1000);
   }
 
-  if (!loginModal) throw new Error("Login modal se po kliknutí na Profil neotevřel.");
+  if (!loginModal) throw new Error("Přihlašovací formulář nebyl nalezen.");
 
   // Vyplnění e-mailu
   const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
@@ -92,7 +72,7 @@ async function executeModalLogin(page, email, password) {
   await emailInput.fill(email);
 
   console.log("Klikám na šipku vpravo vedle e-mailu...");
-  const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), div:has(input[type="email"]) button').last();
+  const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), button[type="submit"]').last();
   await arrowBtn.click();
 
   console.log("Čekám na pole pro heslo v novém kroku...");
@@ -124,8 +104,8 @@ async function publishHeroHero(job) {
 
     const page = await context.newPage();
     
-    console.log("Otevírám herohero.co...");
-    await page.goto("https://herohero.co", {
+    console.log("Otevírám herohero.co/login...");
+    await page.goto("https://herohero.co/login", {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
