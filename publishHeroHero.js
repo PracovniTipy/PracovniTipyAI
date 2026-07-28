@@ -1,339 +1,512 @@
+require("dotenv").config();
+
 const { chromium } = require("playwright");
 
-console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - MULTI-STEP WIZARD");
-console.log("==========================================");
+const express = require("express");
+const fs = require("fs");
+const path = require("path");
+const os = require("os");
 
-const CONFIG = {
-  HEADLESS: process.env.HEADLESS !== "false",
-  TIMEOUTS: {
-    PAGE_NAVIGATION: 60000,
-    ELEMENT_WAIT: 30000,
-  },
-  VIEWPORT: { width: 1280, height: 900 },
-  USER_AGENT:
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-  LOCALE: "cs-CZ",
+const { createCanvas, loadImage } = require("canvas");
+const { registerFont } = require("canvas");
+
+const ffmpeg = require("fluent-ffmpeg");
+const ffmpegPath = require("ffmpeg-static");
+
+const { v2: cloudinary } = require("cloudinary");
+
+ffmpeg.setFfmpegPath(ffmpegPath);
+
+const app = express();
+
+app.use(express.urlencoded({ extended: true }));
+
+const multer = require("multer");
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.use(express.json());
+
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+cloudinary.api.ping()
+    .then(r => console.log("PING:", r))
+    .catch(e => console.error("PING ERROR:", e));
+
+const PORT = process.env.PORT || 3000;
+
+const TEMPLATE_FOLDER = path.join(__dirname, "templates");
+registerFont(
+    path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
+    {
+        family: "Bebas Neue"
+    }
+);
+
+console.log("Templates:", TEMPLATE_FOLDER);
+
+console.log("Exists:", fs.existsSync(TEMPLATE_FOLDER));
+const heroTemplates = {
+    Austria: "Herohero/Rakousko Herohero.png",
+    Belgium: "Herohero/Belgie Herohero.png",
+    Denmark: "Herohero/Dansko Herohero.png",
+    Estonia: "Herohero/Estonsko Herohero.png",
+    Finland: "Herohero/Finsko Herohero.png",
+    France: "Herohero/Francie Herohero.png",
+    Netherlands: "Herohero/Holandsko Herohero.png",
+    Ireland: "Herohero/Irsko Herohero.png",
+    Italy: "Herohero/Italie Herohero.png",
+    Cyprus: "Herohero/Kypr Herohero.png",
+    Malta: "Herohero/Malta Herohero.png",
+    Germany: "Herohero/Nemecko Herohero.png",
+    Norway: "Herohero/Norsko Herohero.png",
+    Greece: "Herohero/Recko Herohero.png",
+    Spain: "Herohero/Spanelsko Herohero.png",
+    Sweden: "Herohero/Svedsko Herohero.png"
 };
 
-const DEFAULT_TEST_JOB = {
-  title: "Skladový operátor (Testovací pozice)",
-  salary: "35 000 - 42 000",
-  location: "Praha - Hostivař",
-  startDate: "Ihned / Dle domluvy",
-  contractType: "HPP na dobu neurčitou",
-  language: "Čeština na komunikativní úrovni",
-  link: "https://pracovnitipy.cz",
-  category: "Belgie",
-  description: [
-    "Příjem a výdej zboží ve skladovém hospodářství",
-    "Práce se čtečkou čárových kódů (skenerem)",
-    "Kontrola dodacích listů a stavu zásob"
-  ],
-  accommodation: [
-    "Možnost zajištění ubytování v blízkosti depa",
-    "Příspěvek na ubytování ze strany zaměstnavatele"
-  ],
-  requirements: [
-    "Fyzická zdatnost a spolehlivost",
-    "Trestní bezúhonnost",
-    "Ochota pracovat na dvousměnný provoz"
-  ],
-  advantages: [
-    "Týden dovolené navíc (celkem 5 týdnů)",
-    "Dotované závodní stravování",
-    "Možnost záloh na mzdu"
-  ],
-  imageUrl: ""
+const reelTemplates = {
+    Austria: "reel/Rakousko reel.png",
+    Belgium: "reel/Belgie reel.png",
+    Denmark: "reel/Dansko reel.png",
+    Estonia: "reel/Estonsko reel.png",
+    Finland: "reel/Finsko reel.png",
+    France: "reel/Francie reel.png",
+    Netherlands: "reel/Holandsko reel.png",
+    Ireland: "reel/Irsko reel.png",
+    Italy: "reel/Italie reel.png",
+    Cyprus: "reel/Kypr reel.png",
+    Malta: "reel/Malta reel.png",
+    Germany: "reel/Nemecko reel.png",
+    Norway: "reel/Norsko reel.png",
+    Greece: "reel/Recko reel.png",
+    Spain: "reel/Spanelsko reel.png",
+    Sweden: "reel/Svedsko reel.png"
 };
 
-async function handleCookieBannerIfPresent(page) {
-  const candidateSelectors = [
-    'button[data-testid="cookie-modal-agree"]',
-    '[data-testid="cookie-modal-agree"]',
-    'button:has-text("Povolit vše")',
-    'button:has-text("Accept")',
-  ];
+function wrapText(ctx, text, maxWidth, startSize) {
+    let size = startSize;
+    while (size >= 20) {
+        ctx.font = `bold ${size}px Bebas Neue`;
+        const words = (text || "").split(" ");
+        const lines = [];
+        let line = "";
 
-  for (const selector of candidateSelectors) {
-    if (page.isClosed()) return;
-    const loc = page.locator(selector);
-    const count = await loc.count().catch(() => 0);
-    if (count > 0 && (await loc.isVisible().catch(() => false))) {
-      await loc.click({ timeout: 5000 }).catch(() => {});
-      break;
-    }
-  }
-}
-
-async function nukeOverlays(page) {
-  try {
-    await page.evaluate(() => {
-      document.querySelectorAll('.modal-overlay, [role="dialog"], div[class*="modal"], div[class*="overlay"]').forEach(el => {
-        const style = window.getComputedStyle(el);
-        if (style.position === 'fixed' || style.position === 'absolute') {
-          el.remove();
+        for (const word of words) {
+            const test = line ? `${line} ${word}` : word;
+            if (ctx.measureText(test).width <= maxWidth) {
+                line = test;
+            } else {
+                if (line) lines.push(line);
+                line = word;
+            }
         }
-      });
-    });
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(300);
-  } catch (e) {}
-}
+        if (line) lines.push(line);
 
-async function getLoginModal(page) {
-  const modalHandles = await page.locator('[role="dialog"], [class*="modal" i]').all();
-  for (const handle of modalHandles) {
-    const hasInputs = (await handle.locator('input[type="email"], input[name="email"], input[type="password"]').count().catch(() => 0)) > 0;
-    const isVisible = await handle.isVisible().catch(() => false);
-    if (hasInputs && isVisible) return handle;
-  }
-  const directForm = page.locator('form, div').filter({ has: page.locator('input[type="email"]') }).first();
-  if (await directForm.isVisible().catch(() => false)) return directForm;
-  return null;
-}
-
-async function executeModalLogin(page, email, password) {
-  let loginModal = null;
-  for (let i = 0; i < 20; i++) {
-    loginModal = await getLoginModal(page);
-    if (loginModal) break;
-    await page.waitForTimeout(1000);
-  }
-
-  if (!loginModal) throw new Error("Přihlašovací formulář nebyl nalezen.");
-
-  const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
-  await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await emailInput.click();
-  await emailInput.fill(email);
-
-  const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), button[type="submit"]').last();
-  await arrowBtn.click();
-
-  const passwordInput = loginModal.locator('input[type="password"]');
-  await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await passwordInput.click();
-  await passwordInput.fill(password);
-
-  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').last();
-  await submitBtn.click();
-
-  await page.waitForTimeout(6000);
-}
-
-function formatJobPost(job) {
-  const title = job.title || "Pracovní nabídka";
-  const salary = job.salary ? `💰 cca ${job.salary} Kč / měsíc` : null;
-  const location = job.location ? `📍 ${job.location}` : null;
-  const startDate = job.startDate ? `⏰ Nástup ${job.startDate}` : null;
-  const contractType = job.contractType ? `🕒 ${job.contractType}` : null;
-  const language = job.language ? `🌍 Jazyk: ${job.language}` : null;
-  const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
-
-  let output = `${title}\n\n`;
-  if (salary) output += `${salary}\n\n`;
-  if (location) output += `${location}\n`;
-  if (startDate) output += `${startDate}\n`;
-  if (contractType) output += `${contractType}\n`;
-  if (language) output += `${language}\n`;
-  if (link) output += `${link}\n`;
-
-  if (job.description && job.description.length > 0) {
-    output += `\n🔧 Náplň práce\n\n`;
-    for (const point of job.description) output += `• ${point}\n`;
-  }
-
-  if (job.accommodation && job.accommodation.length > 0) {
-    output += `\n🏠 Ubytování\n\n`;
-    for (const point of job.accommodation) output += `• ${point}\n`;
-  }
-
-  if (job.requirements && job.requirements.length > 0) {
-    output += `\n📋 Požadavky\n\n`;
-    for (const point of job.requirements) output += `• ${point}\n`;
-  }
-
-  if (job.advantages && job.advantages.length > 0) {
-    output += `\n⭐ Výhody\n\n`;
-    for (const point of job.advantages) output += `• ${point}\n`;
-  }
-
-  return output.trim();
-}
-
-async function createHeroHeroPost(page, job) {
-  console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
-  
-  if (!page.url().includes("/create")) {
-    console.log("Přecházím na /create...");
-    await page.goto("https://herohero.co/create", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    }).catch(() => {});
-  }
-
-  console.log("Probouzím stránku simulací interakce pro vykreslení SPA...");
-  await page.waitForTimeout(3000);
-  await page.mouse.move(200, 200);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.waitForTimeout(2000);
-  await nukeOverlays(page);
-
-  console.log("Hledám políčka pro nadpis a text v editoru...");
-
-  let titleInput = null;
-  for (let attempt = 1; attempt <= 6; attempt++) {
-    await nukeOverlays(page);
-    
-    const editables = await page.locator('div[contenteditable="true"], textarea, input[type="text"]').all();
-    if (editables.length > 0) {
-      for (const el of editables) {
-        if (await el.isVisible().catch(() => false)) {
-          titleInput = el;
-          break;
+        if (lines.length <= 2) {
+            return { size, lines };
         }
-      }
+        size--;
     }
-
-    if (titleInput) {
-      console.log(`✅ Políčko nalezeno v pokusu č. ${attempt}`);
-      break;
-    }
-
-    console.log(`⚠️ Pokus č. ${attempt}: Políčko nenalezeno, klikám do středu obrazovky a čekám...`);
-    await page.mouse.click(500, 400);
-    await page.waitForTimeout(5000);
-  }
-
-  if (!titleInput) {
-    const fullHtml = await page.content();
-    console.log("DEBUG - Celé HTML začátek:", fullHtml.slice(0, 500));
-    throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
-  }
-
-  await titleInput.scrollIntoViewIfNeeded();
-  await titleInput.click({ force: true });
-  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 25 });
-  console.log("✅ Nadpis úspěšně vyplněn.");
-
-  await page.waitForTimeout(1000);
-
-  console.log("Vkládám formátovaný text nabídky...");
-  const formattedText = formatJobPost(job);
-
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-
-  const lines = formattedText.split("\n");
-  for (const line of lines) {
-    await page.keyboard.type(line, { delay: 5 });
-    await page.keyboard.press("Enter");
-  }
-
-  // KROK 1 -> 2: Kliknutí na šipku vpravo nahoře pro přechod na kategorie
-  console.log("Přecházím na další krok (kategorie)...");
-  const nextArrow1 = page.locator('button:has(svg), header button').last();
-  await nextArrow1.click({ force: true });
-  await page.waitForTimeout(3000);
-
-  // KROK 2: Výběr kategorie, pokud je zadaná
-  if (job.category) {
-    console.log(`Hledám a vybírám kategorii: ${job.category}`);
-    const categoryBtn = page.locator(`button:has-text("${job.category}"), div:has-text("${job.category}")`).first();
-    if (await categoryBtn.isVisible().catch(() => false)) {
-      await categoryBtn.click({ force: true }).catch(() => {});
-      console.log(`✅ Kategorie "${job.category}" vybrána.`);
-    }
-  }
-
-  // KROK 2 -> 3: Kliknutí na šipku pro přechod do náhledu
-  console.log("Přecházím do náhledu...");
-  const nextArrow2 = page.locator('button:has(svg), header button').last();
-  await nextArrow2.click({ force: true });
-  await page.waitForTimeout(3000);
-
-  // KROK 3: Finální publikování (tlačítko Sdílet)
-  console.log("Hledám tlačítko pro finální sdílení...");
-  
-  const shareBtnSelectors = [
-    'button:has-text("Sdílet")',
-    'button:has-text("Publikovat")',
-    'header button:has(svg)',
-    'button[type="submit"]'
-  ];
-
-  let shared = false;
-  for (const sel of shareBtnSelectors) {
-    const btn = page.locator(sel).last();
-    if (await btn.isVisible().catch(() => false)) {
-      await btn.click({ force: true });
-      shared = true;
-      console.log(`✅ Tlačítko sdílení stisknuto pomocí selektoru: ${sel}`);
-      break;
-    }
-  }
-
-  if (!shared) {
-    await page.mouse.click(950, 85);
-    console.log("✅ Kliknuto na pozici tlačítka sdílení.");
-  }
-
-  await page.waitForTimeout(2000);
-  const confirmBtn = page.locator('button:has-text("Sdílet"), button:has-text("Potvrdit"), button:has-text("Ano")').last();
-  if (await confirmBtn.isVisible().catch(() => false)) {
-    await confirmBtn.click({ force: true });
-    console.log("✅ Potvrzeno v dialogovém okně.");
-  }
-
-  await page.waitForTimeout(5000);
-  console.log(`Příspěvek "${job.title}" byl kompletně publikován.`);
+    return {
+        size: 20,
+        lines: [text]
+    };
 }
 
-async function publishHeroHero(inputJob) {
-  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title) 
-    ? DEFAULT_TEST_JOB 
-    : inputJob;
+async function createImage(job, templateFile) {
+    const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
 
-  console.log(`Používám data pro pozici: ${job.title}`);
+    if (!fs.existsSync(fullPath)) {
+        throw new Error(`Template not found: ${fullPath}`);
+    }
 
-  let browser;
-  try {
-    browser = await chromium.launch({ 
-      headless: CONFIG.HEADLESS,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    const template = await loadImage(fullPath);
+    const canvas = createCanvas(template.width, template.height);
+    const ctx = canvas.getContext("2d");
+
+    ctx.drawImage(template, 0, 0);
+
+    const startX = 90;
+    const startY = 220;
+    const maxWidth = template.width - (startX * 2);
+
+    // 1. COUNTRY
+    let countrySize = 135;
+    ctx.font = `bold ${countrySize}px Bebas Neue`;
+    const countryText = (job.country || "").toUpperCase();
+
+    // 2. JOB TITLE
+    let jobTitleText = (job.job_title || "").toUpperCase();
+    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, 85);
+    let jobSize = jobWrapped.size;
+    if (jobWrapped.lines.length > 2) {
+        jobSize = Math.max(35, jobSize - 10);
+    }
+
+    // 3. SALARY
+    let salarySize = 75;
+    let salaryText = "";
+    if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
+        salaryText = job.salary_czk_month;
+    }
+
+    // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
+    let bottomSize = 48;
+    let ubytovaniText = "UBYTOVÁNÍ ZAJIŠTĚNO.";
+    let anglictinaText = "ANGLIČTINA";
+
+    const drawLineWithStroke = (text, x, y, size, lineWidth = 5) => {
+        if (!text) return;
+        ctx.font = `bold ${size}px Bebas Neue`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = lineWidth;
+        ctx.strokeText(text, x, y);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(text, x, y);
+        ctx.restore();
+    };
+
+    let currentY = startY;
+
+    // Render Country
+    drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
+    currentY += countrySize * 0.82;
+
+    // Render Job Title (může mít více řádků)
+    ctx.font = `bold ${jobSize}px Bebas Neue`;
+    const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize);
+    currentJobWrapped.lines.forEach((line, index) => {
+        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.05), jobSize, 7);
     });
-    const context = await browser.newContext({
-      viewport: CONFIG.VIEWPORT,
-      userAgent: CONFIG.USER_AGENT,
-      locale: CONFIG.LOCALE,
-    });
+    currentY += currentJobWrapped.lines.length * jobSize * 1.05 + 10;
 
-    const page = await context.newPage();
+    // Render Salary
+    if (salaryText) {
+        drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
+        currentY += salarySize * 1.15;
+    } else {
+        currentY += 10;
+    }
+
+    // Render Ubytování
+    drawLineWithStroke(ubytovaniText, startX, currentY, bottomSize, 5);
+    currentY += bottomSize * 1.15;
+
+    // Render Angličtina
+    drawLineWithStroke(anglictinaText, startX, currentY, bottomSize, 5);
+
+    return canvas.toBuffer("image/png");
+}
+
+async function uploadBuffer(buffer) {
+    console.log("FFmpeg START");  
     
-    console.log("Otevírám herohero.co/login...");
-    await page.goto("https://herohero.co/login", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+    return await new Promise((resolve, reject) => {
+        console.log("FFmpeg HOTOVO");
+        
+        const stream = cloudinary.uploader.upload_stream(
+            {
+                folder: "PracovniTipyAI"
+            },
+            (err, result) => {
+                if (err) {
+                    return reject(err);
+                }
+                resolve(result.secure_url);
+            }
+        );
+        stream.end(buffer);
     });
-
-    await handleCookieBannerIfPresent(page);
-
-    const email = process.env.HEROHERO_EMAIL;
-    const password = process.env.HEROHERO_PASSWORD;
-    if (!email || !password) throw new Error("Chybí přihlašovací údaje v prostředí.");
-
-    await executeModalLogin(page, email, password);
-    await createHeroHeroPost(page, job);
-
-    return { success: true, job };
-  } catch (err) {
-    console.error(`❌ [CHYBA]:`, err.message);
-    throw err;
-  } finally {
-    if (browser) await browser.close().catch(() => {});
-  }
 }
 
-module.exports = publishHeroHero;
+async function createReel(imageBuffer) {
+    const id = Date.now();
+
+    const imagePath = path.join(os.tmpdir(), `${id}.png`);
+    const videoPath = path.join(os.tmpdir(), `${id}.mp4`);
+
+    fs.writeFileSync(imagePath, imageBuffer);
+
+    await new Promise((resolve, reject) => {
+        ffmpeg()
+            .input(imagePath)
+            .inputOptions([
+                "-loop", "1",
+                "-framerate", "25"
+            ])
+            .videoCodec("libx264")
+            .outputOptions([
+                "-t", "8",
+                "-vf", "scale=720:1280",
+                "-pix_fmt", "yuv420p",
+                "-preset", "ultrafast",
+                "-threads", "1",
+                "-movflags", "+faststart"
+            ])
+            .on("start", cmd => {
+                console.log("FFMPEG CMD:");
+                console.log(cmd);
+            })
+            .on("stderr", line => {
+                console.log("FFMPEG:", line);
+            })
+            .on("error", err => {
+                console.log("FFMPEG ERROR:");
+                console.error(err);
+                reject(err);
+            })
+            .on("end", () => {
+                console.log("FFMPEG END");
+                resolve();
+            })
+            .save(videoPath);
+    });
+    console.log("Video existuje:", fs.existsSync(videoPath));
+
+    if (fs.existsSync(videoPath)) {
+        console.log("Velikost videa:", fs.statSync(videoPath).size);
+    }
+
+    console.log("Cesta:", videoPath);
+    console.log("UPLOAD VIDEO START");
+
+    let result;
+
+    try {
+        console.log("Zacinam upload do Cloudinary...");
+        result = await cloudinary.uploader.upload(videoPath, {
+            resource_type: "video",
+            folder: "PracovniTipyAI/reels"
+        });
+        console.log("UPLOAD VIDEO HOTOVO");
+        console.log("VIDEO URL:", result.secure_url);
+        console.dir(result, { depth: null });
+    } catch (e) {
+        console.log("UPLOAD VIDEO CHYBA");
+        console.dir(e, { depth: null });
+        throw e;
+    }
+
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
+
+    return result.secure_url;
+}
+
+app.get("/", (req, res) => {
+    res.send("PracovniTipyAI běží");
+});
+
+app.post("/generate", async (req, res) => {
+    console.log("REQUEST PRIJATA");
+    console.dir(req.body, { depth: null });
+
+    const jobs = Array.isArray(req.body.jobs) ? req.body.jobs : [];
+    const reels = Array.isArray(req.body.reels) ? req.body.reels : [];
+
+    console.log("JOBS COUNT:", jobs.length);
+    console.log("REELS COUNT:", reels.length);
+
+    if (jobs.length === 0 && reels.length === 0) {
+        return res.status(400).json({
+            success: false,
+            error: "Musí být předáno jobs nebo reels"
+        });
+    }
+
+    try {
+        const herohero = [];
+        const instagram = [];
+
+        // HEROHERO
+        for (const job of jobs) {
+            console.log("HERO JOB:", job.job_title);
+
+            const template = heroTemplates[job.country_code];
+
+            console.log("HERO TEMPLATE:", template);
+
+            if (!template) {
+                console.log("HERO TEMPLATE NOT FOUND:", job.country_code);
+                continue;
+            }
+
+            const imageBuffer = await createImage(job, template);
+
+            console.log("HERO IMAGE CREATED");
+
+            const imageUrl = await uploadBuffer(imageBuffer);
+
+            console.log("HERO IMAGE URL:", imageUrl);
+
+            herohero.push({
+                ...job,
+                postId: job.postId,
+                categoryId: job.categoryId,
+                title: job.job_title,
+                text: job.description,
+                textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
+                imageUrl,
+                width: 1080,
+                height: 1350,
+                fileName: `${job.country} Herohero.png`,
+                fileSize: 0,
+                previewLevel: "FIRST_LINES",
+                isAgeRestricted: false,
+                isSponsored: false,
+                isExcludedFromRss: false
+            });
+
+            console.log("HERO PUSH OK");
+        }
+
+        // REELS
+        for (const reel of reels) {
+            console.log("REEL:", reel.job_title);
+            console.log("COUNTRY CODE:", reel.country_code);
+
+            const template = reelTemplates[reel.country_code];
+
+            console.log("REEL TEMPLATE:", template);
+
+            if (!template) {
+                console.log("REEL TEMPLATE NOT FOUND:", reel.country_code);
+                continue;
+            }
+
+            const imageBuffer = await createImage(reel, template);
+
+            console.log("REEL IMAGE CREATED");
+
+            const videoUrl = await createReel(imageBuffer);
+
+            console.log("VIDEO URL:", videoUrl);
+
+            instagram.push({
+                ...reel,
+                videoUrl
+            });
+
+            console.log("INSTAGRAM PUSH OK");
+        }
+
+        console.log("HERO COUNT:", herohero.length);
+        console.log("INSTAGRAM COUNT:", instagram.length);
+        console.log("POSILAM RESPONSE");
+
+        res.json({
+            success: true,
+            herohero,
+            instagram
+        });
+
+    } catch (err) {
+        console.error("FULL ERROR:");
+        console.dir(err, { depth: null });
+
+        if (err.response) {
+            console.log("RESPONSE:");
+            console.dir(err.response, { depth: null });
+        }
+
+        if (err.response?.body) {
+            console.log("BODY:");
+            console.dir(err.response.body, { depth: null });
+        }
+
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+app.get("/test-playwright", async (req, res) => {
+    try {
+        console.log("HOST:", require("os").hostname());
+
+        const browser = await chromium.launch({
+            headless: true
+        });
+
+        const page = await browser.newPage();
+
+        await page.goto("https://herohero.co", {
+            waitUntil: "domcontentloaded"
+        });
+
+        const title = await page.title();
+
+        await browser.close();
+
+        res.json({
+            success: true,
+            title,
+            hostname: require("os").hostname()
+        });
+
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+app.post("/publishHeroHero", async (req, res) => {
+    const mod = require("./publishHeroHero");
+
+    console.log("EXPORT =", mod);
+    console.log("KEYS =", Object.keys(mod));
+    console.log("CACHE =", require.resolve("./publishHeroHero"));
+    
+    const publishHeroHero = require("./publishHeroHero");
+
+    console.log("EXPORT =", publishHeroHero);
+    console.log("KEYS =", Object.keys(publishHeroHero));
+    
+    try {
+        await publishHeroHero(req.body);
+        res.json({
+            success: true
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({
+            success: false,
+            error: e.message
+        });
+    }
+});
+
+app.post("/herohero/upload", upload.single("image"), async (req, res) => {
+  console.log("HeroHero upload přijat");
+  res.json({ success: true });
+});
+
+app.get("/debug", (req, res) => {
+    const file = path.join(__dirname, "debug.tar.gz");
+
+    if (!fs.existsSync(file)) {
+        return res.status(404).send("debug.tar.gz nebyl nalezen");
+    }
+
+    res.download(file);
+});
+
+app.listen(PORT, () => {
+  console.log(`Server běží na portu ${PORT}`);
+});
