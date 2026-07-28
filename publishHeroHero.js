@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ULTIMATE RESILIENT");
+console.log("🚀 HEROHERO PUBLISHER - ULTIMATE FIX");
 console.log("==========================================");
 
 const CONFIG = {
@@ -179,67 +179,39 @@ async function createHeroHeroPost(page, job) {
   console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
   
   if (!page.url().includes("/create")) {
+    console.log("Přecházím na /create...");
     await page.goto("https://herohero.co/create", {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
-  }
-
-  console.log("Čekám, až zmizí #splash obrazovka...");
-  
-  // Agresivně počkáme, až #splash úplně zmizí z DOMu nebo se stane neviditelným
-  try {
-    await page.waitForSelector('#splash', { state: 'detached', timeout: 20000 });
-  } catch (e) {
-    console.log("⚠️ #splash element se neodpojil sám, zkouším ho odstranit násilím přes JS...");
-    await page.evaluate(() => {
-      const splash = document.querySelector('#splash');
-      if (splash) splash.remove();
     }).catch(() => {});
   }
 
-  console.log("Čekám na plné vykreslení editoru...");
-  await page.waitForTimeout(5000);
+  console.log("Čekám na vykreslení editoru a hledám políčko pro nadpis...");
+  await page.waitForTimeout(4000);
   await nukeOverlays(page);
-
-  // 1. Nahrání obrázku (pokud je k dispozici)
-  if (job.imageUrl) {
-    console.log("Nahrávám obrázek...");
-    const fileInput = page.locator('input[type="file"]').first();
-    if (await fileInput.count() > 0) {
-      await fileInput.setInputFiles(job.imageUrl).catch(() => {});
-      await page.waitForTimeout(4000);
-    }
-  }
-
-  await nukeOverlays(page);
-
-  // 2. Vyplnění nadpisu
-  console.log("Hledám políčko pro nadpis...");
-  const titleSelectors = [
-    'textarea#post-title-input',
-    'input#post-title-input',
-    'textarea[placeholder*="Nadpis" i]',
-    'input[placeholder*="Nadpis" i]',
-    'textarea[placeholder*="Napište" i]',
-    'textarea',
-    'input[type="text"]',
-    'div[contenteditable="true"]'
-  ];
 
   let titleInput = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
+  const titleSelectors = [
+    'p:has-text("Začni psát...")',
+    'div[data-placeholder*="Začni" i]',
+    'div[contenteditable="true"]',
+    'textarea',
+    'input[type="text"]'
+  ];
+
+  for (let attempt = 1; attempt <= 5; attempt++) {
+    await nukeOverlays(page);
     for (const sel of titleSelectors) {
       const loc = page.locator(sel).first();
       const count = await loc.count().catch(() => 0);
       if (count > 0) {
         try {
-          await loc.waitFor({ state: "visible", timeout: 4000 });
+          await loc.waitFor({ state: "visible", timeout: 3000 });
           titleInput = loc;
-          console.log(`✅ Nadpis/pole nalezeno pomocí selektoru: ${sel}`);
+          console.log(`✅ Políčko pro nadpis nalezeno pomocí: ${sel}`);
           break;
         } catch (e) {
-          // Pokračujeme dál
+          // Pokračujeme
         }
       }
     }
@@ -256,19 +228,22 @@ async function createHeroHeroPost(page, job) {
 
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
-  await titleInput.fill(job.title || "Nová pracovní nabídka");
+  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 30 });
 
-  // 3. Vložení formátovaného textu
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
   
   await nukeOverlays(page);
   
-  const editorArea = page.locator('div[contenteditable="true"], textarea').last();
-  await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await editorArea.scrollIntoViewIfNeeded();
-  await editorArea.click({ force: true });
-  await editorArea.fill(formattedText);
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Enter');
+  
+  await page.evaluate((text) => {
+    navigator.clipboard.writeText(text);
+  }, formattedText);
+  
+  await page.keyboard.press('Control+V');
+  await page.waitForTimeout(2000);
 
   console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
 }
