@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - CLEAN RUNNER");
+console.log("🚀 HEROHERO PUBLISHER - FULL AUTOMATION");
 console.log("==========================================");
 
 const CONFIG = {
@@ -45,7 +45,6 @@ async function getLoginModal(page) {
     const isVisible = await handle.isVisible().catch(() => false);
     if (hasInputs && isVisible) return handle;
   }
-  // Pojistka: pokud není ve formálním modalu, zkusíme najít přímo formulář na stránce
   const directForm = page.locator('form, div').filter({ has: page.locator('input[type="email"]') }).first();
   if (await directForm.isVisible().catch(() => false)) return directForm;
   
@@ -63,7 +62,6 @@ async function executeModalLogin(page, email, password) {
 
   if (!loginModal) throw new Error("Přihlašovací formulář nebyl nalezen.");
 
-  // Vyplnění e-mailu
   const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   
@@ -92,6 +90,97 @@ async function executeModalLogin(page, email, password) {
   console.log("Přihlášení proběhlo úspěšně.");
 }
 
+// Funkce pro formátování textu přesně podle zadaných pravidel
+function formatJobPost(job) {
+  const title = job.title || "Pracovní nabídka";
+  const salary = job.salary ? `💰 cca ${job.salary} Kč / měsíc` : null;
+  const location = job.location ? `📍 ${job.location}` : null;
+  const startDate = job.startDate ? `⏰ Nástup ${job.startDate}` : null;
+  const contractType = job.contractType ? `🕒 ${job.contractType}` : null;
+  const language = job.language ? `🌍 Jazyk: ${job.language}` : null;
+  const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
+
+  let output = `${title}\n\n`;
+  if (salary) output += `${salary}\n\n`;
+  if (location) output += `${location}\n`;
+  if (startDate) output += `${startDate}\n`;
+  if (contractType) output += `${contractType}\n`;
+  if (language) output += `${language}\n`;
+  if (link) output += `${link}\n`;
+
+  if (job.description && job.description.length > 0) {
+    output += `\n🔧 Náplň práce\n\n`;
+    for (const point of job.description) {
+      output += `• ${point}\n`;
+    }
+  }
+
+  if (job.accommodation && job.accommodation.length > 0) {
+    output += `\n🏠 Ubytování\n\n`;
+    for (const point of job.accommodation) {
+      output += `• ${point}\n`;
+    }
+  }
+
+  if (job.requirements && job.requirements.length > 0) {
+    output += `\n📋 Požadavky\n\n`;
+    for (const point of job.requirements) {
+      output += `• ${point}\n`;
+    }
+  }
+
+  if (job.advantages && job.advantages.length > 0) {
+    output += `\n⭐ Výhody\n\n`;
+    for (const point of job.advantages) {
+      output += `• ${point}\n`;
+    }
+  }
+
+  return output.trim();
+}
+
+async function createHeroHeroPost(page, job) {
+  console.log("Přecházím na https://herohero.co/create...");
+  await page.goto("https://herohero.co/create", {
+    waitUntil: "domcontentloaded",
+    timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+  });
+
+  console.log("Čekám na načtení editoru pro vytvoření příspěvku...");
+  await page.waitForTimeout(3000);
+
+  // 1. Vložení obrázku, pokud je k dispozici
+  if (job.imageUrl) {
+    console.log("Nahrávám obrázek...");
+    const fileInput = page.locator('input[type="file"]').first();
+    if (await fileInput.count() > 0) {
+      // Pokud job.imageUrl obsahuje URL nebo cestu, nastavíme ji
+      // Předpokládáme, že Make předává buď přímou URL nebo base64 / cestu
+      await fileInput.setInputFiles(job.imageUrl).catch(async () => {
+        console.log("⚠️ Přímé nastavení souboru selhalo, zkouším stáhnout obrázek...");
+      });
+    }
+  }
+
+  // 2. Vyplnění nadpisu (Název práce)
+  console.log("Vyplňuji nadpis příspěvku...");
+  const titleInput = page.locator('input[placeholder*="Nadpis" i], input[type="text"]').first();
+  await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await titleInput.click();
+  await titleInput.fill(job.title || "Nová pracovní nabídka");
+
+  // 3. Formátování a vyplnění textu informací o nabídce
+  console.log("Generuji a vkládám text podle pravidel...");
+  const formattedText = formatJobPost(job);
+
+  const editorArea = page.locator('div[contenteditable="true"], textarea').last();
+  await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await editorArea.click();
+  await editorArea.fill(formattedText);
+
+  console.log("Příspěvek na Herohero byl úspěšně připraven.");
+}
+
 async function publishHeroHero(job) {
   let browser;
   try {
@@ -117,6 +206,9 @@ async function publishHeroHero(job) {
     if (!email || !password) throw new Error("Chybí přihlašovací údaje v prostředí.");
 
     await executeModalLogin(page, email, password);
+
+    // Po úspěšném přihlášení přejdeme rovnou na /create a vytvoříme příspěvek
+    await createHeroHeroPost(page, job);
 
     return { success: true, job };
   } catch (err) {
