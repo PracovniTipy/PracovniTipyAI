@@ -7,17 +7,16 @@ console.log("==========================================");
 const CONFIG = {
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
-    PAGE_NAVIGATION: 35000,
-    ELEMENT_WAIT: 20000,
-    LOGIN_WAIT: 15000,
+    PAGE_NAVIGATION: 45000,
+    ELEMENT_WAIT: 30000,
+    LOGIN_WAIT: 20000,
   },
   VIEWPORT: { width: 1280, height: 900 },
   USER_AGENT:
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   LOCALE: "cs-CZ",
 };
 
-// Pevná testovací šablona pro bezpečné ověření v Make bez nutnosti vyplňovat data
 const DEFAULT_TEST_JOB = {
   title: "Skladový operátor (Testovací pozice)",
   salary: "35 000 - 42 000",
@@ -99,7 +98,7 @@ async function getLoginModal(page) {
 
 async function executeModalLogin(page, email, password) {
   let loginModal = null;
-  for (let i = 0; i < 15; i++) {
+  for (let i = 0; i < 20; i++) {
     loginModal = await getLoginModal(page);
     if (loginModal) break;
     await page.waitForTimeout(1000);
@@ -125,7 +124,7 @@ async function executeModalLogin(page, email, password) {
   const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').last();
   await submitBtn.click();
 
-  await page.waitForTimeout(4000);
+  await page.waitForTimeout(6000);
 }
 
 function formatJobPost(job) {
@@ -181,22 +180,26 @@ async function createHeroHeroPost(page, job) {
   
   if (!page.url().includes("/create")) {
     await page.goto("https://herohero.co/create", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
   }
 
-  console.log("Čekám na plné načtení editoru...");
+  console.log("Čekám, až zmizí #splash obrazovka...");
   
+  // Agresivně počkáme, až #splash úplně zmizí z DOMu nebo se stane neviditelným
   try {
-    await page.waitForSelector('textarea, input[type="text"], div[contenteditable="true"]', { 
-      state: 'visible', 
-      timeout: 15000 
-    });
+    await page.waitForSelector('#splash', { state: 'detached', timeout: 20000 });
   } catch (e) {
-    console.log("⚠️ Prvek se neobjevil hned, zkouším obnovit overlaye...");
+    console.log("⚠️ #splash element se neodpojil sám, zkouším ho odstranit násilím přes JS...");
+    await page.evaluate(() => {
+      const splash = document.querySelector('#splash');
+      if (splash) splash.remove();
+    }).catch(() => {});
   }
 
+  console.log("Čekám na plné vykreslení editoru...");
+  await page.waitForTimeout(5000);
   await nukeOverlays(page);
 
   // 1. Nahrání obrázku (pokud je k dispozici)
@@ -225,24 +228,29 @@ async function createHeroHeroPost(page, job) {
   ];
 
   let titleInput = null;
-  for (const sel of titleSelectors) {
-    const loc = page.locator(sel).first();
-    const count = await loc.count().catch(() => 0);
-    if (count > 0) {
-      try {
-        await loc.waitFor({ state: "visible", timeout: 4000 });
-        titleInput = loc;
-        console.log(`✅ Nadpis/pole nalezeno pomocí selektoru: ${sel}`);
-        break;
-      } catch (e) {
-        // Pokračujeme dalším selektorem
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    for (const sel of titleSelectors) {
+      const loc = page.locator(sel).first();
+      const count = await loc.count().catch(() => 0);
+      if (count > 0) {
+        try {
+          await loc.waitFor({ state: "visible", timeout: 4000 });
+          titleInput = loc;
+          console.log(`✅ Nadpis/pole nalezeno pomocí selektoru: ${sel}`);
+          break;
+        } catch (e) {
+          // Pokračujeme dál
+        }
       }
     }
+    if (titleInput) break;
+    console.log(`⚠️ Pokus č. ${attempt}: Políčko nenalezeno, čekám dalších 5 sekund...`);
+    await page.waitForTimeout(5000);
   }
 
   if (!titleInput) {
-    const bodySnippet = await page.evaluate(() => document.body.innerHTML.slice(0, 300));
-    console.log("DEBUG - Obsah stránky začíná:", bodySnippet);
+    const fullHtml = await page.content();
+    console.log("DEBUG - Celé HTML začátek:", fullHtml.slice(0, 500));
     throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
   }
 
@@ -274,7 +282,10 @@ async function publishHeroHero(inputJob) {
 
   let browser;
   try {
-    browser = await chromium.launch({ headless: CONFIG.HEADLESS });
+    browser = await chromium.launch({ 
+      headless: CONFIG.HEADLESS,
+      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+    });
     const context = await browser.newContext({
       viewport: CONFIG.VIEWPORT,
       userAgent: CONFIG.USER_AGENT,
