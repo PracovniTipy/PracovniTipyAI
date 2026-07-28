@@ -1,14 +1,14 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - RESILIENT RUNNER");
+console.log("🚀 HEROHERO PUBLISHER - ULTRA RESILIENT");
 console.log("==========================================");
 
 const CONFIG = {
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 35000,
-    ELEMENT_WAIT: 15000,
+    ELEMENT_WAIT: 20000,
     LOGIN_WAIT: 15000,
   },
   VIEWPORT: { width: 1280, height: 900 },
@@ -18,7 +18,6 @@ const CONFIG = {
 };
 
 async function handleCookieBannerIfPresent(page) {
-  console.log("🍪 Vyhledávám tlačítko pro přijetí cookies...");
   const candidateSelectors = [
     'button[data-testid="cookie-modal-agree"]',
     '[data-testid="cookie-modal-agree"]',
@@ -32,7 +31,6 @@ async function handleCookieBannerIfPresent(page) {
     const count = await loc.count().catch(() => 0);
     if (count > 0 && (await loc.isVisible().catch(() => false))) {
       await loc.click({ timeout: 5000 }).catch(() => {});
-      console.log(`✅ Cookies potvrzeny přes selector: ${selector}`);
       break;
     }
   }
@@ -40,7 +38,6 @@ async function handleCookieBannerIfPresent(page) {
 
 async function nukeOverlays(page) {
   try {
-    console.log("🧹 Úklid případných modálních oken a overlayů...");
     await page.evaluate(() => {
       document.querySelectorAll('.modal-overlay, [role="dialog"], div[class*="modal"], div[class*="overlay"]').forEach(el => {
         const style = window.getComputedStyle(el);
@@ -50,7 +47,7 @@ async function nukeOverlays(page) {
       });
     });
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(400);
   } catch (e) {
     // Ignorujeme
   }
@@ -70,7 +67,6 @@ async function getLoginModal(page) {
 }
 
 async function executeModalLogin(page, email, password) {
-  console.log("Čekám na přihlašovací formulář...");
   let loginModal = null;
   for (let i = 0; i < 15; i++) {
     loginModal = await getLoginModal(page);
@@ -83,29 +79,22 @@ async function executeModalLogin(page, email, password) {
   const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   
-  console.log("Vyplňuji e-mail...");
   await emailInput.click();
   await emailInput.fill(email);
 
-  console.log("Klikám na šipku vpravo vedle e-mailu...");
   const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), button[type="submit"]').last();
   await arrowBtn.click();
 
-  console.log("Čekám na pole pro heslo v novém kroku...");
   const passwordInput = loginModal.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
 
-  console.log("Vyplňuji heslo...");
   await passwordInput.click();
   await passwordInput.fill(password);
 
-  console.log("Klikám na tlačítko pro odeslání hesla (Pokračovat)...");
   const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').last();
   await submitBtn.click();
 
-  console.log("Čekám na načtení po přihlášení...");
   await page.waitForTimeout(4000);
-  console.log("Přihlášení proběhlo úspěšně.");
 }
 
 function formatJobPost(job) {
@@ -166,32 +155,34 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(4000);
   await nukeOverlays(page);
 
-  // 1. Nahrání obrázku, pokud je k dispozici
+  // 1. Nahrání obrázku
   if (job.imageUrl) {
     console.log("Nahrávám obrázek...");
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
       await fileInput.setInputFiles(job.imageUrl).catch(() => {});
-      await page.waitForTimeout(2000); // Počkáme na zpracování obrázku v UI
+      await page.waitForTimeout(2500); // Čas pro náhled obrázku
     }
   }
 
   await nukeOverlays(page);
 
-  // 2. Vyplnění nadpisu (flexibilní hledání prvního textového pole nebo textarey na stránce)
+  // 2. Vyplnění nadpisu – čekáme na stav "attached" a "visible"
   console.log("Vyplňuji nadpis...");
-  const titleInput = page.locator('textarea, input[type="text"]').first();
-  await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  const titleInput = page.locator('#post-title-input, textarea, input[type="text"]').first();
+  await titleInput.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
   await titleInput.fill(job.title || "Nová pracovní nabídka");
 
-  // 3. Vložení formátovaného textu do editoru
+  // 3. Vložení formátovaného textu
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
   
   await nukeOverlays(page);
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
-  await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await editorArea.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await editorArea.scrollIntoViewIfNeeded();
   await editorArea.click({ force: true });
   await editorArea.fill(formattedText);
 
@@ -223,7 +214,6 @@ async function publishHeroHero(job) {
     if (!email || !password) throw new Error("Chybí přihlašovací údaje v prostředí.");
 
     await executeModalLogin(page, email, password);
-
     await createHeroHeroPost(page, job);
 
     return { success: true, job };
