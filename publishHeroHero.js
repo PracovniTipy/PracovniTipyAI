@@ -24,7 +24,7 @@ const DEFAULT_TEST_JOB = {
   contractType: "HPP na dobu neurčitou",
   language: "Čeština na komunikativní úrovni",
   link: "https://pracovnitipy.cz",
-  category: "Belgie", // Případná kategorie pro výběr
+  category: "Belgie",
   description: [
     "Příjem a výdej zboží ve skladovém hospodářství",
     "Práce se čtečkou čárových kódů (skenerem)",
@@ -238,7 +238,7 @@ async function createHeroHeroPost(page, job) {
   await nextArrow1.click({ force: true });
   await page.waitForTimeout(3000);
 
-  // KROK 2: Výběr kategorie, pokud je zadaná (např. Belgie)
+  // KROK 2: Výběr kategorie, pokud je zadaná
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
     const categoryBtn = page.locator(`button:has-text("${job.category}"), div:has-text("${job.category}")`).first();
@@ -256,13 +256,35 @@ async function createHeroHeroPost(page, job) {
 
   // KROK 3: Finální publikování (tlačítko Sdílet)
   console.log("Hledám tlačítko pro finální sdílení...");
-  const shareBtn = page.locator('button:has-text("Sdílet"), button:has-text("Publikovat")').first();
-  if (await shareBtn.isVisible().catch(() => false)) {
-    await shareBtn.click({ force: true });
-    console.log("✅ Tlačítko Sdílet úspěšně stisknuto.");
-  } else {
-    // Záložní kliknutí na šipku/tlačítko vpravo nahoře
-    await page.locator('button:has(svg)').last().click({ force: true }).catch(() => {});
+  
+  const shareBtnSelectors = [
+    'button:has-text("Sdílet")',
+    'button:has-text("Publikovat")',
+    'header button:has(svg)',
+    'button[type="submit"]'
+  ];
+
+  let shared = false;
+  for (const sel of shareBtnSelectors) {
+    const btn = page.locator(sel).last();
+    if (await btn.isVisible().catch(() => false)) {
+      await btn.click({ force: true });
+      shared = true;
+      console.log(`✅ Tlačítko sdílení stisknuto pomocí selektoru: ${sel}`);
+      break;
+    }
+  }
+
+  if (!shared) {
+    await page.mouse.click(950, 85);
+    console.log("✅ Kliknuto na pozici tlačítka sdílení.");
+  }
+
+  await page.waitForTimeout(2000);
+  const confirmBtn = page.locator('button:has-text("Sdílet"), button:has-text("Potvrdit"), button:has-text("Ano")').last();
+  if (await confirmBtn.isVisible().catch(() => false)) {
+    await confirmBtn.click({ force: true });
+    console.log("✅ Potvrzeno v dialogovém okně.");
   }
 
   await page.waitForTimeout(5000);
