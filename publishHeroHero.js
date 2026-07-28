@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ULTRA RESILIENT");
+console.log("🚀 HEROHERO PUBLISHER - ULTIMATE RESILIENT");
 console.log("==========================================");
 
 const CONFIG = {
@@ -161,16 +161,25 @@ async function createHeroHeroPost(page, job) {
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
       await fileInput.setInputFiles(job.imageUrl).catch(() => {});
-      await page.waitForTimeout(2500); // Čas pro náhled obrázku
+      await page.waitForTimeout(3000);
     }
   }
 
   await nukeOverlays(page);
 
-  // 2. Vyplnění nadpisu – čekáme na stav "attached" a "visible"
+  // 2. Vyplnění nadpisu s pojistkou pro případ zpožděného vykreslení
   console.log("Vyplňuji nadpis...");
   const titleInput = page.locator('#post-title-input, textarea, input[type="text"]').first();
-  await titleInput.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  
+  try {
+    await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  } catch (e) {
+    console.log("⚠️ Nadpis nebyl hned viditelný, zkouším obnovit overlaye a počkat...");
+    await nukeOverlays(page);
+    await page.waitForTimeout(2000);
+    await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  }
+
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
   await titleInput.fill(job.title || "Nová pracovní nabídka");
@@ -181,7 +190,7 @@ async function createHeroHeroPost(page, job) {
   
   await nukeOverlays(page);
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
-  await editorArea.waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await editorArea.scrollIntoViewIfNeeded();
   await editorArea.click({ force: true });
   await editorArea.fill(formattedText);
