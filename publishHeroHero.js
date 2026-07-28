@@ -1,15 +1,14 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ULTIMATE FIX");
+console.log("🚀 HEROHERO PUBLISHER - ULTIMATE BULLETPROOF");
 console.log("==========================================");
 
 const CONFIG = {
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
-    PAGE_NAVIGATION: 45000,
+    PAGE_NAVIGATION: 60000,
     ELEMENT_WAIT: 30000,
-    LOGIN_WAIT: 20000,
   },
   VIEWPORT: { width: 1280, height: 900 },
   USER_AGENT:
@@ -77,10 +76,8 @@ async function nukeOverlays(page) {
       });
     });
     await page.keyboard.press('Escape');
-    await page.waitForTimeout(400);
-  } catch (e) {
-    // Ignorujeme
-  }
+    await page.waitForTimeout(300);
+  } catch (e) {}
 }
 
 async function getLoginModal(page) {
@@ -92,7 +89,6 @@ async function getLoginModal(page) {
   }
   const directForm = page.locator('form, div').filter({ has: page.locator('input[type="email"]') }).first();
   if (await directForm.isVisible().catch(() => false)) return directForm;
-  
   return null;
 }
 
@@ -108,7 +104,6 @@ async function executeModalLogin(page, email, password) {
 
   const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  
   await emailInput.click();
   await emailInput.fill(email);
 
@@ -116,8 +111,7 @@ async function executeModalLogin(page, email, password) {
   await arrowBtn.click();
 
   const passwordInput = loginModal.locator('input[type="password"]');
-  await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
-
+  await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await passwordInput.click();
   await passwordInput.fill(password);
 
@@ -146,30 +140,22 @@ function formatJobPost(job) {
 
   if (job.description && job.description.length > 0) {
     output += `\n🔧 Náplň práce\n\n`;
-    for (const point of job.description) {
-      output += `• ${point}\n`;
-    }
+    for (const point of job.description) output += `• ${point}\n`;
   }
 
   if (job.accommodation && job.accommodation.length > 0) {
     output += `\n🏠 Ubytování\n\n`;
-    for (const point of job.accommodation) {
-      output += `• ${point}\n`;
-    }
+    for (const point of job.accommodation) output += `• ${point}\n`;
   }
 
   if (job.requirements && job.requirements.length > 0) {
     output += `\n📋 Požadavky\n\n`;
-    for (const point of job.requirements) {
-      output += `• ${point}\n`;
-    }
+    for (const point of job.requirements) output += `• ${point}\n`;
   }
 
   if (job.advantages && job.advantages.length > 0) {
     output += `\n⭐ Výhody\n\n`;
-    for (const point of job.advantages) {
-      output += `• ${point}\n`;
-    }
+    for (const point of job.advantages) output += `• ${point}\n`;
   }
 
   return output.trim();
@@ -181,42 +167,42 @@ async function createHeroHeroPost(page, job) {
   if (!page.url().includes("/create")) {
     console.log("Přecházím na /create...");
     await page.goto("https://herohero.co/create", {
-      waitUntil: "networkidle",
+      waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     }).catch(() => {});
   }
 
-  console.log("Čekám na vykreslení editoru a hledám políčko pro nadpis...");
-  await page.waitForTimeout(4000);
+  console.log("Probouzím stránku simulací interakce pro vykreslení SPA...");
+  await page.waitForTimeout(3000);
+  await page.mouse.move(200, 200);
+  await page.mouse.down();
+  await page.mouse.up();
+  await page.waitForTimeout(2000);
   await nukeOverlays(page);
 
-  let titleInput = null;
-  const titleSelectors = [
-    'p:has-text("Začni psát...")',
-    'div[data-placeholder*="Začni" i]',
-    'div[contenteditable="true"]',
-    'textarea',
-    'input[type="text"]'
-  ];
+  console.log("Hledám políčka pro nadpis a text v editoru...");
 
-  for (let attempt = 1; attempt <= 5; attempt++) {
+  let titleInput = null;
+  for (let attempt = 1; attempt <= 6; attempt++) {
     await nukeOverlays(page);
-    for (const sel of titleSelectors) {
-      const loc = page.locator(sel).first();
-      const count = await loc.count().catch(() => 0);
-      if (count > 0) {
-        try {
-          await loc.waitFor({ state: "visible", timeout: 3000 });
-          titleInput = loc;
-          console.log(`✅ Políčko pro nadpis nalezeno pomocí: ${sel}`);
+    
+    const editables = await page.locator('div[contenteditable="true"], textarea, input[type="text"]').all();
+    if (editables.length > 0) {
+      for (const el of editables) {
+        if (await el.isVisible().catch(() => false)) {
+          titleInput = el;
           break;
-        } catch (e) {
-          // Pokračujeme
         }
       }
     }
-    if (titleInput) break;
-    console.log(`⚠️ Pokus č. ${attempt}: Políčko nenalezeno, čekám dalších 5 sekund...`);
+
+    if (titleInput) {
+      console.log(`✅ Políčko nalezeno v pokusu č. ${attempt}`);
+      break;
+    }
+
+    console.log(`⚠️ Pokus č. ${attempt}: Políčko nenalezeno, klikám do středu obrazovky a čekám...`);
+    await page.mouse.click(500, 400);
     await page.waitForTimeout(5000);
   }
 
@@ -228,22 +214,22 @@ async function createHeroHeroPost(page, job) {
 
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
-  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 30 });
+  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 25 });
+  console.log("✅ Nadpis úspěšně vyplněn.");
+
+  await page.waitForTimeout(1000);
 
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
-  
-  await nukeOverlays(page);
-  
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('Enter');
-  
-  await page.evaluate((text) => {
-    navigator.clipboard.writeText(text);
-  }, formattedText);
-  
-  await page.keyboard.press('Control+V');
-  await page.waitForTimeout(2000);
+
+  await page.keyboard.press("Enter");
+  await page.keyboard.press("Enter");
+
+  const lines = formattedText.split("\n");
+  for (const line of lines) {
+    await page.keyboard.type(line, { delay: 5 });
+    await page.keyboard.press("Enter");
+  }
 
   console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
 }
