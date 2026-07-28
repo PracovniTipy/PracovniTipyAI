@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ULTIMATE BULLETPROOF");
+console.log("🚀 HEROHERO PUBLISHER - MULTI-STEP WIZARD");
 console.log("==========================================");
 
 const CONFIG = {
@@ -24,6 +24,7 @@ const DEFAULT_TEST_JOB = {
   contractType: "HPP na dobu neurčitou",
   language: "Čeština na komunikativní úrovni",
   link: "https://pracovnitipy.cz",
+  category: "Belgie", // Případná kategorie pro výběr
   description: [
     "Příjem a výdej zboží ve skladovém hospodářství",
     "Práce se čtečkou čárových kódů (skenerem)",
@@ -231,7 +232,41 @@ async function createHeroHeroPost(page, job) {
     await page.keyboard.press("Enter");
   }
 
-  console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
+  // KROK 1 -> 2: Kliknutí na šipku vpravo nahoře pro přechod na kategorie
+  console.log("Přecházím na další krok (kategorie)...");
+  const nextArrow1 = page.locator('button:has(svg), header button').last();
+  await nextArrow1.click({ force: true });
+  await page.waitForTimeout(3000);
+
+  // KROK 2: Výběr kategorie, pokud je zadaná (např. Belgie)
+  if (job.category) {
+    console.log(`Hledám a vybírám kategorii: ${job.category}`);
+    const categoryBtn = page.locator(`button:has-text("${job.category}"), div:has-text("${job.category}")`).first();
+    if (await categoryBtn.isVisible().catch(() => false)) {
+      await categoryBtn.click({ force: true }).catch(() => {});
+      console.log(`✅ Kategorie "${job.category}" vybrána.`);
+    }
+  }
+
+  // KROK 2 -> 3: Kliknutí na šipku pro přechod do náhledu
+  console.log("Přecházím do náhledu...");
+  const nextArrow2 = page.locator('button:has(svg), header button').last();
+  await nextArrow2.click({ force: true });
+  await page.waitForTimeout(3000);
+
+  // KROK 3: Finální publikování (tlačítko Sdílet)
+  console.log("Hledám tlačítko pro finální sdílení...");
+  const shareBtn = page.locator('button:has-text("Sdílet"), button:has-text("Publikovat")').first();
+  if (await shareBtn.isVisible().catch(() => false)) {
+    await shareBtn.click({ force: true });
+    console.log("✅ Tlačítko Sdílet úspěšně stisknuto.");
+  } else {
+    // Záložní kliknutí na šipku/tlačítko vpravo nahoře
+    await page.locator('button:has(svg)').last().click({ force: true }).catch(() => {});
+  }
+
+  await page.waitForTimeout(5000);
+  console.log(`Příspěvek "${job.title}" byl kompletně publikován.`);
 }
 
 async function publishHeroHero(inputJob) {
