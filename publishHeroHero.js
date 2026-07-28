@@ -181,20 +181,22 @@ async function createHeroHeroPost(page, job) {
   
   if (!page.url().includes("/create")) {
     await page.goto("https://herohero.co/create", {
-      waitUntil: "domcontentloaded",
+      waitUntil: "networkidle",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
   }
 
-  console.log("Čekám na zmizení splash obrazovky a načtení editoru...");
+  console.log("Čekám na plné načtení editoru...");
   
   try {
-    await page.locator('#splash').waitFor({ state: 'hidden', timeout: 10000 });
+    await page.waitForSelector('textarea, input[type="text"], div[contenteditable="true"]', { 
+      state: 'visible', 
+      timeout: 15000 
+    });
   } catch (e) {
-    // Ignorujeme, pokud #splash neexistuje
+    console.log("⚠️ Prvek se neobjevil hned, zkouším obnovit overlaye...");
   }
 
-  await page.waitForTimeout(8000);
   await nukeOverlays(page);
 
   // 1. Nahrání obrázku (pokud je k dispozici)
