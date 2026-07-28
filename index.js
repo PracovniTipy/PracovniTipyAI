@@ -563,6 +563,16 @@ app.post("/herohero/upload", upload.single("image"), async (req, res) => {
   res.json({ success: true });
 });
 
+app.get("/debug", (req, res) => {
+    const file = path.join(__dirname, "debug.tar.gz");
+
+    if (!fs.existsSync(file)) {
+        return res.status(404).send("debug.tar.gz nebyl nalezen");
+    }
+
+    res.download(file);
+});
+
 app.listen(PORT, () => {
   console.log(`Server běží na portu ${PORT}`);
 });
