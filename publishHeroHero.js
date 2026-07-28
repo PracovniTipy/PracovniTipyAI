@@ -444,7 +444,6 @@ function attachEventListeners(page) {
         lastUrl = newUrl;
         logDiag(`🌐 [URL CHANGED] ${newUrl}`);
         await captureStateSnapshotWithConsole(page, "024-url-changed");
-        
       }
     }
   });
@@ -671,6 +670,25 @@ async function safeClick(
       `⚠️ První pokus o kliknutí na "${description}" selhal: ${err.message}. Opakuji kliknutí...`
     );
     retryUsed = true;
+    await captureStateSnapshotWithConsole(page, "cookie-click-failed-before-retry");
+    const box = await locator.boundingBox();
+    if (box) {
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      const topElement = await page.evaluate(({x,y}) => {
+        const el = document.elementFromPoint(x, y);
+        if (!el) return null;
+        return {
+          tag: el.tagName,
+          id: el.id,
+          class: el.className,
+          text: (el.innerText || "").slice(0,150),
+          html: el.outerHTML.slice(0,500)
+        };
+      }, {x,y});
+      console.log("TOP ELEMENT:", JSON.stringify(topElement,null,2));
+    }
+    await captureStateSnapshotWithConsole(page, "cookie-click-after-elementFromPoint");
     await locator.waitFor({
       state: "visible",
       timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
@@ -1277,15 +1295,6 @@ async function executeModalLogin(page, email, password) {
       if (await eh.isVisible().catch(() => false)) {
         editorElement = eh;
         break;
-
-        const start = Date.now();
-
-while (!editorElement) {
-
-   if (Date.now() - start > 30000)
-      break;
-
-}
       }
     }
     if (editorElement) break;
@@ -1305,7 +1314,7 @@ while (!editorElement) {
     );
   }
 
-  DIAG.lastSuccessfulStep = "EDITOR_LOADED";
+  DIAG.lastSuccessfulTag = "EDITOR_LOADED";
   await captureStateSnapshotWithConsole(page, "10-editor");
 
   console.log(`📌 [LOG PO PŘIHLÁŠENÍ]
