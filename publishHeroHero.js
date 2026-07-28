@@ -51,29 +51,39 @@ async function getLoginModal(page) {
 async function executeModalLogin(page, email, password) {
   console.log("Klikám na levé menu na 'Profil' pro otevření přihlášení...");
   
-  // Kliknutí na tlačítko profilu v levém bočním panelu
-  const profileNavBtn = page.locator('aside, nav, div').filter({ hasText: /^Profil$/ }).first();
-  await profileNavBtn.click({ timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT }).catch(async () => {
-    // Záložní pokus podle běžného selektoru pro profil v levém menu
-    await page.locator('a[href*="profile"], button:has-text("Profil")').first().click();
-  });
+  // 1. Cílené hledání tlačítka "Profil" v levém menu
+  const profileButton = page.locator('aside, nav, div').filter({ hasText: 'Profil' }).locator('button, a, div').filter({ hasText: 'Profil' }).first();
+  
+  // Pojistka: kdyby specifický filtr nenašel, zkusíme obecnější
+  const finalProfileBtn = (await profileButton.count() > 0) ? profileButton : page.locator('text=Profil').first();
+  
+  await finalProfileBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await finalProfileBtn.click();
 
-  console.log("Zahajuji přihlašovací formulář...");
-  let loginModal = await getLoginModal(page);
-  if (!loginModal) throw new Error("Login modal nebyl nalezen.");
+  console.log("Čekám na přihlašovací modal...");
+  let loginModal = null;
+  for (let i = 0; i < 10; i++) {
+    loginModal = await getLoginModal(page);
+    if (loginModal) break;
+    await page.waitForTimeout(1000);
+  }
 
-  const emailInput = loginModal.locator('input[type="email"], input[name="email"]').first();
+  if (!loginModal) throw new Error("Login modal se po kliknutí na Profil neotevřel.");
+
+  // 2. Vyplnění e-mailu
+  const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   
   console.log("Vyplňuji e-mail...");
   await emailInput.click();
   await emailInput.fill(email);
 
-  console.log("Odesílám e-mail šipkou...");
-  const arrowBtn = loginModal.locator('button:has(svg), button[type="submit"]').last();
+  console.log("Klikám na šipku vpravo vedle e-mailu...");
+  // Cílíme na tlačítko se šipkou, které je v kontejneru e-mailového vstupu nebo jako poslední submit v modalu
+  const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), div:has(input[type="email"]) button').last();
   await arrowBtn.click();
 
-  console.log("Čekám na pole pro heslo v novém formuláři...");
+  console.log("Čekám na pole pro heslo v novém kroku...");
   const passwordInput = loginModal.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.LOGIN_WAIT });
 
@@ -81,8 +91,8 @@ async function executeModalLogin(page, email, password) {
   await passwordInput.click();
   await passwordInput.fill(password);
 
-  console.log("Klikám na tlačítko pro odeslání hesla...");
-  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]');
+  console.log("Klikám na tlačítko pro odeslání hesla (Pokračovat)...");
+  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').last();
   await submitBtn.click();
 
   console.log("Čekám na načtení po přihlášení...");
@@ -103,7 +113,7 @@ async function publishHeroHero(job) {
     const page = await context.newPage();
     
     console.log("Otevírám herohero.co...");
-    await page.goto("https://herohero.co/", {
+    await page.goto("https://herohero.co", {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
