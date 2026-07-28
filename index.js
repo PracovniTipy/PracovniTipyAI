@@ -147,7 +147,7 @@ async function createImage(job, templateFile) {
         jobSize = Math.max(35, jobSize - 10);
     }
 
-    // 3. SALARY (vynecháme, pokud je NEUVEDENO)
+    // 3. SALARY
     let salarySize = 75;
     let salaryText = "";
     if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
@@ -192,7 +192,7 @@ async function createImage(job, templateFile) {
     });
     currentY += currentJobWrapped.lines.length * jobSize * 1.05 + 10;
 
-    // Render Salary (pouze pokud existuje a není NEUVEDENO)
+    // Render Salary (pokud není k dispozici, řádek se zcela vynechá, aby se pozice posunuly nahoru)
     if (salaryText) {
         drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
         currentY += salarySize * 1.15;
