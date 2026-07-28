@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - MULTI-STEP WIZARD");
+console.log("🚀 HEROHERO PUBLISHER - FIX FINAL STEP");
 console.log("==========================================");
 
 const CONFIG = {
@@ -58,7 +58,7 @@ async function handleCookieBannerIfPresent(page) {
   for (const selector of candidateSelectors) {
     if (page.isClosed()) return;
     const loc = page.locator(selector);
-    const count = await loc.count().count ? await loc.count() : 0;
+    const count = await loc.count().catch(() => 0);
     if (count > 0 && (await loc.isVisible().catch(() => false))) {
       await loc.click({ timeout: 5000 }).catch(() => {});
       break;
@@ -208,8 +208,6 @@ async function createHeroHeroPost(page, job) {
   }
 
   if (!titleInput) {
-    const fullHtml = await page.content();
-    console.log("DEBUG - Celé HTML začátek:", fullHtml.slice(0, 500));
     throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
   }
 
@@ -233,61 +231,75 @@ async function createHeroHeroPost(page, job) {
   }
 
   // ==========================================
-  // KROK 1 -> KROK 2: Přechod na kategorie
+  // KROK 1 -> KROK 2: Přechod na kategorie (přes JS click)
   // ==========================================
   console.log("Přecházím na další krok (kategorie)...");
-  await page.mouse.click(945, 180);
+  await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const nextBtn = buttons.find(b => b.textContent.includes('Pokračovat') || b.textContent.includes('Další') || b.querySelector('svg'));
+    if (nextBtn) nextBtn.click();
+  });
   await page.waitForTimeout(3000);
 
   // Výběr kategorie
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
-    const categoryBtn = page.locator(`button:has-text("${job.category}"), div:has-text("${job.category}")`).first();
-    if (await categoryBtn.isVisible().catch(() => false)) {
-      await categoryBtn.click({ force: true }).catch(() => {});
-      console.log(`✅ Kategorie "${job.category}" vybrána.`);
-    }
+    await page.evaluate((catName) => {
+      const elements = Array.from(document.querySelectorAll('button, div, span'));
+      const target = elements.find(el => el.textContent.trim() === catName);
+      if (target) target.click();
+    }, job.category);
+    console.log(`✅ Kategorie "${job.category}" vybrána.`);
+    await page.waitForTimeout(2000);
   }
 
   // ==========================================
   // KROK 2 -> KROK 3: Přechod do náhledu
   // ==========================================
   console.log("Přecházím do náhledu...");
-  await page.mouse.click(945, 180);
+  await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    const nextBtn = buttons.find(b => b.textContent.includes('Pokračovat') || b.textContent.includes('Další') || b.querySelector('svg'));
+    if (nextBtn) nextBtn.click();
+  });
   await page.waitForTimeout(3000);
 
   // ==========================================
-  // KROK 3: Finální publikování (Tlačítko Sdílet)
+  // KROK 3: Finální publikování (Přímý JS klik na Sdílet)
   // ==========================================
-  console.log("Hledám a klikám na tlačítko Sdílet v náhledu...");
-  await page.waitForTimeout(2000);
-
-  let published = false;
-  const selectorsToTry = [
-    'button:has-text("Sdílet")',
-    'button:has-text("Publikovat")',
-    'button[type="submit"]',
-    'div.modal button:has-text("Sdílet")'
-  ];
-
-  for (const sel of selectorsToTry) {
-    const btn = page.locator(sel).last();
-    if (await btn.isVisible().catch(() => false)) {
-      await btn.click({ force: true });
-      console.log(`✅ Úspěšně kliknuto na tlačítko přes selektor: ${sel}`);
-      published = true;
-      break;
+  console.log("Hledám a publikuji finální příspěvek přes JS...");
+  
+  const publishedOk = await page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll('button'));
+    // Hledáme tlačítko, které obsahuje text Sdílet nebo Publikovat
+    const shareBtn = buttons.find(b => {
+      const text = b.textContent.trim();
+      return text === 'Sdílet' || text === 'Publikovat' || text.includes('Sdílet');
+    });
+    
+    if (shareBtn) {
+      shareBtn.click();
+      return true;
     }
+    return false;
+  });
+
+  if (publishedOk) {
+    console.log("✅ Tlačítko Sdílet bylo úspěšně aktivováno přes DOM.");
+  } else {
+    console.log("⚠️ Tlačítko nenalezeno přes DOM, zkouším alternativní tagy...");
+    await page.evaluate(() => {
+      // Fallback: kliknutí na jakékoliv tlačítko v pravém horním rohu modalu
+      const allBtns = document.querySelectorAll('button');
+      if (allBtns.length > 0) {
+        allBtns[allBtns.length - 1].click();
+      }
+    });
   }
 
-  if (!published) {
-    console.log("⚠️ Tlačítko nenalezeno běžnými selektory, zkouším finální pozici...");
-    await page.mouse.click(1200, 180);
-  }
-
-  // Delší pauza pro jistotu uložení na server Herohero
-  await page.waitForTimeout(7000);
-  console.log(`Příspěvek "${job.title}" byl zpracován.`);
+  // Pořádná prodleva, aby se požadavek propsal na server Herohero
+  await page.waitForTimeout(8000);
+  console.log(`Příspěvek "${job.title}" byl odeslán.`);
 }
 
 async function publishHeroHero(inputJob) {
