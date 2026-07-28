@@ -147,7 +147,7 @@ async function createImage(job, templateFile) {
         jobSize = Math.max(35, jobSize - 10);
     }
 
-    // 3. SALARY
+    // 3. SALARY (vynecháme, pokud je NEUVEDENO)
     let salarySize = 75;
     let salaryText = "";
     if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
@@ -184,7 +184,7 @@ async function createImage(job, templateFile) {
     drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
     currentY += countrySize * 0.82;
 
-    // Render Job Title (může mít více řádků)
+    // Render Job Title
     ctx.font = `bold ${jobSize}px Bebas Neue`;
     const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize);
     currentJobWrapped.lines.forEach((line, index) => {
@@ -192,12 +192,10 @@ async function createImage(job, templateFile) {
     });
     currentY += currentJobWrapped.lines.length * jobSize * 1.05 + 10;
 
-    // Render Salary
+    // Render Salary (pouze pokud existuje a není NEUVEDENO)
     if (salaryText) {
         drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
         currentY += salarySize * 1.15;
-    } else {
-        currentY += 10;
     }
 
     // Render Ubytování
