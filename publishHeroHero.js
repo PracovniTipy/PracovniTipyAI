@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - ULTIMATE RUNNER");
+console.log("🚀 HEROHERO PUBLISHER - RESILIENT RUNNER");
 console.log("==========================================");
 
 const CONFIG = {
@@ -43,14 +43,12 @@ async function nukeOverlays(page) {
     console.log("🧹 Úklid případných modálních oken a overlayů...");
     await page.evaluate(() => {
       document.querySelectorAll('.modal-overlay, [role="dialog"], div[class*="modal"], div[class*="overlay"]').forEach(el => {
-        // Nechceme smazat celou stránku, jen prvky s fixed/absolute pozicí přes celou obrazovku
         const style = window.getComputedStyle(el);
         if (style.position === 'fixed' || style.position === 'absolute') {
           el.remove();
         }
       });
     });
-    // Zkusíme poslat Escape pro zavření případných tooltipů/guided tour
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
   } catch (e) {
@@ -166,8 +164,6 @@ async function createHeroHeroPost(page, job) {
   });
 
   await page.waitForTimeout(4000);
-
-  // Důkladný úklid překryvných vrstev před interakcí
   await nukeOverlays(page);
 
   // 1. Nahrání obrázku, pokud je k dispozici
@@ -176,21 +172,20 @@ async function createHeroHeroPost(page, job) {
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
       await fileInput.setInputFiles(job.imageUrl).catch(() => {});
+      await page.waitForTimeout(2000); // Počkáme na zpracování obrázku v UI
     }
   }
 
-  // Před vyplněním nadpisu ještě jednou smeteme případné overlaye
   await nukeOverlays(page);
 
+  // 2. Vyplnění nadpisu (flexibilní hledání prvního textového pole nebo textarey na stránce)
   console.log("Vyplňuji nadpis...");
-  const titleInput = page.locator('#post-title-input, textarea[placeholder="Nadpis"], input[type="text"]').first();
+  const titleInput = page.locator('textarea, input[type="text"]').first();
   await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  
-  // Použijeme kliknutí s force: true a rovnou vyplníme text
   await titleInput.click({ force: true });
   await titleInput.fill(job.title || "Nová pracovní nabídka");
 
-  // 3. Vložení formátovaného textu
+  // 3. Vložení formátovaného textu do editoru
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
   
