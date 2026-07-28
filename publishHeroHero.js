@@ -1363,11 +1363,6 @@ async function publishHeroHero(job) {
         await page.waitForTimeout(1500);
       }
     }
-      if (!clickedLoginButton) {
-        await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
-        throw new Error("Nelze najít tlačítko Přihlásit se / Log in pro otevření login modalu.");
-      }
-    }
 
     const openedModal = await getLoginModal(page);
     if (openedModal) {
@@ -1375,6 +1370,9 @@ async function publishHeroHero(job) {
         state: "visible",
         timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT,
       });
+    } else {
+      await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
+      throw new Error("Nelze najít ani načíst login modal.");
     }
 
     await executeModalLogin(page, HEROHERO_EMAIL, HEROHERO_PASSWORD);
