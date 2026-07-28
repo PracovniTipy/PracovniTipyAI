@@ -580,10 +580,6 @@ async function logElementDetails(locator, stageDescription) {
   }
 }
 
-/**
- * ODOLNÁ FUNKCE SAFECLICK
- * Obsahuje záložní strategie (force click a JS click) pro případ překrytí prvků overlayem.
- */
 async function safeClick(
   page,
   locator,
@@ -633,7 +629,6 @@ async function safeClick(
   let retryUsed = false;
   let clickSuccess = false;
 
-  // 1. Pokus: Běžný klik
   try {
     await locator.waitFor({
       state: "visible",
@@ -649,7 +644,6 @@ async function safeClick(
     );
     retryUsed = true;
     
-    // 2. Pokus: Forced Click (obchází interception check)
     try {
       await locator.click({ force: true, timeout: 5000 });
       clickSuccess = true;
@@ -659,7 +653,6 @@ async function safeClick(
         `⚠️ Forced click na "${description}" selhal (${forceErr.message}). Zkouším EVALUATE JS CLICK...`
       );
 
-      // 3. Pokus: Direct JavaScript click v DOMu
       try {
         await locator.evaluate((el) => el.click());
         clickSuccess = true;
@@ -720,16 +713,12 @@ async function safeClick(
   return clickSuccess;
 }
 
-/**
- * Zpracování cookie modalu s ošetřením překrývání
- */
 async function handleCookieBannerIfPresent(page) {
   console.log("🍪 Vyhledávám tlačítko pro přijetí cookies...");
   DIAG.cookieStatus.cookiesBefore = (
     await page.context().cookies().catch(() => [])
   ).length;
 
-  // Zkusíme nejprve poslat Escape, pokud je zobrazen jakýkoliv jiný modal/overlay
   await page.keyboard.press("Escape").catch(() => {});
   await page.waitForTimeout(500);
 
@@ -860,6 +849,27 @@ async function findLoginButton(page, loginModal, mode) {
   if (mode !== "continue" && mode !== "submit") {
     await captureStateSnapshotWithConsole(page, "033-pred-kazdym-throw");
     throw new Error(`⛔ [STRICT ERROR] Neznámý mode pro findLoginButton: "${mode}"`);
+  }
+
+  // PRO REŽIM CONTINUE: Hledáme specifické tlačítko šipky vedle e-mailu (často má SVG ikonu a prázdný text)
+  if (mode === "continue") {
+    const arrowButtons = await loginModal.locator('button:has(svg), button[type="submit"], button').all();
+    for (const btn of arrowButtons) {
+      const info = await btn.evaluate((el) => {
+        const text = (el.innerText || "").trim();
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        const isVisible = rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        const hasSvg = el.querySelector("svg") !== null;
+        const parentIsInputRow = el.closest(".input-group, form, div") !== null;
+        return { text, isVisible, hasSvg, parentIsInputRow };
+      }).catch(() => null);
+
+      if (info && info.isVisible && (info.hasSvg || info.text === "")) {
+        console.log("🎯 Nalezeno tlačítko šipky pro pokračování (continue mode).");
+        return btn;
+      }
+    }
   }
 
   let allowedKeywords = [];
@@ -1031,7 +1041,7 @@ async function executeModalLogin(page, email, password) {
   const networkCountBeforeClick = DIAG.networkLogs.length;
 
   await captureStateSnapshotWithConsole(page, "015-pred-kliknutim-na-pokracovat");
-  await safeClick(page, targetContinueButton, "Login modal button");
+  await safeClick(page, targetContinueButton, "Login modal continue button");
   await captureStateSnapshotWithConsole(page, "016-ihned-po-kliknuti-na-pokracovat");
 
   await page.waitForTimeout(1000);
@@ -1168,7 +1178,7 @@ async function executeModalLogin(page, email, password) {
   const targetSubmitButton = await findLoginButton(page, finalLoginModal, "submit");
 
   await captureStateSnapshotWithConsole(page, "029-pred-finalnim-kliknutim-na-prihlasit");
-  await safeClick(page, targetSubmitButton, "Login modal button");
+  await safeClick(page, targetSubmitButton, "Login modal submit button");
   await captureStateSnapshotWithConsole(page, "030-ihned-po-finalnim-kliknuti");
   await captureStateSnapshotWithConsole(page, "09-after-login-click");
 
