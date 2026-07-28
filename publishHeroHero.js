@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - FULL AUTOMATION");
+console.log("🚀 HEROHERO PUBLISHER - MULTI-POST RUNNER");
 console.log("==========================================");
 
 const CONFIG = {
@@ -90,7 +90,7 @@ async function executeModalLogin(page, email, password) {
   console.log("Přihlášení proběhlo úspěšně.");
 }
 
-// Funkce pro formátování textu přesně podle zadaných pravidel
+// Formátování podle přesných pravidel
 function formatJobPost(job) {
   const title = job.title || "Pracovní nabídka";
   const salary = job.salary ? `💰 cca ${job.salary} Kč / měsíc` : null;
@@ -140,45 +140,39 @@ function formatJobPost(job) {
 }
 
 async function createHeroHeroPost(page, job) {
-  console.log("Přecházím na https://herohero.co/create...");
+  console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
   await page.goto("https://herohero.co/create", {
     waitUntil: "domcontentloaded",
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
 
-  console.log("Čekám na načtení editoru pro vytvoření příspěvku...");
   await page.waitForTimeout(3000);
 
-  // 1. Vložení obrázku, pokud je k dispozici
+  // 1. Nahrání obrázku
   if (job.imageUrl) {
     console.log("Nahrávám obrázek...");
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
-      // Pokud job.imageUrl obsahuje URL nebo cestu, nastavíme ji
-      // Předpokládáme, že Make předává buď přímou URL nebo base64 / cestu
-      await fileInput.setInputFiles(job.imageUrl).catch(async () => {
-        console.log("⚠️ Přímé nastavení souboru selhalo, zkouším stáhnout obrázek...");
-      });
+      await fileInput.setInputFiles(job.imageUrl).catch(() => {});
     }
   }
 
-  // 2. Vyplnění nadpisu (Název práce)
-  console.log("Vyplňuji nadpis příspěvku...");
+  // 2. Nadpis
+  console.log("Vyplňuji nadpis...");
   const titleInput = page.locator('input[placeholder*="Nadpis" i], input[type="text"]').first();
   await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await titleInput.click();
   await titleInput.fill(job.title || "Nová pracovní nabídka");
 
-  // 3. Formátování a vyplnění textu informací o nabídce
-  console.log("Generuji a vkládám text podle pravidel...");
+  // 3. Textová část
+  console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
-
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
   await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await editorArea.click();
   await editorArea.fill(formattedText);
 
-  console.log("Příspěvek na Herohero byl úspěšně připraven.");
+  console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
 }
 
 async function publishHeroHero(job) {
@@ -207,7 +201,7 @@ async function publishHeroHero(job) {
 
     await executeModalLogin(page, email, password);
 
-    // Po úspěšném přihlášení přejdeme rovnou na /create a vytvoříme příspěvek
+    // Zpracuje konkrétní přijatou práci z Make (díky Iteratoru poběží 5krát za sebou pro každou práci zvlášť)
     await createHeroHeroPost(page, job);
 
     return { success: true, job };
