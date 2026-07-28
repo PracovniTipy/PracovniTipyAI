@@ -186,8 +186,15 @@ async function createHeroHeroPost(page, job) {
     });
   }
 
-  console.log("Čekám na načtení editoru...");
-  await page.waitForTimeout(6000);
+  console.log("Čekám na zmizení splash obrazovky a načtení editoru...");
+  
+  try {
+    await page.locator('#splash').waitFor({ state: 'hidden', timeout: 10000 });
+  } catch (e) {
+    // Ignorujeme, pokud #splash neexistuje
+  }
+
+  await page.waitForTimeout(8000);
   await nukeOverlays(page);
 
   // 1. Nahrání obrázku (pokud je k dispozici)
@@ -221,7 +228,7 @@ async function createHeroHeroPost(page, job) {
     const count = await loc.count().catch(() => 0);
     if (count > 0) {
       try {
-        await loc.waitFor({ state: "visible", timeout: 3000 });
+        await loc.waitFor({ state: "visible", timeout: 4000 });
         titleInput = loc;
         console.log(`✅ Nadpis/pole nalezeno pomocí selektoru: ${sel}`);
         break;
