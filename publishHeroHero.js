@@ -17,6 +17,37 @@ const CONFIG = {
   LOCALE: "cs-CZ",
 };
 
+// Pevná testovací šablona pro bezpečné ověření v Make bez nutnosti vyplňovat data
+const DEFAULT_TEST_JOB = {
+  title: "Skladový operátor (Testovací pozice)",
+  salary: "35 000 - 42 000",
+  location: "Praha - Hostivař",
+  startDate: "Ihned / Dle domluvy",
+  contractType: "HPP na dobu neurčitou",
+  language: "Čeština na komunikativní úrovni",
+  link: "https://pracovnitipy.cz",
+  description: [
+    "Příjem a výdej zboží ve skladovém hospodářství",
+    "Práce se čtečkou čárových kódů (skenerem)",
+    "Kontrola dodacích listů a stavu zásob"
+  ],
+  accommodation: [
+    "Možnost zajištění ubytování v blízkosti depa",
+    "Příspěvek na ubytování ze strany zaměstnavatele"
+  ],
+  requirements: [
+    "Fyzická zdatnost a spolehlivost",
+    "Trestní bezúhonnost",
+    "Ochota pracovat na dvousměnný provoz"
+  ],
+  advantages: [
+    "Týden dovolené navíc (celkem 5 týdnů)",
+    "Dotované závodní stravování",
+    "Možnost záloh na mzdu"
+  ],
+  imageUrl: ""
+};
+
 async function handleCookieBannerIfPresent(page) {
   const candidateSelectors = [
     'button[data-testid="cookie-modal-agree"]',
@@ -152,32 +183,51 @@ async function createHeroHeroPost(page, job) {
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
 
-  await page.waitForTimeout(4000);
+  // Počkáme, až se editor plně načte
+  await page.waitForTimeout(5000);
   await nukeOverlays(page);
 
-  // 1. Nahrání obrázku
+  // 1. Nahrání obrázku (pokud je k dispozici)
   if (job.imageUrl) {
     console.log("Nahrávám obrázek...");
     const fileInput = page.locator('input[type="file"]').first();
     if (await fileInput.count() > 0) {
       await fileInput.setInputFiles(job.imageUrl).catch(() => {});
-      await page.waitForTimeout(3000);
+      // Důležitá prodleva, aby Herohero stihlo zpracovat obrázek v UI
+      await page.waitForTimeout(4000);
     }
   }
 
   await nukeOverlays(page);
 
-  // 2. Vyplnění nadpisu s pojistkou pro případ zpožděného vykreslení
+  // 2. Vyplnění nadpisu (vyzkoušíme vícero možných selektorů pro nadpis)
   console.log("Vyplňuji nadpis...");
-  const titleInput = page.locator('#post-title-input, textarea, input[type="text"]').first();
-  
-  try {
-    await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  } catch (e) {
-    console.log("⚠️ Nadpis nebyl hned viditelný, zkouším obnovit overlaye a počkat...");
-    await nukeOverlays(page);
-    await page.waitForTimeout(2000);
-    await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  const titleSelectors = [
+    'textarea#post-title-input',
+    'textarea[placeholder*="Nadpis" i]',
+    'input[placeholder*="Nadpis" i]',
+    'textarea.post-title-input',
+    'div[contenteditable="true"]',
+    'textarea'
+  ];
+
+  let titleInput = null;
+  for (const sel of titleSelectors) {
+    const loc = page.locator(sel).first();
+    if (await loc.count().catch(() => 0) > 0) {
+      try {
+        await loc.waitFor({ state: "visible", timeout: 5000 });
+        titleInput = loc;
+        console.log(`✅ Nadpis nalezen pomocí selektoru: ${sel}`);
+        break;
+      } catch (e) {
+        // Zkoušíme další
+      }
+    }
+  }
+
+  if (!titleInput) {
+    throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
   }
 
   await titleInput.scrollIntoViewIfNeeded();
@@ -189,6 +239,8 @@ async function createHeroHeroPost(page, job) {
   const formattedText = formatJobPost(job);
   
   await nukeOverlays(page);
+  
+  // Editor pro tělo příspěvku bývá obvykle poslední textarea nebo contenteditable div
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
   await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await editorArea.scrollIntoViewIfNeeded();
@@ -198,7 +250,14 @@ async function createHeroHeroPost(page, job) {
   console.log(`Příspěvek "${job.title}" byl úspěšně vyplněn.`);
 }
 
-async function publishHeroHero(job) {
+async function publishHeroHero(inputJob) {
+  // Pokud Make pošle prázdná data, automaticky použijeme pevnou testovací šablonu
+  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title) 
+    ? DEFAULT_TEST_JOB 
+    : inputJob;
+
+  console.log(`Používám data pro pozici: ${job.title}`);
+
   let browser;
   try {
     browser = await chromium.launch({ headless: CONFIG.HEADLESS });
