@@ -1,10 +1,12 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - MAX RESILIENCE");
+console.log("🚀 HEROHERO PUBLISHER - DETECTIVE MODE");
 console.log("==========================================");
 
 const CONFIG = {
+  // Pro testování na Railway to necháme false nebo true, 
+  // ale pokud to testuješ lokálně, nastav si HEADLESS: false, ať to vidíš na vlastní oči!
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 60000,
@@ -202,7 +204,6 @@ async function createHeroHeroPost(page, job) {
       break;
     }
 
-    console.log(`⚠️ Pokus č. ${attempt}: Políčko nenalezeno, klikám do středu obrazovky a čekám...`);
     await page.mouse.click(500, 400);
     await page.waitForTimeout(5000);
   }
@@ -234,10 +235,13 @@ async function createHeroHeroPost(page, job) {
   // KROK 1 -> KROK 2: Přechod na kategorie
   // ==========================================
   console.log("Přecházím na další krok (kategorie)...");
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(2000);
   await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll('button'));
-    const nextBtn = buttons.find(b => b.textContent.includes('Pokračovat') || b.textContent.includes('Další') || b.querySelector('svg'));
+    const nextBtn = buttons.find(b => {
+      const t = b.textContent.toLowerCase();
+      return t.includes('pokračovat') || t.includes('další') || b.querySelector('svg');
+    });
     if (nextBtn) nextBtn.click();
   });
   await page.waitForTimeout(3000);
@@ -246,11 +250,17 @@ async function createHeroHeroPost(page, job) {
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
     await page.evaluate((catName) => {
-      const elements = Array.from(document.querySelectorAll('button, div, span'));
+      const elements = Array.from(document.querySelectorAll('button, div, span, label'));
       const target = elements.find(el => el.textContent.trim() === catName);
-      if (target) target.click();
+      if (target) {
+        target.click();
+      } else {
+        // Zkusíme částečnou shodu
+        const partial = elements.find(el => el.textContent.includes(catName));
+        if (partial) partial.click();
+      }
     }, job.category);
-    console.log(`✅ Kategorie "${job.category}" vybrána.`);
+    console.log(`✅ Pokus o výběr kategorie "${job.category}" proveden.`);
     await page.waitForTimeout(2000);
   }
 
@@ -258,49 +268,51 @@ async function createHeroHeroPost(page, job) {
   // KROK 2 -> KROK 3: Přechod do náhledu
   // ==========================================
   console.log("Přecházím do náhledu...");
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(2000);
   await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll('button'));
-    const nextBtn = buttons.find(b => b.textContent.includes('Pokračovat') || b.textContent.includes('Další') || b.querySelector('svg'));
+    const nextBtn = buttons.find(b => {
+      const t = b.textContent.toLowerCase();
+      return t.includes('pokračovat') || t.includes('další') || b.querySelector('svg');
+    });
     if (nextBtn) nextBtn.click();
   });
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(4000);
 
   // ==========================================
-  // KROK 3: Finální publikování (Přímý JS klik na Sdílet)
+  // KROK 3: DETEKTIVNÍ PUBLIKOVÁNÍ
   // ==========================================
-  console.log("Hledám a publikuji finální příspěvek přes JS...");
-  await page.waitForLoadState('networkidle').catch(() => {});
+  console.log("Analyzuji tlačítka na poslední stránce...");
   
-  const publishedOk = await page.evaluate(() => {
+  const clickResult = await page.evaluate(() => {
     const buttons = Array.from(document.querySelectorAll('button'));
-    const shareBtn = buttons.find(b => {
-      const text = b.textContent.trim();
-      return text === 'Sdílet' || text === 'Publikovat' || text.includes('Sdílet');
-    });
+    const buttonTexts = buttons.map(b => b.textContent.trim());
     
-    if (shareBtn) {
-      shareBtn.click();
-      return true;
+    // Zkusíme najít tlačítko pro publikování
+    const targetBtn = buttons.find(b => {
+      const t = b.textContent.trim().toLowerCase();
+      return t === 'sdílet' || t === 'publikovat' || t.includes('sdílet') || t.includes('zveřejnit');
+    });
+
+    if (targetBtn) {
+      targetBtn.click();
+      return { found: true, text: targetBtn.textContent.trim(), allButtons: buttonTexts };
     }
-    return false;
+    
+    // Pokud nenajdeme podle textu, klikneme na poslední tlačítko na stránce
+    if (buttons.length > 0) {
+      buttons[buttons.length - 1].click();
+      return { found: false, clickedLast: true, allButtons: buttonTexts };
+    }
+
+    return { found: false, allButtons: buttonTexts };
   });
 
-  if (publishedOk) {
-    console.log("✅ Tlačítko Sdílet bylo úspěšně aktivováno přes DOM.");
-  } else {
-    console.log("⚠️ Tlačítko nenalezeno přes DOM, zkouším záložní kliknutí...");
-    await page.evaluate(() => {
-      const allBtns = document.querySelectorAll('button');
-      if (allBtns.length > 0) {
-        allBtns[allBtns.length - 1].click();
-      }
-    });
-  }
+  console.log(`🔍 Výsledek analýzy tlačítek:`, JSON.stringify(clickResult));
 
   // Pořádná prodleva, aby se požadavek propsal na server Herohero
   await page.waitForTimeout(8000);
-  console.log(`Příspěvek "${job.title}" byl odeslán.`);
+  console.log(`Příspěvek "${job.title}" prošel skriptem do konce.`);
 }
 
 async function publishHeroHero(inputJob) {
@@ -324,7 +336,6 @@ async function publishHeroHero(inputJob) {
 
     const page = await context.newPage();
 
-    // Sledování konzolových logů z prohlížeče pro dokonalý přehled
     page.on('console', msg => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
     page.on('pageerror', err => console.log(`[BROWSER ERROR] ${err.message}`));
     
