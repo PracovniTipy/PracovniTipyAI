@@ -147,11 +147,12 @@ async function createImage(job, templateFile) {
         jobSize = Math.max(35, jobSize - 10);
     }
 
-    // 3. SALARY
+    // 3. SALARY - opraveno: pokud objekt obsahuje mzdu přímo (např. job.salary), zkontrolujeme ji, jinak zkusíme salary_czk_month. Pokud neexistuje vůbec nebo je NEUVEDENO, nezobrazí se.
     let salarySize = 75;
     let salaryText = "";
-    if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
-        salaryText = job.salary_czk_month;
+    const rawSalary = job.salary || job.salary_czk_month;
+    if (rawSalary && typeof rawSalary === "string" && rawSalary.trim() !== "" && rawSalary !== "NEUVEDENO") {
+        salaryText = rawSalary;
     }
 
     // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
@@ -182,25 +183,25 @@ async function createImage(job, templateFile) {
 
     // Render Country
     drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
-    currentY += countrySize * 0.82;
+    currentY += countrySize * 0.95; // Zvětšený rozestup pod zemí
 
     // Render Job Title
     ctx.font = `bold ${jobSize}px Bebas Neue`;
     const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize);
     currentJobWrapped.lines.forEach((line, index) => {
-        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.05), jobSize, 7);
+        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.15), jobSize, 7);
     });
-    currentY += currentJobWrapped.lines.length * jobSize * 1.05 + 10;
+    currentY += currentJobWrapped.lines.length * jobSize * 1.15 + 20; // Zvětšený rozestup pod pozicí
 
-    // Render Salary (pokud není k dispozici, řádek se zcela vynechá, aby se pozice posunuly nahoru)
+    // Render Salary (pouze pokud je reálně k dispozici)
     if (salaryText) {
         drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
-        currentY += salarySize * 1.15;
+        currentY += salarySize * 1.25; // Zvětšený rozestup pod mzdou
     }
 
     // Render Ubytování
     drawLineWithStroke(ubytovaniText, startX, currentY, bottomSize, 5);
-    currentY += bottomSize * 1.15;
+    currentY += bottomSize * 1.25; // Zvětšený rozestup mezi ubytováním a angličtinou
 
     // Render Angličtina
     drawLineWithStroke(anglictinaText, startX, currentY, bottomSize, 5);
