@@ -38,6 +38,21 @@ async function handleCookieBannerIfPresent(page) {
   }
 }
 
+async function closeAnyBlockingModal(page) {
+  try {
+    const overlay = page.locator('.modal-overlay');
+    if (await overlay.isVisible().catch(() => false)) {
+      console.log("⚠️ Nalezen překážející modal overlay, odstraňuji přes DOM...");
+      await page.evaluate(() => {
+        document.querySelectorAll('.modal-overlay, [role="dialog"]').forEach(el => el.remove());
+      });
+      await page.waitForTimeout(500);
+    }
+  } catch (e) {
+    // Ignorujeme, pokud tam nic není
+  }
+}
+
 async function getLoginModal(page) {
   const modalHandles = await page.locator('[role="dialog"], [class*="modal" i]').all();
   for (const handle of modalHandles) {
@@ -49,16 +64,14 @@ async function getLoginModal(page) {
 }
 
 async function executeModalLogin(page, email, password) {
+  await closeAnyBlockingModal(page);
+
   console.log("Klikám na levé menu na 'Profil' pro otevření přihlášení...");
   
-  // 1. Cílené hledání tlačítka "Profil" v levém menu
-  const profileButton = page.locator('aside, nav, div').filter({ hasText: 'Profil' }).locator('button, a, div').filter({ hasText: 'Profil' }).first();
-  
-  // Pojistka: kdyby specifický filtr nenašel, zkusíme obecnější
-  const finalProfileBtn = (await profileButton.count() > 0) ? profileButton : page.locator('text=Profil').first();
-  
-  await finalProfileBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await finalProfileBtn.click();
+  // Spolehlivé kliknutí přímo na text "Profil"
+  const profileButton = page.locator('text=Profil').first();
+  await profileButton.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  await profileButton.click({ force: true });
 
   console.log("Čekám na přihlašovací modal...");
   let loginModal = null;
@@ -70,7 +83,7 @@ async function executeModalLogin(page, email, password) {
 
   if (!loginModal) throw new Error("Login modal se po kliknutí na Profil neotevřel.");
 
-  // 2. Vyplnění e-mailu
+  // Vyplnění e-mailu
   const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   
@@ -79,7 +92,6 @@ async function executeModalLogin(page, email, password) {
   await emailInput.fill(email);
 
   console.log("Klikám na šipku vpravo vedle e-mailu...");
-  // Cílíme na tlačítko se šipkou, které je v kontejneru e-mailového vstupu nebo jako poslední submit v modalu
   const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), div:has(input[type="email"]) button').last();
   await arrowBtn.click();
 
