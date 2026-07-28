@@ -1,14 +1,14 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - MULTI-POST RUNNER");
+console.log("🚀 HEROHERO PUBLISHER - ROBUST RUNNER");
 console.log("==========================================");
 
 const CONFIG = {
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 35000,
-    ELEMENT_WAIT: 10000,
+    ELEMENT_WAIT: 15000,
     LOGIN_WAIT: 15000,
   },
   VIEWPORT: { width: 1280, height: 900 },
@@ -90,7 +90,6 @@ async function executeModalLogin(page, email, password) {
   console.log("Přihlášení proběhlo úspěšně.");
 }
 
-// Formátování podle přesných pravidel
 function formatJobPost(job) {
   const title = job.title || "Pracovní nabídka";
   const salary = job.salary ? `💰 cca ${job.salary} Kč / měsíc` : null;
@@ -146,9 +145,10 @@ async function createHeroHeroPost(page, job) {
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
 
-  await page.waitForTimeout(3000);
+  // Delší pauza na vykreslení React/Vue editoru po přechodu na /create
+  await page.waitForTimeout(5000);
 
-  // 1. Nahrání obrázku
+  // 1. Nahrání obrázku, pokud je k dispozici
   if (job.imageUrl) {
     console.log("Nahrávám obrázek...");
     const fileInput = page.locator('input[type="file"]').first();
@@ -157,16 +157,18 @@ async function createHeroHeroPost(page, job) {
     }
   }
 
-  // 2. Nadpis
+  // 2. Vyplnění nadpisu (flexibilnější selektory pro vstupní pole)
   console.log("Vyplňuji nadpis...");
-  const titleInput = page.locator('input[placeholder*="Nadpis" i], input[type="text"]').first();
+  const titleInput = page.locator('input[type="text"], input:not([type]), textarea').first();
   await titleInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await titleInput.click();
   await titleInput.fill(job.title || "Nová pracovní nabídka");
 
-  // 3. Textová část
+  // 3. Vložení formátovaného textu
   console.log("Vkládám formátovaný text nabídky...");
   const formattedText = formatJobPost(job);
+  
+  // Zkusíme najít hlavní editor (obsahové pole / textarea)
   const editorArea = page.locator('div[contenteditable="true"], textarea').last();
   await editorArea.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await editorArea.click();
@@ -201,7 +203,6 @@ async function publishHeroHero(job) {
 
     await executeModalLogin(page, email, password);
 
-    // Zpracuje konkrétní přijatou práci z Make (díky Iteratoru poběží 5krát za sebou pro každou práci zvlášť)
     await createHeroHeroPost(page, job);
 
     return { success: true, job };
