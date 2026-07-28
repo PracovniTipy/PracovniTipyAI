@@ -259,28 +259,35 @@ async function createHeroHeroPost(page, job) {
   // ==========================================
   // KROK 3: Finální publikování (Tlačítko Sdílet)
   // ==========================================
-  console.log("Hledám a klikám na tlačítko Sdílet...");
-  
-  const shareBtn = page.locator('button').filter({ hasText: /^Sdílet$/ }).first();
-  if (await shareBtn.isVisible().catch(() => false)) {
-    await shareBtn.click({ force: true });
-    console.log("✅ Tlačítko Sdílet úspěšně stisknuto.");
-  } else {
-    console.log("Tlačítko Sdílet nenalezeno přes text, klikám na jeho souřadnice...");
+  console.log("Hledám a klikám na tlačítko Sdílet v náhledu...");
+  await page.waitForTimeout(2000);
+
+  let published = false;
+  const selectorsToTry = [
+    'button:has-text("Sdílet")',
+    'button:has-text("Publikovat")',
+    'button[type="submit"]',
+    'div.modal button:has-text("Sdílet")'
+  ];
+
+  for (const sel of selectorsToTry) {
+    const btn = page.locator(sel).last();
+    if (await btn.isVisible().catch(() => false)) {
+      await btn.click({ force: true });
+      console.log(`✅ Úspěšně kliknuto na tlačítko přes selektor: ${sel}`);
+      published = true;
+      break;
+    }
+  }
+
+  if (!published) {
+    console.log("⚠️ Tlačítko nenalezeno běžnými selektory, zkouším finální pozici...");
     await page.mouse.click(1200, 180);
   }
 
-  await page.waitForTimeout(2000);
-  
-  // Pojistka pro případné potvrzovací okno
-  const confirmBtn = page.locator('button').filter({ hasText: /^Sdílet$|^Potvrdit$|^Ano$|^Publikovat$/ }).last();
-  if (await confirmBtn.isVisible().catch(() => false)) {
-    await confirmBtn.click({ force: true });
-    console.log("✅ Potvrzeno v dialogovém okně.");
-  }
-
-  await page.waitForTimeout(5000);
-  console.log(`Příspěvek "${job.title}" byl kompletně publikován.`);
+  // Delší pauza pro jistotu uložení na server Herohero
+  await page.waitForTimeout(7000);
+  console.log(`Příspěvek "${job.title}" byl zpracován.`);
 }
 
 async function publishHeroHero(inputJob) {
