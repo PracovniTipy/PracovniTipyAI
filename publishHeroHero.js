@@ -1,12 +1,10 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - DETECTIVE MODE");
+console.log("🚀 HEROHERO PUBLISHER - FINAL DOMINANCE");
 console.log("==========================================");
 
 const CONFIG = {
-  // Pro testování na Railway to necháme false nebo true, 
-  // ale pokud to testuješ lokálně, nastav si HEADLESS: false, ať to vidíš na vlastní oči!
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 60000,
@@ -234,32 +232,24 @@ async function createHeroHeroPost(page, job) {
   // ==========================================
   // KROK 1 -> KROK 2: Přechod na kategorie
   // ==========================================
-  console.log("Přecházím na další krok (kategorie)...");
+  console.log("Přecházím na další krok (kategorie)... via Playwright Click");
   await page.waitForTimeout(2000);
-  await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const nextBtn = buttons.find(b => {
-      const t = b.textContent.toLowerCase();
-      return t.includes('pokračovat') || t.includes('další') || b.querySelector('svg');
-    });
-    if (nextBtn) nextBtn.click();
+  
+  // Hledáme reálné tlačítko "Pokračovat" nebo "Další" pomocí Playwright lokátoru
+  const step1Btn = page.locator('button').filter({ hasText: /(pokračovat|další)/i }).first();
+  await step1Btn.click({ timeout: 10000 }).catch(async () => {
+    // Záložní kliknutí na poslední tlačítko na stránce
+    await page.locator('button').last().click();
   });
   await page.waitForTimeout(3000);
 
   // Výběr kategorie
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
-    await page.evaluate((catName) => {
-      const elements = Array.from(document.querySelectorAll('button, div, span, label'));
-      const target = elements.find(el => el.textContent.trim() === catName);
-      if (target) {
-        target.click();
-      } else {
-        // Zkusíme částečnou shodu
-        const partial = elements.find(el => el.textContent.includes(catName));
-        if (partial) partial.click();
-      }
-    }, job.category);
+    const catElement = page.locator('button, div, span, label').filter({ hasText: job.category }).first();
+    await catElement.click({ timeout: 5000 }).catch(() => {
+      console.log("⚠️ Přímé kliknutí na kategorii selhalo, zkouším alternativu...");
+    });
     console.log(`✅ Pokus o výběr kategorie "${job.category}" proveden.`);
     await page.waitForTimeout(2000);
   }
@@ -267,52 +257,37 @@ async function createHeroHeroPost(page, job) {
   // ==========================================
   // KROK 2 -> KROK 3: Přechod do náhledu
   // ==========================================
-  console.log("Přecházím do náhledu...");
+  console.log("Přecházím do náhledu... via Playwright Click");
   await page.waitForTimeout(2000);
-  await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const nextBtn = buttons.find(b => {
-      const t = b.textContent.toLowerCase();
-      return t.includes('pokračovat') || t.includes('další') || b.querySelector('svg');
-    });
-    if (nextBtn) nextBtn.click();
+  
+  const step2Btn = page.locator('button').filter({ hasText: /(pokračovat|další)/i }).first();
+  await step2Btn.click({ timeout: 10000 }).catch(async () => {
+    await page.locator('button').last().click();
   });
   await page.waitForTimeout(4000);
 
   // ==========================================
-  // KROK 3: DETEKTIVNÍ PUBLIKOVÁNÍ
+  // KROK 3: FINÁLNÍ REÁLNÝ KLIK (TRUSTED EVENT)
   // ==========================================
-  console.log("Analyzuji tlačítka na poslední stránce...");
+  console.log("Aktivuji finální tlačítko Sdílet reálným Playwright klikem...");
   
-  const clickResult = await page.evaluate(() => {
-    const buttons = Array.from(document.querySelectorAll('button'));
-    const buttonTexts = buttons.map(b => b.textContent.trim());
-    
-    // Zkusíme najít tlačítko pro publikování
-    const targetBtn = buttons.find(b => {
-      const t = b.textContent.trim().toLowerCase();
-      return t === 'sdílet' || t === 'publikovat' || t.includes('sdílet') || t.includes('zveřejnit');
-    });
-
-    if (targetBtn) {
-      targetBtn.click();
-      return { found: true, text: targetBtn.textContent.trim(), allButtons: buttonTexts };
-    }
-    
-    // Pokud nenajdeme podle textu, klikneme na poslední tlačítko na stránce
-    if (buttons.length > 0) {
-      buttons[buttons.length - 1].click();
-      return { found: false, clickedLast: true, allButtons: buttonTexts };
-    }
-
-    return { found: false, allButtons: buttonTexts };
-  });
-
-  console.log(`🔍 Výsledek analýzy tlačítek:`, JSON.stringify(clickResult));
+  // Hledáme tlačítko podle textu Sdílet / Publikovat / Zveřejnit
+  const shareBtn = page.locator('button').filter({ hasText: /(sdílet|publikovat|zveřejnit)/i }).last();
+  
+  const isVisible = await shareBtn.isVisible().catch(() => false);
+  if (isVisible) {
+    // Scrollneme na něj a provedeme reálný fyzický klik myši v Playwrightu
+    await shareBtn.scrollIntoViewIfNeeded();
+    await shareBtn.click({ delay: 100 });
+    console.log("✅ Tlačítko Sdílet bylo stisknuto reálnou událostí myši.");
+  } else {
+    console.log("⚠️ Tlačítko Sdílet nebylo nalezeno, klikám na absolutně poslední tlačítko na stránce...");
+    await page.locator('button').last().click({ delay: 100 });
+  }
 
   // Pořádná prodleva, aby se požadavek propsal na server Herohero
-  await page.waitForTimeout(8000);
-  console.log(`Příspěvek "${job.title}" prošel skriptem do konce.`);
+  await page.waitForTimeout(10000);
+  console.log(`Finální krok dokončen pro: ${job.title}`);
 }
 
 async function publishHeroHero(inputJob) {
