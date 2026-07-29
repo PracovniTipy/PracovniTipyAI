@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - RESILIENT LOGIN FLOW");
+console.log("🚀 HEROHERO PUBLISHER - 3-STEP FLOW FIXED");
 console.log("==========================================");
 
 const CONFIG = {
@@ -120,14 +120,12 @@ async function nukeOverlays(page) {
 async function executeModalLogin(page, email, password) {
   console.log("Zahajuji proces přihlášení...");
   
-  // Počkáme na načtení e-mailového políčka
   const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await emailInput.click();
   await emailInput.fill(email);
   console.log("E-mail vyplněn.");
 
-  // Pokusíme se kliknout na tlačítko pro pokračování vedle e-mailu, případně pošleme Enter
   const emailSubmitBtn = page.locator('form button[type="submit"], button:has(svg)').first();
   if (await emailSubmitBtn.isVisible().catch(() => false)) {
     await emailSubmitBtn.click({ timeout: 5000 }).catch(() => {
@@ -140,7 +138,6 @@ async function executeModalLogin(page, email, password) {
   console.log("Čekám na zobrazení pole pro heslo...");
   const passwordInput = page.locator('input[type="password"]');
   
-  // Robustní smyčka pro případ, že se Vue.js komponenta renderuje na 2x
   let passwordFound = false;
   for (let i = 0; i < 10; i++) {
     await page.waitForTimeout(1000);
@@ -149,19 +146,17 @@ async function executeModalLogin(page, email, password) {
       passwordFound = true;
       break;
     }
-    // Pokud pole ještě není, zkusíme ještě jednou ťuknout Enter nebo kliknout
     await page.keyboard.press("Enter").catch(() => {});
   }
 
   if (!passwordFound) {
-    throw new Error("Pole pro heslo se po zadání e-mailu neobjevené (Vue.js rendering error).");
+    throw new Error("Pole pro heslo se po zadání e-mailu neobjevilo.");
   }
 
   await passwordInput.click();
   await passwordInput.fill(password);
   console.log("Heslo vyplněno, odesílám přihlášení...");
 
-  // Odeslání formuláře s heslem
   const passwordSubmitBtn = page.locator('button[type="submit"], button:has-text("Pokračovat"), button:has-text("Přihlásit")').first();
   if (await passwordSubmitBtn.isVisible().catch(() => false)) {
     await passwordSubmitBtn.click({ timeout: 5000 }).catch(() => {
@@ -278,29 +273,30 @@ async function createHeroHeroPost(page, job) {
     await page.keyboard.press("Enter");
   }
 
-  // ==========================================
-  // KROK 1 -> KROK 2: První šipka vpravo nahoře
-  // ==========================================
+  // =========================================================================
+  // KROK 1 -> KROK 2: První šipka vpravo nahoře (Z editoru do Možností/Kategorií)
+  // =========================================================================
   await page.waitForTimeout(2000);
-  await findAndClickButton(page, "První šipka (Vytvořit příspěvek -> Možnosti)", async ({ btn, text }) => {
+  await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(3000);
 
-  // ==========================================
-  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře
-  // ==========================================
+  // =========================================================================
+  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře (Z Možností do Náhledu)
+  // Země/kategorie se vůbec nedotýkáme, jen se proklikneme dál.
+  // =========================================================================
   await page.waitForTimeout(2000);
-  await findAndClickButton(page, "Druhá šipka (Možnosti -> Náhled)", async ({ btn, text }) => {
+  await findAndClickButton(page, "Druhá šipka (Možnosti příspěvku -> Náhled)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(4000);
 
-  // ==========================================
-  // KROK 3: Finální kliknutí na "Sdílet"
-  // ==========================================
+  // =========================================================================
+  // KROK 3: Finální kliknutí na tlačítko "Sdílet" v Náhledu
+  // =========================================================================
   await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
     return text.toLowerCase().includes("sdílet");
   });
