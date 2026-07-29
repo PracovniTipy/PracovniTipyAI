@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - CORRECT FLOW");
+console.log("🚀 HEROHERO PUBLISHER - OPRAVENÝ LOGIN FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -66,8 +66,6 @@ async function findAndClickButton(page, stepDescription, identifierPredicate) {
       const ariaLabel = await btn.getAttribute('aria-label') || '';
       const className = await btn.getAttribute('class') || '';
 
-      console.log(`  [Button #${i}] text="${text}" | aria-label="${ariaLabel}" | class="${className.substring(0, 40)}..."`);
-
       if (await identifierPredicate({ btn, text, ariaLabel, className, index: i })) {
         targetButton = btn;
         console.log(`  👉 [VYBRÁNO] Button #${i} odpovídá kritériím pro "${stepDescription}".`);
@@ -81,6 +79,7 @@ async function findAndClickButton(page, stepDescription, identifierPredicate) {
   }
 
   await targetButton.scrollIntoViewIfNeeded();
+  await page.waitForTimeout(500);
   await targetButton.click({ timeout: 10000 });
   console.log(`✅ Úspěšně kliknuto na tlačítko pro: ${stepDescription}`);
 }
@@ -122,24 +121,27 @@ async function nukeOverlays(page) {
 async function executeModalLogin(page, email, password) {
   console.log("Zahajuji proces přihlášení...");
   
+  // 1. Zadání e-mailu
   const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await emailInput.click();
   await emailInput.fill(email);
+  console.log("E-mail vyplněn, odesílám Enterem...");
+  await page.keyboard.press("Enter");
+  
+  await page.waitForTimeout(3000);
+  await nukeOverlays(page);
 
-  // Kliknutí na šipku/tlačítko po e-mailu
-  const nextBtn = page.locator('button:has(svg), button[type="submit"]').first();
-  await nextBtn.click();
-
+  // 2. Zadání hesla
   const passwordInput = page.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await passwordInput.click();
   await passwordInput.fill(password);
+  console.log("Heslo vyplněno, odesílám Enterem...");
+  await page.keyboard.press("Enter");
 
-  const submitBtn = page.locator('button:has-text("Pokračovat"), button[type="submit"]').first();
-  await submitBtn.click();
-
-  await page.waitForTimeout(6000);
+  await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION }).catch(() => {});
+  await page.waitForTimeout(3000);
 }
 
 function formatJobPost(job) {
@@ -190,10 +192,10 @@ async function createHeroHeroPost(page, job) {
     await page.goto("https://herohero.co/create", {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    }).catch(() => {});
+    });
   }
 
-  console.log("Probouzím stránku simulací interakce pro vykreslení SPA...");
+  console.log("Čekám na stabilizaci SPA rozhraní...");
   await page.waitForTimeout(3000);
   await page.mouse.move(200, 200);
   await page.mouse.down();
@@ -219,7 +221,7 @@ async function createHeroHeroPost(page, job) {
 
     if (titleInput) break;
     await page.mouse.click(500, 400);
-    await page.waitForTimeout(5000);
+    await page.waitForTimeout(3000);
   }
 
   if (!titleInput) {
@@ -228,7 +230,7 @@ async function createHeroHeroPost(page, job) {
 
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
-  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 25 });
+  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 35 });
   console.log("✅ Nadpis úspěšně vyplněn.");
 
   await page.waitForTimeout(1000);
@@ -241,7 +243,7 @@ async function createHeroHeroPost(page, job) {
 
   const lines = formattedText.split("\n");
   for (const line of lines) {
-    await page.keyboard.type(line, { delay: 5 });
+    await page.keyboard.type(line, { delay: 10 });
     await page.keyboard.press("Enter");
   }
 
@@ -251,7 +253,6 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "První šipka (Vytvořit příspěvek -> Možnosti)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
-    // Ověříme, že tlačítko je v hlavičce (Y < 100), vpravo (X > 800) a nemá text (je to ikona šipky)
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(3000);
@@ -262,18 +263,18 @@ async function createHeroHeroPost(page, job) {
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
     const catElement = page.locator('button, div, span, label').filter({ hasText: job.category }).first();
+    await catElement.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
     await catElement.click({ timeout: 5000 }).catch(() => {});
     console.log(`✅ Kategorie "${job.category}" vybrána.`);
     await page.waitForTimeout(2000);
   }
 
   // ==========================================
-  // KROK 2 -> KROK 3: Druhá šipka na stejném místě vpravo nahoře
+  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře
   // ==========================================
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "Druhá šipka (Možnosti -> Náhled)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
-    // Stejná pozice vpravo nahoře v hlavičce
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(4000);
@@ -285,7 +286,7 @@ async function createHeroHeroPost(page, job) {
     return text.toLowerCase().includes("sdílet");
   });
 
-  await page.waitForTimeout(10000);
+  await page.waitForTimeout(8000);
   console.log(`✅ Příspěvek "${job.title}" úspěšně odeslán!`);
 }
 
@@ -300,8 +301,14 @@ async function publishHeroHero(inputJob) {
   try {
     browser = await chromium.launch({ 
       headless: CONFIG.HEADLESS,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
+      args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox', 
+        '--disable-dev-shm-usage',
+        '--disable-blink-features=AutomationControlled'
+      ]
     });
+
     const context = await browser.newContext({
       viewport: CONFIG.VIEWPORT,
       userAgent: CONFIG.USER_AGENT,
@@ -309,6 +316,10 @@ async function publishHeroHero(inputJob) {
     });
 
     const page = await context.newPage();
+
+    await page.addInitScript(() => {
+      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    });
 
     page.on('console', msg => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
     page.on('pageerror', err => console.log(`[BROWSER ERROR] ${err.message}`));
