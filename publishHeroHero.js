@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - DIRECT CREATE NAV");
+console.log("🚀 HEROHERO PUBLISHER - EXACT LOGIN FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -46,16 +46,11 @@ const DEFAULT_TEST_JOB = {
   imageUrl: ""
 };
 
-/**
- * Bezpečná funkce pro inspekci, výpis a kliknutí na správné tlačítko
- */
 async function findAndClickButton(page, stepDescription, identifierPredicate) {
   console.log(`\n🔍 [INSPEKCE] Hledám tlačítko pro: ${stepDescription}`);
   
   const buttons = page.locator('button:visible');
   const count = await buttons.count();
-  console.log(`Na stránce nalezeno ${count} viditelných tlačítek.`);
-
   let targetButton = null;
 
   for (let i = 0; i < count; i++) {
@@ -120,21 +115,22 @@ async function nukeOverlays(page) {
 async function executeModalLogin(page, email, password) {
   console.log("Zahajuji proces přihlášení...");
   
+  // 1. Vyplnění e-mailu do vstupního pole v modálu
   const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await emailInput.click();
   await emailInput.fill(email);
   console.log("E-mail vyplněn.");
 
-  const emailSubmitBtn = page.locator('form button[type="submit"], button:has(svg)').first();
-  if (await emailSubmitBtn.isVisible().catch(() => false)) {
-    await emailSubmitBtn.click({ timeout: 5000 }).catch(() => {
-      page.keyboard.press("Enter");
-    });
-  } else {
+  // 2. Kliknutí na šipku vedle e-mailu (jak je vidět na prvním screenshotu)
+  console.log("Hledám šipku pro potvrzení e-mailu...");
+  const emailArrowBtn = page.locator('button:has(svg), button[type="submit"]').last();
+  await emailArrowBtn.click({ timeout: 5000 }).catch(async () => {
     await page.keyboard.press("Enter");
-  }
+  });
+  console.log("Kliknuto na šipku pro pokračování.");
 
+  // 3. Čekání na zobrazení pole pro heslo (druhý screenshot)
   console.log("Čekám na zobrazení pole pro heslo...");
   const passwordInput = page.locator('input[type="password"]');
   
@@ -146,28 +142,26 @@ async function executeModalLogin(page, email, password) {
       passwordFound = true;
       break;
     }
-    await page.keyboard.press("Enter").catch(() => {});
   }
 
   if (!passwordFound) {
     throw new Error("Pole pro heslo se po zadání e-mailu neobjevilo.");
   }
 
+  // 4. Vyplnění hesla
   await passwordInput.click();
   await passwordInput.fill(password);
-  console.log("Heslo vyplněno, odesílám přihlášení...");
+  console.log("Heslo vyplněno.");
 
-  const passwordSubmitBtn = page.locator('button[type="submit"], button:has-text("Pokračovat"), button:has-text("Přihlásit")').first();
-  if (await passwordSubmitBtn.isVisible().catch(() => false)) {
-    await passwordSubmitBtn.click({ timeout: 5000 }).catch(() => {
-      page.keyboard.press("Enter");
-    });
-  } else {
+  // 5. Kliknutí na tlačítko "Pokračovat" pod heslem (druhý screenshot)
+  console.log("Klikám na tlačítko Pokračovat pro přihlášení...");
+  const continueBtn = page.locator('button:has-text("Pokračovat"), button:has-text("Přihlásit"), button[type="submit"]').last();
+  await continueBtn.click({ timeout: 5000 }).catch(async () => {
     await page.keyboard.press("Enter");
-  }
+  });
 
-  console.log("Přihlášení odesláno, vynucuji přechod na https://herohero.co/create...");
-  await page.waitForTimeout(4000);
+  console.log("Přihlášení odesláno, čekám na načtení...");
+  await page.waitForTimeout(5000);
 }
 
 function formatJobPost(job) {
@@ -213,7 +207,7 @@ function formatJobPost(job) {
 async function createHeroHeroPost(page, job) {
   console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
   
-  // Zde natvrdo jdeme na požadovanou URL pro vytvoření příspěvku
+  // Rovnou jdeme na /create podle tvého přání
   console.log("Přecházím na https://herohero.co/create...");
   await page.goto("https://herohero.co/create", {
     waitUntil: "domcontentloaded",
@@ -272,9 +266,7 @@ async function createHeroHeroPost(page, job) {
     await page.keyboard.press("Enter");
   }
 
-  // =========================================================================
-  // KROK 1 -> KROK 2: První šipka vpravo nahoře (Z editoru do Možností)
-  // =========================================================================
+  // 1. Krok: Šipka z editoru do možností
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
@@ -282,9 +274,7 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(3000);
 
-  // =========================================================================
-  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře (Z Možností do Náhledu)
-  // =========================================================================
+  // 2. Krok: Šipka z možností do náhledu
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "Druhá šipka (Možnosti příspěvku -> Náhled)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
@@ -292,9 +282,7 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(4000);
 
-  // =========================================================================
-  // KROK 3: Finální kliknutí na tlačítko "Sdílet" v Náhledu
-  // =========================================================================
+  // 3. Krok: Finální tlačítko Sdílet
   await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
     return text.toLowerCase().includes("sdílet");
   });
