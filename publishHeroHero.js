@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - 3-STEP FLOW FIXED");
+console.log("🚀 HEROHERO PUBLISHER - DIRECT CREATE NAV");
 console.log("==========================================");
 
 const CONFIG = {
@@ -139,7 +139,7 @@ async function executeModalLogin(page, email, password) {
   const passwordInput = page.locator('input[type="password"]');
   
   let passwordFound = false;
-  for (let i = 0; i < 10; i++) {
+  for (let i = 0; i < 15; i++) {
     await page.waitForTimeout(1000);
     await nukeOverlays(page);
     if (await passwordInput.isVisible().catch(() => false)) {
@@ -166,7 +166,7 @@ async function executeModalLogin(page, email, password) {
     await page.keyboard.press("Enter");
   }
 
-  await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION }).catch(() => {});
+  console.log("Přihlášení odesláno, vynucuji přechod na https://herohero.co/create...");
   await page.waitForTimeout(4000);
 }
 
@@ -213,13 +213,12 @@ function formatJobPost(job) {
 async function createHeroHeroPost(page, job) {
   console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
   
-  if (!page.url().includes("/create")) {
-    console.log("Přecházím na /create...");
-    await page.goto("https://herohero.co/create", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
-  }
+  // Zde natvrdo jdeme na požadovanou URL pro vytvoření příspěvku
+  console.log("Přecházím na https://herohero.co/create...");
+  await page.goto("https://herohero.co/create", {
+    waitUntil: "domcontentloaded",
+    timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+  });
 
   console.log("Čekám na stabilizaci SPA rozhraní...");
   await page.waitForTimeout(3000);
@@ -274,7 +273,7 @@ async function createHeroHeroPost(page, job) {
   }
 
   // =========================================================================
-  // KROK 1 -> KROK 2: První šipka vpravo nahoře (Z editoru do Možností/Kategorií)
+  // KROK 1 -> KROK 2: První šipka vpravo nahoře (Z editoru do Možností)
   // =========================================================================
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ btn, text }) => {
@@ -285,7 +284,6 @@ async function createHeroHeroPost(page, job) {
 
   // =========================================================================
   // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře (Z Možností do Náhledu)
-  // Země/kategorie se vůbec nedotýkáme, jen se proklikneme dál.
   // =========================================================================
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "Druhá šipka (Možnosti příspěvku -> Náhled)", async ({ btn, text }) => {
