@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - SECURE SELECTOR FLOW");
+console.log("🚀 HEROHERO PUBLISHER - CORRECT FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -48,12 +48,11 @@ const DEFAULT_TEST_JOB = {
 };
 
 /**
- * Bezpečná funkce pro inspekci, výpis a kliknutí na správné tlačítko podle kritérií
+ * Bezpečná funkce pro inspekci, výpis a kliknutí na správné tlačítko
  */
 async function findAndClickButton(page, stepDescription, identifierPredicate) {
   console.log(`\n🔍 [INSPEKCE] Hledám tlačítko pro: ${stepDescription}`);
   
-  // Získáme všechny viditelné buttony na stránce
   const buttons = page.locator('button:visible');
   const count = await buttons.count();
   console.log(`Na stránce nalezeno ${count} viditelných tlačítek.`);
@@ -66,19 +65,15 @@ async function findAndClickButton(page, stepDescription, identifierPredicate) {
       const text = (await btn.innerText()).trim();
       const ariaLabel = await btn.getAttribute('aria-label') || '';
       const className = await btn.getAttribute('class') || '';
-      const outerHTML = await btn.evaluate(el => el.outerHTML.substring(0, 150)); // zkráceno pro přehlednost
 
       console.log(`  [Button #${i}] text="${text}" | aria-label="${ariaLabel}" | class="${className.substring(0, 40)}..."`);
 
-      // Ověření splnění predikátu pro konkrétní krok
       if (await identifierPredicate({ btn, text, ariaLabel, className, index: i })) {
         targetButton = btn;
         console.log(`  👉 [VYBRÁNO] Button #${i} odpovídá kritériím pro "${stepDescription}".`);
         break;
       }
-    } catch (e) {
-      // Element mohl během iterace zmizet
-    }
+    } catch (e) {}
   }
 
   if (!targetButton) {
@@ -124,43 +119,24 @@ async function nukeOverlays(page) {
   } catch (e) {}
 }
 
-async function getLoginModal(page) {
-  const modalHandles = await page.locator('[role="dialog"], [class*="modal" i]').all();
-  for (const handle of modalHandles) {
-    const hasInputs = (await handle.locator('input[type="email"], input[name="email"], input[type="password"]').count().catch(() => 0)) > 0;
-    const isVisible = await handle.isVisible().catch(() => false);
-    if (hasInputs && isVisible) return handle;
-  }
-  const directForm = page.locator('form, div').filter({ has: page.locator('input[type="email"]') }).first();
-  if (await directForm.isVisible().catch(() => false)) return directForm;
-  return null;
-}
-
 async function executeModalLogin(page, email, password) {
-  let loginModal = null;
-  for (let i = 0; i < 20; i++) {
-    loginModal = await getLoginModal(page);
-    if (loginModal) break;
-    await page.waitForTimeout(1000);
-  }
-
-  if (!loginModal) throw new Error("Přihlašovací formulář nebyl nalezen.");
-
-  const emailInput = loginModal.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
+  console.log("Zahajuji proces přihlášení...");
+  
+  const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await emailInput.click();
   await emailInput.fill(email);
 
-  // Zde pro přihlašovací šipku také nepoužijeme .last(), ale vezmeme tlačítko obsahující SVG v rámci modalu
-  const loginArrow = loginModal.locator('button:has(svg), button[type="submit"]').first();
-  await loginArrow.click();
+  // Kliknutí na šipku/tlačítko po e-mailu
+  const nextBtn = page.locator('button:has(svg), button[type="submit"]').first();
+  await nextBtn.click();
 
-  const passwordInput = loginModal.locator('input[type="password"]');
+  const passwordInput = page.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await passwordInput.click();
   await passwordInput.fill(password);
 
-  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').first();
+  const submitBtn = page.locator('button:has-text("Pokračovat"), button[type="submit"]').first();
   await submitBtn.click();
 
   await page.waitForTimeout(6000);
@@ -274,15 +250,14 @@ async function createHeroHeroPost(page, job) {
   // ==========================================
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "První šipka (Vytvořit příspěvek -> Možnosti)", async ({ btn, text }) => {
-    // Tlačítko šipky vpravo nahoře je v hlavičce, nemá text, ale uvnitř má SVG. 
-    // Nachází se v horní části stránky (koordinát Y je malé číslo).
     const box = await btn.boundingBox();
+    // Ověříme, že tlačítko je v hlavičce (Y < 100), vpravo (X > 800) a nemá text (je to ikona šipky)
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(3000);
 
   // ==========================================
-  // KROK 2: Výběr kategorie podle země
+  // KROK 2: Výběr kategorie podle země (např. Belgie)
   // ==========================================
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
@@ -293,17 +268,18 @@ async function createHeroHeroPost(page, job) {
   }
 
   // ==========================================
-  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře
+  // KROK 2 -> KROK 3: Druhá šipka na stejném místě vpravo nahoře
   // ==========================================
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "Druhá šipka (Možnosti -> Náhled)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
+    // Stejná pozice vpravo nahoře v hlavičce
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(4000);
 
   // ==========================================
-  // KROK 3: Finální tlačítko "Sdílet"
+  // KROK 3: Finální kliknutí na "Sdílet"
   // ==========================================
   await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
     return text.toLowerCase().includes("sdílet");
