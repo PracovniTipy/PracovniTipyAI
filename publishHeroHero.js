@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - FINAL ARROW FLOW");
+console.log("🚀 HEROHERO PUBLISHER - SECURE SELECTOR FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -46,6 +46,49 @@ const DEFAULT_TEST_JOB = {
   ],
   imageUrl: ""
 };
+
+/**
+ * Bezpečná funkce pro inspekci, výpis a kliknutí na správné tlačítko podle kritérií
+ */
+async function findAndClickButton(page, stepDescription, identifierPredicate) {
+  console.log(`\n🔍 [INSPEKCE] Hledám tlačítko pro: ${stepDescription}`);
+  
+  // Získáme všechny viditelné buttony na stránce
+  const buttons = page.locator('button:visible');
+  const count = await buttons.count();
+  console.log(`Na stránce nalezeno ${count} viditelných tlačítek.`);
+
+  let targetButton = null;
+
+  for (let i = 0; i < count; i++) {
+    const btn = buttons.nth(i);
+    try {
+      const text = (await btn.innerText()).trim();
+      const ariaLabel = await btn.getAttribute('aria-label') || '';
+      const className = await btn.getAttribute('class') || '';
+      const outerHTML = await btn.evaluate(el => el.outerHTML.substring(0, 150)); // zkráceno pro přehlednost
+
+      console.log(`  [Button #${i}] text="${text}" | aria-label="${ariaLabel}" | class="${className.substring(0, 40)}..."`);
+
+      // Ověření splnění predikátu pro konkrétní krok
+      if (await identifierPredicate({ btn, text, ariaLabel, className, index: i })) {
+        targetButton = btn;
+        console.log(`  👉 [VYBRÁNO] Button #${i} odpovídá kritériím pro "${stepDescription}".`);
+        break;
+      }
+    } catch (e) {
+      // Element mohl během iterace zmizet
+    }
+  }
+
+  if (!targetButton) {
+    throw new Error(`Nepodařilo se nalézt odpovídající tlačítko pro krok: ${stepDescription}`);
+  }
+
+  await targetButton.scrollIntoViewIfNeeded();
+  await targetButton.click({ timeout: 10000 });
+  console.log(`✅ Úspěšně kliknuto na tlačítko pro: ${stepDescription}`);
+}
 
 async function handleCookieBannerIfPresent(page) {
   const candidateSelectors = [
@@ -108,15 +151,16 @@ async function executeModalLogin(page, email, password) {
   await emailInput.click();
   await emailInput.fill(email);
 
-  const arrowBtn = loginModal.locator('input[type="email"] ~ button, input[type="email"] + button, button:has(svg), button[type="submit"]').last();
-  await arrowBtn.click();
+  // Zde pro přihlašovací šipku také nepoužijeme .last(), ale vezmeme tlačítko obsahující SVG v rámci modalu
+  const loginArrow = loginModal.locator('button:has(svg), button[type="submit"]').first();
+  await loginArrow.click();
 
   const passwordInput = loginModal.locator('input[type="password"]');
   await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await passwordInput.click();
   await passwordInput.fill(password);
 
-  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').last();
+  const submitBtn = loginModal.locator('button:has-text("Pokračovat"), button[type="submit"]').first();
   await submitBtn.click();
 
   await page.waitForTimeout(6000);
@@ -197,11 +241,7 @@ async function createHeroHeroPost(page, job) {
       }
     }
 
-    if (titleInput) {
-      console.log(`✅ Políčko nalezeno v pokusu č. ${attempt}`);
-      break;
-    }
-
+    if (titleInput) break;
     await page.mouse.click(500, 400);
     await page.waitForTimeout(5000);
   }
@@ -230,14 +270,15 @@ async function createHeroHeroPost(page, job) {
   }
 
   // ==========================================
-  // KROK 1 -> KROK 2: Kliknutí na šipku vpravo nahoře
+  // KROK 1 -> KROK 2: První šipka vpravo nahoře
   // ==========================================
-  console.log("Klikám na horní šipku pro přechod do možností příspěvku...");
   await page.waitForTimeout(2000);
-  
-  // Šipka vpravo nahoře (obsahuje SVG ikonu šipky, nachází se v horní liště vedle nadpisu "Vytvořit příspěvek")
-  const topArrowBtn = page.locator('header button:has(svg), div:has-text("Vytvořit příspěvek") ~ button, button:has(svg)').last();
-  await topArrowBtn.click({ timeout: 10000 });
+  await findAndClickButton(page, "První šipka (Vytvořit příspěvek -> Možnosti)", async ({ btn, text }) => {
+    // Tlačítko šipky vpravo nahoře je v hlavičce, nemá text, ale uvnitř má SVG. 
+    // Nachází se v horní části stránky (koordinát Y je malé číslo).
+    const box = await btn.boundingBox();
+    return box && box.y < 100 && box.x > 800 && text === "";
+  });
   await page.waitForTimeout(3000);
 
   // ==========================================
@@ -246,32 +287,28 @@ async function createHeroHeroPost(page, job) {
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
     const catElement = page.locator('button, div, span, label').filter({ hasText: job.category }).first();
-    await catElement.click({ timeout: 5000 }).catch(() => {
-      console.log("⚠️ Přímé kliknutí na kategorii vyžaduje pozornost, ale pokračujeme...");
-    });
+    await catElement.click({ timeout: 5000 }).catch(() => {});
     console.log(`✅ Kategorie "${job.category}" vybrána.`);
     await page.waitForTimeout(2000);
   }
 
   // ==========================================
-  // KROK 2 -> KROK 3: Kliknutí na druhou šipku vpravo nahoře
+  // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře
   // ==========================================
-  console.log("Klikám na druhou horní šipku pro přechod do náhledu...");
   await page.waitForTimeout(2000);
-  
-  const secondArrowBtn = page.locator('header button:has(svg), div:has-text("Možnosti příspěvku") ~ button, button:has(svg)').last();
-  await secondArrowBtn.click({ timeout: 10000 });
+  await findAndClickButton(page, "Druhá šipka (Možnosti -> Náhled)", async ({ btn, text }) => {
+    const box = await btn.boundingBox();
+    return box && box.y < 100 && box.x > 800 && text === "";
+  });
   await page.waitForTimeout(4000);
 
   // ==========================================
-  // KROK 3: Finální kliknutí na "Sdílet"
+  // KROK 3: Finální tlačítko "Sdílet"
   // ==========================================
-  console.log("Klikám na finální tlačítko Sdílet...");
-  
-  const shareBtn = page.locator('button').filter({ hasText: /(sdílet|publikovat|zveřejnit)/i }).first();
-  await shareBtn.click({ timeout: 10000 });
+  await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
+    return text.toLowerCase().includes("sdílet");
+  });
 
-  // Pořádná prodleva, aby se požadavek propsal na server Herohero
   await page.waitForTimeout(10000);
   console.log(`✅ Příspěvek "${job.title}" úspěšně odeslán!`);
 }
