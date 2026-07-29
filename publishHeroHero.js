@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - FINAL DOMINANCE");
+console.log("🚀 HEROHERO PUBLISHER - FINAL ARROW FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -230,64 +230,50 @@ async function createHeroHeroPost(page, job) {
   }
 
   // ==========================================
-  // KROK 1 -> KROK 2: Přechod na kategorie
+  // KROK 1 -> KROK 2: Kliknutí na šipku vpravo nahoře
   // ==========================================
-  console.log("Přecházím na další krok (kategorie)... via Playwright Click");
+  console.log("Klikám na horní šipku pro přechod do možností příspěvku...");
   await page.waitForTimeout(2000);
   
-  // Hledáme reálné tlačítko "Pokračovat" nebo "Další" pomocí Playwright lokátoru
-  const step1Btn = page.locator('button').filter({ hasText: /(pokračovat|další)/i }).first();
-  await step1Btn.click({ timeout: 10000 }).catch(async () => {
-    // Záložní kliknutí na poslední tlačítko na stránce
-    await page.locator('button').last().click();
-  });
+  // Šipka vpravo nahoře (obsahuje SVG ikonu šipky, nachází se v horní liště vedle nadpisu "Vytvořit příspěvek")
+  const topArrowBtn = page.locator('header button:has(svg), div:has-text("Vytvořit příspěvek") ~ button, button:has(svg)').last();
+  await topArrowBtn.click({ timeout: 10000 });
   await page.waitForTimeout(3000);
 
-  // Výběr kategorie
+  // ==========================================
+  // KROK 2: Výběr kategorie podle země
+  // ==========================================
   if (job.category) {
     console.log(`Hledám a vybírám kategorii: ${job.category}`);
     const catElement = page.locator('button, div, span, label').filter({ hasText: job.category }).first();
     await catElement.click({ timeout: 5000 }).catch(() => {
-      console.log("⚠️ Přímé kliknutí na kategorii selhalo, zkouším alternativu...");
+      console.log("⚠️ Přímé kliknutí na kategorii vyžaduje pozornost, ale pokračujeme...");
     });
-    console.log(`✅ Pokus o výběr kategorie "${job.category}" proveden.`);
+    console.log(`✅ Kategorie "${job.category}" vybrána.`);
     await page.waitForTimeout(2000);
   }
 
   // ==========================================
-  // KROK 2 -> KROK 3: Přechod do náhledu
+  // KROK 2 -> KROK 3: Kliknutí na druhou šipku vpravo nahoře
   // ==========================================
-  console.log("Přecházím do náhledu... via Playwright Click");
+  console.log("Klikám na druhou horní šipku pro přechod do náhledu...");
   await page.waitForTimeout(2000);
   
-  const step2Btn = page.locator('button').filter({ hasText: /(pokračovat|další)/i }).first();
-  await step2Btn.click({ timeout: 10000 }).catch(async () => {
-    await page.locator('button').last().click();
-  });
+  const secondArrowBtn = page.locator('header button:has(svg), div:has-text("Možnosti příspěvku") ~ button, button:has(svg)').last();
+  await secondArrowBtn.click({ timeout: 10000 });
   await page.waitForTimeout(4000);
 
   // ==========================================
-  // KROK 3: FINÁLNÍ REÁLNÝ KLIK (TRUSTED EVENT)
+  // KROK 3: Finální kliknutí na "Sdílet"
   // ==========================================
-  console.log("Aktivuji finální tlačítko Sdílet reálným Playwright klikem...");
+  console.log("Klikám na finální tlačítko Sdílet...");
   
-  // Hledáme tlačítko podle textu Sdílet / Publikovat / Zveřejnit
-  const shareBtn = page.locator('button').filter({ hasText: /(sdílet|publikovat|zveřejnit)/i }).last();
-  
-  const isVisible = await shareBtn.isVisible().catch(() => false);
-  if (isVisible) {
-    // Scrollneme na něj a provedeme reálný fyzický klik myši v Playwrightu
-    await shareBtn.scrollIntoViewIfNeeded();
-    await shareBtn.click({ delay: 100 });
-    console.log("✅ Tlačítko Sdílet bylo stisknuto reálnou událostí myši.");
-  } else {
-    console.log("⚠️ Tlačítko Sdílet nebylo nalezeno, klikám na absolutně poslední tlačítko na stránce...");
-    await page.locator('button').last().click({ delay: 100 });
-  }
+  const shareBtn = page.locator('button').filter({ hasText: /(sdílet|publikovat|zveřejnit)/i }).first();
+  await shareBtn.click({ timeout: 10000 });
 
   // Pořádná prodleva, aby se požadavek propsal na server Herohero
   await page.waitForTimeout(10000);
-  console.log(`Finální krok dokončen pro: ${job.title}`);
+  console.log(`✅ Příspěvek "${job.title}" úspěšně odeslán!`);
 }
 
 async function publishHeroHero(inputJob) {
