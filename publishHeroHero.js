@@ -1,7 +1,7 @@
 const { chromium } = require("playwright");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - OPRAVENÝ LOGIN FLOW");
+console.log("🚀 HEROHERO PUBLISHER - RESILIENT LOGIN FLOW");
 console.log("==========================================");
 
 const CONFIG = {
@@ -24,7 +24,6 @@ const DEFAULT_TEST_JOB = {
   contractType: "HPP na dobu neurčitou",
   language: "Čeština na komunikativní úrovni",
   link: "https://pracovnitipy.cz",
-  category: "Belgie",
   description: [
     "Příjem a výdej zboží ve skladovém hospodářství",
     "Práce se čtečkou čárových kódů (skenerem)",
@@ -121,27 +120,59 @@ async function nukeOverlays(page) {
 async function executeModalLogin(page, email, password) {
   console.log("Zahajuji proces přihlášení...");
   
-  // 1. Zadání e-mailu
+  // Počkáme na načtení e-mailového políčka
   const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
   await emailInput.click();
   await emailInput.fill(email);
-  console.log("E-mail vyplněn, odesílám Enterem...");
-  await page.keyboard.press("Enter");
-  
-  await page.waitForTimeout(3000);
-  await nukeOverlays(page);
+  console.log("E-mail vyplněn.");
 
-  // 2. Zadání hesla
+  // Pokusíme se kliknout na tlačítko pro pokračování vedle e-mailu, případně pošleme Enter
+  const emailSubmitBtn = page.locator('form button[type="submit"], button:has(svg)').first();
+  if (await emailSubmitBtn.isVisible().catch(() => false)) {
+    await emailSubmitBtn.click({ timeout: 5000 }).catch(() => {
+      page.keyboard.press("Enter");
+    });
+  } else {
+    await page.keyboard.press("Enter");
+  }
+
+  console.log("Čekám na zobrazení pole pro heslo...");
   const passwordInput = page.locator('input[type="password"]');
-  await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  
+  // Robustní smyčka pro případ, že se Vue.js komponenta renderuje na 2x
+  let passwordFound = false;
+  for (let i = 0; i < 10; i++) {
+    await page.waitForTimeout(1000);
+    await nukeOverlays(page);
+    if (await passwordInput.isVisible().catch(() => false)) {
+      passwordFound = true;
+      break;
+    }
+    // Pokud pole ještě není, zkusíme ještě jednou ťuknout Enter nebo kliknout
+    await page.keyboard.press("Enter").catch(() => {});
+  }
+
+  if (!passwordFound) {
+    throw new Error("Pole pro heslo se po zadání e-mailu neobjevené (Vue.js rendering error).");
+  }
+
   await passwordInput.click();
   await passwordInput.fill(password);
-  console.log("Heslo vyplněno, odesílám Enterem...");
-  await page.keyboard.press("Enter");
+  console.log("Heslo vyplněno, odesílám přihlášení...");
+
+  // Odeslání formuláře s heslem
+  const passwordSubmitBtn = page.locator('button[type="submit"], button:has-text("Pokračovat"), button:has-text("Přihlásit")').first();
+  if (await passwordSubmitBtn.isVisible().catch(() => false)) {
+    await passwordSubmitBtn.click({ timeout: 5000 }).catch(() => {
+      page.keyboard.press("Enter");
+    });
+  } else {
+    await page.keyboard.press("Enter");
+  }
 
   await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION }).catch(() => {});
-  await page.waitForTimeout(3000);
+  await page.waitForTimeout(4000);
 }
 
 function formatJobPost(job) {
@@ -221,7 +252,7 @@ async function createHeroHeroPost(page, job) {
 
     if (titleInput) break;
     await page.mouse.click(500, 400);
-    await page.waitForTimeout(3000);
+    await page.waitForTimeout(5000);
   }
 
   if (!titleInput) {
@@ -256,18 +287,6 @@ async function createHeroHeroPost(page, job) {
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(3000);
-
-  // ==========================================
-  // KROK 2: Výběr kategorie podle země (např. Belgie)
-  // ==========================================
-  if (job.category) {
-    console.log(`Hledám a vybírám kategorii: ${job.category}`);
-    const catElement = page.locator('button, div, span, label').filter({ hasText: job.category }).first();
-    await catElement.waitFor({ state: "visible", timeout: 10000 }).catch(() => {});
-    await catElement.click({ timeout: 5000 }).catch(() => {});
-    console.log(`✅ Kategorie "${job.category}" vybrána.`);
-    await page.waitForTimeout(2000);
-  }
 
   // ==========================================
   // KROK 2 -> KROK 3: Druhá šipka vpravo nahoře
