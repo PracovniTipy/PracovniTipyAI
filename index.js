@@ -466,21 +466,13 @@ app.get("/test-playwright", async (req, res) => {
 });
 
 app.post("/publishHeroHero", async (req, res) => {
-    const mod = require("./publishHeroHero");
-
-    console.log("EXPORT =", mod);
-    console.log("KEYS =", Object.keys(mod));
-    console.log("CACHE =", require.resolve("./publishHeroHero"));
-    
     const publishHeroHero = require("./publishHeroHero");
-
-    console.log("EXPORT =", publishHeroHero);
-    console.log("KEYS =", Object.keys(publishHeroHero));
     
     try {
-        await publishHeroHero(req.body);
+        const result = await publishHeroHero(req.body);
         res.json({
-            success: true
+            success: true,
+            result
         });
     } catch (e) {
         console.error(e);

@@ -1,14 +1,22 @@
 const { chromium } = require("playwright");
+const fs = require("fs");
+const http = require("http");
+const https = require("https");
+const os = require("os");
+const path = require("path");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - EXACT LOGIN FLOW");
+console.log("🚀 HEROHERO PUBLISHER - PERSISTENT PROFILE");
 console.log("==========================================");
 
 const CONFIG = {
+  PROFILE_DIR: path.resolve(process.env.HEROHERO_PROFILE_DIR || path.join(__dirname, "herohero-profile")),
+  DEBUG_DIR: path.resolve(process.env.HEROHERO_DEBUG_DIR || path.join(__dirname, "herohero-debug")),
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 60000,
     ELEMENT_WAIT: 30000,
+    EDITOR_WAIT: 30000,
   },
   VIEWPORT: { width: 1280, height: 900 },
   USER_AGENT:
@@ -46,36 +54,226 @@ const DEFAULT_TEST_JOB = {
   imageUrl: ""
 };
 
+function ensureDir(dir) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+function timestamp() {
+  return new Date().toISOString().replace(/[:.]/g, "-");
+}
+
+function createDiagnostics() {
+  return {
+    consoleLogs: [],
+    networkErrors: [],
+    pageErrors: [],
+    requests: [],
+  };
+}
+
+function logStep(message) {
+  console.log(`[HEROHERO] ${message}`);
+}
+
+async function pageSummary(page) {
+  const url = page.url();
+  const title = await page.title().catch(() => "N/A");
+  return { url, title };
+}
+
+async function logPageState(page, label) {
+  const state = await pageSummary(page);
+  logStep(`${label} | URL=${state.url} | TITLE=${state.title}`);
+  return state;
+}
+
+function attachDiagnostics(page, diagnostics) {
+  page.on("console", msg => {
+    const line = `[${msg.type()}] ${msg.text()}`;
+    diagnostics.consoleLogs.push(line);
+    console.log(`[BROWSER CONSOLE] ${line}`);
+  });
+
+  page.on("pageerror", err => {
+    diagnostics.pageErrors.push(err.message);
+    console.log(`[BROWSER ERROR] ${err.message}`);
+  });
+
+  page.on("request", req => {
+    diagnostics.requests.push({
+      method: req.method(),
+      url: req.url(),
+    });
+  });
+
+  page.on("requestfailed", req => {
+    const failure = req.failure();
+    const item = {
+      method: req.method(),
+      url: req.url(),
+      errorText: failure ? failure.errorText : "Unknown",
+    };
+    diagnostics.networkErrors.push(item);
+    console.log(`[NETWORK FAILED] ${item.method} ${item.url} | ${item.errorText}`);
+  });
+}
+
+async function collectEditorDiagnostics(page, initialUrl) {
+  const state = await pageSummary(page);
+  const html = await page.content().catch(() => "");
+  const lowerHtml = html.toLowerCase();
+  const currentUrl = state.url;
+
+  const visibleEditables = await page
+    .locator('div[contenteditable="true"], textarea, input[type="text"]')
+    .evaluateAll(elements =>
+      elements.map(el => {
+        const rect = el.getBoundingClientRect();
+        const style = window.getComputedStyle(el);
+        return {
+          tagName: el.tagName.toLowerCase(),
+          contentEditable: el.getAttribute("contenteditable"),
+          type: el.getAttribute("type"),
+          placeholder: el.getAttribute("placeholder"),
+          ariaLabel: el.getAttribute("aria-label"),
+          visible:
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden",
+          width: rect.width,
+          height: rect.height,
+        };
+      })
+    )
+    .catch(() => []);
+
+  const visibleEditorCount = visibleEditables.filter(el => el.visible).length;
+  const loginIndicators = [
+    "přihlásit",
+    "prihlasit",
+    "log in",
+    "login",
+    "sign in",
+    "email",
+    "heslo",
+    "password",
+  ];
+  const errorIndicators = [
+    "404",
+    "not found",
+    "error",
+    "something went wrong",
+    "došlo k chybě",
+    "access denied",
+    "forbidden",
+  ];
+
+  return {
+    initialUrl,
+    currentUrl,
+    title: state.title,
+    redirected: initialUrl !== currentUrl,
+    reactEditorLoaded: visibleEditorCount > 0,
+    visibleEditorCount,
+    visibleEditables,
+    heroHeroErrorPage: errorIndicators.some(token => lowerHtml.includes(token)),
+    loginPageLikely: loginIndicators.some(token => lowerHtml.includes(token)) || currentUrl.includes("/login"),
+    htmlLength: html.length,
+  };
+}
+
+async function saveFailureArtifacts(page, diagnostics, err, extra = {}) {
+  ensureDir(CONFIG.DEBUG_DIR);
+  const id = timestamp();
+  const screenshotPath = path.join(CONFIG.DEBUG_DIR, `herohero-error-${id}.png`);
+  const htmlPath = path.join(CONFIG.DEBUG_DIR, `herohero-error-${id}.html`);
+  const consolePath = path.join(CONFIG.DEBUG_DIR, `herohero-console-${id}.log`);
+  const networkPath = path.join(CONFIG.DEBUG_DIR, `herohero-network-errors-${id}.json`);
+  const statePath = path.join(CONFIG.DEBUG_DIR, `herohero-state-${id}.json`);
+
+  let state = {};
+  if (page && !page.isClosed()) {
+    state = await pageSummary(page);
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+    const html = await page.content().catch(() => "");
+    fs.writeFileSync(htmlPath, html, "utf8");
+  }
+
+  fs.writeFileSync(consolePath, diagnostics.consoleLogs.join("\n"), "utf8");
+  fs.writeFileSync(networkPath, JSON.stringify(diagnostics.networkErrors, null, 2), "utf8");
+  fs.writeFileSync(
+    statePath,
+    JSON.stringify(
+      {
+        error: err.message,
+        page: state,
+        extra,
+        pageErrors: diagnostics.pageErrors,
+        artifacts: {
+          screenshotPath,
+          htmlPath,
+          consolePath,
+          networkPath,
+          statePath,
+        },
+      },
+      null,
+      2
+    ),
+    "utf8"
+  );
+
+  console.error(`[HEROHERO] Artefakty chyby uloženy:`);
+  console.error(`  screenshot: ${screenshotPath}`);
+  console.error(`  html: ${htmlPath}`);
+  console.error(`  console: ${consolePath}`);
+  console.error(`  network: ${networkPath}`);
+  console.error(`  state: ${statePath}`);
+
+  return { screenshotPath, htmlPath, consolePath, networkPath, statePath };
+}
+
 async function findAndClickButton(page, stepDescription, identifierPredicate) {
-  console.log(`\n🔍 [INSPEKCE] Hledám tlačítko pro: ${stepDescription}`);
-  
-  const buttons = page.locator('button:visible');
+  logStep(`Hledám tlačítko pro: ${stepDescription}`);
+  await logPageState(page, `Před hledáním tlačítka: ${stepDescription}`);
+
+  const buttons = page.locator("button:visible");
   const count = await buttons.count();
+  logStep(`Selector button:visible našel ${count} tlačítek.`);
+
   let targetButton = null;
 
   for (let i = 0; i < count; i++) {
     const btn = buttons.nth(i);
     try {
       const text = (await btn.innerText()).trim();
-      const ariaLabel = await btn.getAttribute('aria-label') || '';
-      const className = await btn.getAttribute('class') || '';
+      const ariaLabel = await btn.getAttribute("aria-label") || "";
+      const className = await btn.getAttribute("class") || "";
+      const box = await btn.boundingBox();
+
+      logStep(`Button #${i}: text="${text}" aria="${ariaLabel}" class="${className}" box=${JSON.stringify(box)}`);
 
       if (await identifierPredicate({ btn, text, ariaLabel, className, index: i })) {
         targetButton = btn;
-        console.log(`  👉 [VYBRÁNO] Button #${i} odpovídá kritériím pro "${stepDescription}".`);
+        logStep(`Vybrán button #${i} pro "${stepDescription}".`);
         break;
       }
-    } catch (e) {}
+    } catch (e) {
+      logStep(`Button #${i} přeskočen: ${e.message}`);
+    }
   }
 
   if (!targetButton) {
     throw new Error(`Nepodařilo se nalézt odpovídající tlačítko pro krok: ${stepDescription}`);
   }
 
+  logStep(`Čekám na scroll tlačítka: ${stepDescription}`);
   await targetButton.scrollIntoViewIfNeeded();
   await page.waitForTimeout(500);
+  logStep(`Klikám: ${stepDescription}`);
   await targetButton.click({ timeout: 10000 });
-  console.log(`✅ Úspěšně kliknuto na tlačítko pro: ${stepDescription}`);
+  await logPageState(page, `Po kliknutí: ${stepDescription}`);
 }
 
 async function handleCookieBannerIfPresent(page) {
@@ -88,10 +286,14 @@ async function handleCookieBannerIfPresent(page) {
 
   for (const selector of candidateSelectors) {
     if (page.isClosed()) return;
+    logStep(`Kontroluji cookie selector: ${selector}`);
     const loc = page.locator(selector);
     const count = await loc.count().catch(() => 0);
-    if (count > 0 && (await loc.isVisible().catch(() => false))) {
-      await loc.click({ timeout: 5000 }).catch(() => {});
+    if (count > 0 && (await loc.first().isVisible().catch(() => false))) {
+      logStep(`Klikám cookie banner přes selector: ${selector}`);
+      await loc.first().click({ timeout: 5000 }).catch(err => {
+        logStep(`Cookie klik selhal: ${err.message}`);
+      });
       break;
     }
   }
@@ -102,66 +304,16 @@ async function nukeOverlays(page) {
     await page.evaluate(() => {
       document.querySelectorAll('.modal-overlay, [role="dialog"], div[class*="modal"], div[class*="overlay"]').forEach(el => {
         const style = window.getComputedStyle(el);
-        if (style.position === 'fixed' || style.position === 'absolute') {
+        if (style.position === "fixed" || style.position === "absolute") {
           el.remove();
         }
       });
     });
-    await page.keyboard.press('Escape');
+    await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
-  } catch (e) {}
-}
-
-async function executeModalLogin(page, email, password) {
-  console.log("Zahajuji proces přihlášení...");
-  
-  // 1. Vyplnění e-mailu do vstupního pole v modálu
-  const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
-  await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await emailInput.click();
-  await emailInput.fill(email);
-  console.log("E-mail vyplněn.");
-
-  // 2. Kliknutí na šipku vedle e-mailu (jak je vidět na prvním screenshotu)
-  console.log("Hledám šipku pro potvrzení e-mailu...");
-  const emailArrowBtn = page.locator('button:has(svg), button[type="submit"]').last();
-  await emailArrowBtn.click({ timeout: 5000 }).catch(async () => {
-    await page.keyboard.press("Enter");
-  });
-  console.log("Kliknuto na šipku pro pokračování.");
-
-  // 3. Čekání na zobrazení pole pro heslo (druhý screenshot)
-  console.log("Čekám na zobrazení pole pro heslo...");
-  const passwordInput = page.locator('input[type="password"]');
-  
-  let passwordFound = false;
-  for (let i = 0; i < 15; i++) {
-    await page.waitForTimeout(1000);
-    await nukeOverlays(page);
-    if (await passwordInput.isVisible().catch(() => false)) {
-      passwordFound = true;
-      break;
-    }
+  } catch (e) {
+    logStep(`nukeOverlays přeskočeno: ${e.message}`);
   }
-
-  if (!passwordFound) {
-    throw new Error("Pole pro heslo se po zadání e-mailu neobjevilo.");
-  }
-
-  // 4. Vyplnění hesla
-  await passwordInput.click();
-  await passwordInput.fill(password);
-  console.log("Heslo vyplněno.");
-
-  // 5. Kliknutí na tlačítko "Pokračovat" pod heslem (druhý screenshot)
-  console.log("Klikám na tlačítko Pokračovat pro přihlášení...");
-  const continueBtn = page.locator('button:has-text("Pokračovat"), button:has-text("Přihlásit"), button[type="submit"]').last();
-  await continueBtn.click({ timeout: 5000 }).catch(async () => {
-    await page.keyboard.press("Enter");
-  });
-
-  console.log("Přihlášení odesláno, čekám na načtení...");
-  await page.waitForTimeout(5000);
 }
 
 function formatJobPost(job) {
@@ -204,17 +356,135 @@ function formatJobPost(job) {
   return output.trim();
 }
 
+async function verifyCreateEditor(page, initialUrl) {
+  logStep("Čekám na dostupný editor.");
+  const editorLocator = page.locator('div[contenteditable="true"], textarea, input[type="text"]');
+
+  for (let attempt = 1; attempt <= 6; attempt++) {
+    await logPageState(page, `Kontrola editoru pokus ${attempt}`);
+    await nukeOverlays(page);
+    const count = await editorLocator.count().catch(() => 0);
+    logStep(`Editor selector našel ${count} prvků.`);
+
+    for (let i = 0; i < count; i++) {
+      const el = editorLocator.nth(i);
+      if (await el.isVisible().catch(() => false)) {
+        logStep(`React/editor vstup nalezen na indexu ${i}.`);
+        return el;
+      }
+    }
+
+    await page.waitForTimeout(5000);
+  }
+
+  const details = await collectEditorDiagnostics(page, initialUrl);
+  const reason = [
+    "Editor se neotevřel.",
+    `URL: ${details.currentUrl}`,
+    `Title: ${details.title}`,
+    `Redirect: ${details.redirected}`,
+    `React editor loaded: ${details.reactEditorLoaded}`,
+    `HeroHero error page: ${details.heroHeroErrorPage}`,
+    `Login page likely: ${details.loginPageLikely}`,
+    `Visible editor count: ${details.visibleEditorCount}`,
+  ].join(" | ");
+
+  const err = new Error(reason);
+  err.heroHeroDetails = details;
+  throw err;
+}
+
+async function uploadImageIfPresent(page, job) {
+  if (!job.imagePath && !job.imageUrl && !job.image) {
+    logStep("Obrázek není v jobu dostupný, krok nahrání obrázku přeskakuji.");
+    return;
+  }
+
+  let filePath = job.imagePath || job.image;
+  let tempFilePath = null;
+
+  if (!filePath && job.imageUrl) {
+    tempFilePath = await downloadImageToTempFile(job.imageUrl);
+    filePath = tempFilePath;
+  }
+
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Soubor obrázku neexistuje: ${filePath}`);
+  }
+
+  logStep(`Hledám file input pro nahrání obrázku: ${filePath}`);
+  const fileInput = page.locator('input[type="file"]').first();
+  if (await fileInput.count().catch(() => 0)) {
+    await fileInput.setInputFiles(filePath);
+    logStep("Obrázek nahrán přes input[type=file].");
+    await page.waitForTimeout(3000);
+  } else {
+    logStep("File input nenalezen; zachovávám workflow bez vynuceného uploadu.");
+  }
+
+  if (tempFilePath) {
+    fs.unlink(tempFilePath, () => {});
+  }
+}
+
+async function downloadImageToTempFile(imageUrl) {
+  if (!/^https?:\/\//i.test(imageUrl)) {
+    throw new Error(`imageUrl není platná HTTP URL: ${imageUrl}`);
+  }
+
+  ensureDir(CONFIG.DEBUG_DIR);
+  const url = new URL(imageUrl);
+  const extension = path.extname(url.pathname) || ".png";
+  const filePath = path.join(os.tmpdir(), `herohero-upload-${Date.now()}${extension}`);
+  const client = url.protocol === "https:" ? https : http;
+  let resolvedFilePath = filePath;
+
+  logStep(`Stahuji obrázek pro upload: ${imageUrl}`);
+
+  await new Promise((resolve, reject) => {
+    const request = client.get(url, response => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        downloadImageToTempFile(response.headers.location)
+          .then(redirectedFilePath => {
+            resolvedFilePath = redirectedFilePath;
+            resolve();
+          })
+          .catch(reject);
+        return;
+      }
+
+      if (response.statusCode !== 200) {
+        reject(new Error(`Stažení obrázku selhalo: HTTP ${response.statusCode}`));
+        return;
+      }
+
+      const file = fs.createWriteStream(filePath);
+      response.pipe(file);
+      file.on("finish", () => file.close(resolve));
+      file.on("error", reject);
+    });
+
+    request.on("error", reject);
+  });
+
+  logStep(`Obrázek stažen do: ${resolvedFilePath}`);
+  return resolvedFilePath;
+}
+
 async function createHeroHeroPost(page, job) {
-  console.log(`Vytvářím příspěvek pro pozici: ${job.title}`);
-  
-  // Rovnou jdeme na /create podle tvého přání
-  console.log("Přecházím na https://herohero.co/create...");
-  await page.goto("https://herohero.co/create", {
+  logStep(`Vytvářím příspěvek pro pozici: ${job.title}`);
+  const initialCreateUrl = "https://herohero.co/create";
+
+  logStep(`Otevírám stránku: ${initialCreateUrl}`);
+  await page.goto(initialCreateUrl, {
     waitUntil: "domcontentloaded",
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
+  await logPageState(page, "Po otevření /create");
 
-  console.log("Čekám na stabilizaci SPA rozhraní...");
+  await handleCookieBannerIfPresent(page);
+
+  logStep("Čekám na stabilizaci SPA rozhraní.");
   await page.waitForTimeout(3000);
   await page.mouse.move(200, 200);
   await page.mouse.down();
@@ -222,41 +492,20 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(2000);
   await nukeOverlays(page);
 
-  console.log("Hledám políčka pro nadpis a text v editoru...");
+  const titleInput = await verifyCreateEditor(page, initialCreateUrl);
 
-  let titleInput = null;
-  for (let attempt = 1; attempt <= 6; attempt++) {
-    await nukeOverlays(page);
-    
-    const editables = await page.locator('div[contenteditable="true"], textarea, input[type="text"]').all();
-    if (editables.length > 0) {
-      for (const el of editables) {
-        if (await el.isVisible().catch(() => false)) {
-          titleInput = el;
-          break;
-        }
-      }
-    }
+  await uploadImageIfPresent(page, job);
 
-    if (titleInput) break;
-    await page.mouse.click(500, 400);
-    await page.waitForTimeout(5000);
-  }
-
-  if (!titleInput) {
-    throw new Error("Nepodařilo se najít políčko pro nadpis příspěvku.");
-  }
-
+  logStep("Vyplňuji nadpis.");
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
   await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 35 });
-  console.log("✅ Nadpis úspěšně vyplněn.");
+  await logPageState(page, "Po vyplnění nadpisu");
 
   await page.waitForTimeout(1000);
 
-  console.log("Vkládám formátovaný text nabídky...");
+  logStep("Vkládám formátovaný popisek nabídky.");
   const formattedText = formatJobPost(job);
-
   await page.keyboard.press("Enter");
   await page.keyboard.press("Enter");
 
@@ -265,8 +514,8 @@ async function createHeroHeroPost(page, job) {
     await page.keyboard.type(line, { delay: 10 });
     await page.keyboard.press("Enter");
   }
+  await logPageState(page, "Po vyplnění popisku");
 
-  // 1. Krok: Šipka z editoru do možností
   await page.waitForTimeout(2000);
   await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
@@ -274,87 +523,70 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(3000);
 
-  // 2. Krok: Šipka z možností do náhledu
-  await page.waitForTimeout(2000);
   await findAndClickButton(page, "Druhá šipka (Možnosti příspěvku -> Náhled)", async ({ btn, text }) => {
     const box = await btn.boundingBox();
     return box && box.y < 100 && box.x > 800 && text === "";
   });
   await page.waitForTimeout(4000);
 
-  // 3. Krok: Finální tlačítko Sdílet
   await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
-    return text.toLowerCase().includes("sdílet");
+    return text.toLowerCase().includes("sdílet") || text.toLowerCase().includes("share");
   });
 
   await page.waitForTimeout(8000);
-  console.log(`✅ Příspěvek "${job.title}" úspěšně odeslán!`);
+  await logPageState(page, "Po odeslání příspěvku");
+  logStep(`Příspěvek "${job.title}" úspěšně odeslán.`);
 }
 
 async function publishHeroHero(inputJob) {
-  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title) 
-    ? DEFAULT_TEST_JOB 
+  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title)
+    ? DEFAULT_TEST_JOB
     : inputJob;
 
-  console.log(`Používám data pro pozici: ${job.title}`);
+  logStep(`Používám data pro pozici: ${job.title}`);
+  logStep(`Persistent profile: ${CONFIG.PROFILE_DIR}`);
+  logStep(`Debug dir: ${CONFIG.DEBUG_DIR}`);
 
-  let browser;
+  ensureDir(CONFIG.PROFILE_DIR);
+  ensureDir(CONFIG.DEBUG_DIR);
+
+  const diagnostics = createDiagnostics();
+  let context;
+  let page;
+
   try {
-    browser = await chromium.launch({ 
+    context = await chromium.launchPersistentContext(CONFIG.PROFILE_DIR, {
       headless: CONFIG.HEADLESS,
-      args: [
-        '--no-sandbox', 
-        '--disable-setuid-sandbox', 
-        '--disable-dev-shm-usage',
-        '--disable-blink-features=AutomationControlled'
-      ]
-    });
-
-    const context = await browser.newContext({
       viewport: CONFIG.VIEWPORT,
       userAgent: CONFIG.USER_AGENT,
       locale: CONFIG.LOCALE,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled"
+      ]
     });
 
-    const page = await context.newPage();
+    page = await context.newPage();
+    attachDiagnostics(page, diagnostics);
 
     await page.addInitScript(() => {
-      Object.defineProperty(navigator, 'webdriver', { get: () => false });
+      Object.defineProperty(navigator, "webdriver", { get: () => false });
     });
 
-    page.on('console', msg => console.log(`[BROWSER CONSOLE] ${msg.text()}`));
-    page.on('pageerror', err => console.log(`[BROWSER ERROR] ${err.message}`));
-    
-    console.log("Otevírám herohero.co/login...");
-    await page.goto("https://herohero.co/login", {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
-
-    await handleCookieBannerIfPresent(page);
-
-    const email = process.env.HEROHERO_EMAIL;
-    const password = process.env.HEROHERO_PASSWORD;
-    if (!email || !password) throw new Error("Chybí přihlašovací údaje v prostředí.");
-
-    await executeModalLogin(page, email, password);
     await createHeroHeroPost(page, job);
-
     return { success: true, job };
   } catch (err) {
-    console.error(`❌ [CHYBA]:`, err.message);
-    if (browser) {
-      try {
-        const pages = await browser.contexts()[0]?.pages();
-        if (pages && pages.length > 0) {
-          await pages[0].screenshot({ path: `error-screenshot-${Date.now()}.png`, fullPage: true });
-          console.log("📸 Uložen screenshot z místa selhání.");
-        }
-      } catch (e) {}
-    }
+    const extra = err.heroHeroDetails || {};
+    const artifacts = await saveFailureArtifacts(page, diagnostics, err, extra).catch(saveErr => {
+      console.error(`[HEROHERO] Nepodařilo se uložit diagnostiku: ${saveErr.message}`);
+      return null;
+    });
+    err.message = `${err.message}${artifacts ? ` | Diagnostika: ${JSON.stringify(artifacts)}` : ""}`;
     throw err;
   } finally {
-    if (browser) await browser.close().catch(() => {});
+    if (context) await context.close().catch(() => {});
   }
 }
 
