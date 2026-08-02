@@ -1,4 +1,4 @@
-    require("dotenv").config();
+require("dotenv").config();
 
 const { chromium } = require("playwright");
 
@@ -86,104 +86,38 @@ const reelTemplates = {
     Spain: "reel/Spanelsko reel.png",
     Sweden: "reel/Svedsko reel.png"
 };
+
 function wrapText(ctx, text, maxWidth, startSize) {
-
     let size = startSize;
-
     while (size >= 20) {
-
         ctx.font = `bold ${size}px Bebas Neue`;
-
         const words = (text || "").split(" ");
-
-        text = (text || "").replace(/\//g, "/ ");
-
         const lines = [];
         let line = "";
 
         for (const word of words) {
-
             const test = line ? `${line} ${word}` : word;
-
             if (ctx.measureText(test).width <= maxWidth) {
                 line = test;
             } else {
                 if (line) lines.push(line);
                 line = word;
             }
-
         }
-
         if (line) lines.push(line);
 
         if (lines.length <= 2) {
             return { size, lines };
         }
-
         size--;
-
     }
-
     return {
         size: 20,
         lines: [text]
     };
-
 }
 
-function drawCentered(ctx, text, x, y, width, startSize, color = "#ffffff") {
-
-    const result = wrapText(ctx, text, width, startSize);
-
-    if (text.length > 24) {
-    result.size -= 15;
-}
-
-if (text.length > 36) {
-    result.size -= 10;
-}
-
-    if (result.lines.length > 2) {
-    result.size -= 18;
-}
-
-   ctx.font = `bold ${result.size}px Bebas Neue`;
-ctx.fillStyle = color;
-
-ctx.textAlign = "left";
-ctx.textBaseline = "top";
-
-const lineHeight = result.size + 10;
-
-result.lines.forEach((line, index) => {
-
-    const textX = x 
-    const textY = y + index * lineHeight;
-
-    // Černý obrys
-    ctx.lineWidth = 6;
-    ctx.strokeStyle = "#000000";
-    ctx.strokeText(line, textX, textY);
-
-   ctx.save();
-
-ctx.lineJoin = "round";
-ctx.lineCap = "round";
-ctx.miterLimit = 2;
-
-ctx.strokeStyle = "#000000";
-ctx.lineWidth = 8;
-ctx.strokeText(line, textX, textY);
-
-ctx.fillStyle = "#ffffff";
-ctx.fillText(line, textX, textY);
-
-ctx.restore();
-        });
-
-}
 async function createImage(job, templateFile) {
-
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
 
     if (!fs.existsSync(fullPath)) {
@@ -191,85 +125,112 @@ async function createImage(job, templateFile) {
     }
 
     const template = await loadImage(fullPath);
-
     const canvas = createCanvas(template.width, template.height);
     const ctx = canvas.getContext("2d");
 
-ctx.drawImage(template, 0, 0);
+    ctx.drawImage(template, 0, 0);
 
-// ZEMĚ (3× větší)
-ctx.font = "156px Bebas Neue";
-ctx.fillStyle = "#ffffff";
-ctx.strokeStyle = "#000000";
-ctx.lineWidth = 10;
+    const startX = 90;
+    const startY = 220;
+    const maxWidth = template.width - (startX * 2);
 
-if (job.country !== "NEUVEDENO") {
-  ctx.strokeText((job.country || "").toUpperCase(), 90, 320);
-ctx.fillText((job.country || "").toUpperCase(), 90, 320);
-}
-// PRACOVNÍ NABÍDKA (2× větší)
-ctx.font = "104px Bebas Neue";
-ctx.lineWidth = 8;
+    // 1. COUNTRY
+    let countrySize = 135;
+    ctx.font = `bold ${countrySize}px Bebas Neue`;
+    const countryText = (job.country || "").toUpperCase();
 
-ctx.strokeText(job.job_title || "", 90, 530);
-ctx.fillText(job.job_title || "", 90, 530);
-    
-// MZDA (o 50 % větší)
-ctx.font = "78px Bebas Neue";
-ctx.lineWidth = 7;
+    // 2. JOB TITLE
+    let jobTitleText = (job.job_title || "").toUpperCase();
+    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, 85);
+    let jobSize = jobWrapped.size;
+    if (jobWrapped.lines.length > 2) {
+        jobSize = Math.max(35, jobSize - 10);
+    }
 
-if (job.salary_czk_month && job.salary_czk_month !== "NEUVEDENO") {
-    ctx.strokeText(job.salary_czk_month, 90, 640);
-    ctx.fillText(job.salary_czk_month, 90, 640);
-}
-    
-// JAZYK
-ctx.font = "52px Bebas Neue";
-ctx.lineWidth = 6;
+    // 3. SALARY - opraveno: pokud objekt obsahuje mzdu přímo (např. job.salary), zkontrolujeme ji, jinak zkusíme salary_czk_month. Pokud neexistuje vůbec nebo je NEUVEDENO, nezobrazí se.
+    let salarySize = 75;
+    let salaryText = "";
+    const rawSalary = job.salary || job.salary_czk_month;
+    if (rawSalary && typeof rawSalary === "string" && rawSalary.trim() !== "" && rawSalary !== "NEUVEDENO") {
+        salaryText = rawSalary;
+    }
 
-if (job.language && job.language !== "NEUVEDENO") {
-    ctx.strokeText(job.language, 90, 750);
-    ctx.fillText(job.language, 90, 750);
-}
-    
-return canvas.toBuffer("image/png");
+    // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
+    let bottomSize = 48;
+    let ubytovaniText = "UBYTOVÁNÍ ZAJIŠTĚNO.";
+    let anglictinaText = "ANGLIČTINA";
 
+    const drawLineWithStroke = (text, x, y, size, lineWidth = 5) => {
+        if (!text) return;
+        ctx.font = `bold ${size}px Bebas Neue`;
+        ctx.textAlign = "left";
+        ctx.textBaseline = "top";
+
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = lineWidth;
+        ctx.strokeText(text, x, y);
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(text, x, y);
+        ctx.restore();
+    };
+
+    let currentY = startY;
+
+    // Render Country
+    drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
+    currentY += countrySize * 0.95; // Zvětšený rozestup pod zemí
+
+    // Render Job Title
+    ctx.font = `bold ${jobSize}px Bebas Neue`;
+    const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize);
+    currentJobWrapped.lines.forEach((line, index) => {
+        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.15), jobSize, 7);
+    });
+    currentY += currentJobWrapped.lines.length * jobSize * 1.15 + 20; // Zvětšený rozestup pod pozicí
+
+    // Render Salary (pouze pokud je reálně k dispozici)
+    if (salaryText) {
+        drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
+        currentY += salarySize * 1.25; // Zvětšený rozestup pod mzdou
+    }
+
+    // Render Ubytování
+    drawLineWithStroke(ubytovaniText, startX, currentY, bottomSize, 5);
+    currentY += bottomSize * 1.25; // Zvětšený rozestup mezi ubytováním a angličtinou
+
+    // Render Angličtina
+    drawLineWithStroke(anglictinaText, startX, currentY, bottomSize, 5);
+
+    return canvas.toBuffer("image/png");
 }
 
 async function uploadBuffer(buffer) {
-    
     console.log("FFmpeg START");  
     
     return await new Promise((resolve, reject) => {
-
-    console.log("FFmpeg HOTOVO");
+        console.log("FFmpeg HOTOVO");
         
         const stream = cloudinary.uploader.upload_stream(
-
             {
                 folder: "PracovniTipyAI"
             },
-
             (err, result) => {
-
                 if (err) {
                     return reject(err);
                 }
-
                 resolve(result.secure_url);
-
             }
-
         );
-
         stream.end(buffer);
-
     });
-
 }
 
 async function createReel(imageBuffer) {
-    
     const id = Date.now();
 
     const imagePath = path.join(os.tmpdir(), `${id}.png`);
@@ -278,73 +239,69 @@ async function createReel(imageBuffer) {
     fs.writeFileSync(imagePath, imageBuffer);
 
     await new Promise((resolve, reject) => {
-
- ffmpeg()
-    .input(imagePath)
-    .inputOptions([
-        "-loop", "1",
-        "-framerate", "25"
-    ])
-    .videoCodec("libx264")
-    .outputOptions([
-        "-t", "8",
-        "-vf", "scale=720:1280",
-        "-pix_fmt", "yuv420p",
-        "-preset", "ultrafast",
-        "-threads", "1",
-        "-movflags", "+faststart"
-    ])
-    .on("start", cmd => {
-        console.log("FFMPEG CMD:");
-        console.log(cmd);
-    })
-    .on("stderr", line => {
-        console.log("FFMPEG:", line);
-    })
-    .on("error", err => {
-        console.log("FFMPEG ERROR:");
-        console.error(err);
-        reject(err);
-    })
-    .on("end", () => {
-        console.log("FFMPEG END");
-        resolve();
-    })
-    .save(videoPath);
+        ffmpeg()
+            .input(imagePath)
+            .inputOptions([
+                "-loop", "1",
+                "-framerate", "25"
+            ])
+            .videoCodec("libx264")
+            .outputOptions([
+                "-t", "8",
+                "-vf", "scale=720:1280",
+                "-pix_fmt", "yuv420p",
+                "-preset", "ultrafast",
+                "-threads", "1",
+                "-movflags", "+faststart"
+            ])
+            .on("start", cmd => {
+                console.log("FFMPEG CMD:");
+                console.log(cmd);
+            })
+            .on("stderr", line => {
+                console.log("FFMPEG:", line);
+            })
+            .on("error", err => {
+                console.log("FFMPEG ERROR:");
+                console.error(err);
+                reject(err);
+            })
+            .on("end", () => {
+                console.log("FFMPEG END");
+                resolve();
+            })
+            .save(videoPath);
     });
-console.log("Video existuje:", fs.existsSync(videoPath));
+    console.log("Video existuje:", fs.existsSync(videoPath));
 
-if (fs.existsSync(videoPath)) {
-    console.log("Velikost videa:", fs.statSync(videoPath).size);
-}
+    if (fs.existsSync(videoPath)) {
+        console.log("Velikost videa:", fs.statSync(videoPath).size);
+    }
 
-console.log("Cesta:", videoPath);
+    console.log("Cesta:", videoPath);
+    console.log("UPLOAD VIDEO START");
 
-console.log("UPLOAD VIDEO START");
+    let result;
 
-let result;
+    try {
+        console.log("Zacinam upload do Cloudinary...");
+        result = await cloudinary.uploader.upload(videoPath, {
+            resource_type: "video",
+            folder: "PracovniTipyAI/reels"
+        });
+        console.log("UPLOAD VIDEO HOTOVO");
+        console.log("VIDEO URL:", result.secure_url);
+        console.dir(result, { depth: null });
+    } catch (e) {
+        console.log("UPLOAD VIDEO CHYBA");
+        console.dir(e, { depth: null });
+        throw e;
+    }
 
-try {
-    console.log("Zacinam upload do Cloudinary...");
-    result = await cloudinary.uploader.upload(videoPath, {
-    resource_type: "video",
-    folder: "PracovniTipyAI/reels"
-    });
-console.log("UPLOAD VIDEO HOTOVO");
-console.log("VIDEO URL:", result.secure_url);
-console.dir(result, { depth: null });
-    
-} catch (e) {
-    console.log("UPLOAD VIDEO CHYBA");
-    console.dir(e, { depth: null });
-    throw e;
-}
+    if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
 
-if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
-if (fs.existsSync(videoPath)) fs.unlinkSync(videoPath);
-
-return result.secure_url;
-
+    return result.secure_url;
 }
 
 app.get("/", (req, res) => {
@@ -352,7 +309,6 @@ app.get("/", (req, res) => {
 });
 
 app.post("/generate", async (req, res) => {
-
     console.log("REQUEST PRIJATA");
     console.dir(req.body, { depth: null });
 
@@ -370,14 +326,11 @@ app.post("/generate", async (req, res) => {
     }
 
     try {
-
         const herohero = [];
         const instagram = [];
 
         // HEROHERO
-
         for (const job of jobs) {
-
             console.log("HERO JOB:", job.job_title);
 
             const template = heroTemplates[job.country_code];
@@ -398,34 +351,28 @@ app.post("/generate", async (req, res) => {
             console.log("HERO IMAGE URL:", imageUrl);
 
             herohero.push({
-    ...job,
-
-postId: job.postId,
-categoryId: job.categoryId,
-                
-    title: job.job_title,
-    text: job.description,
-textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
-    imageUrl,
-
-    width: 1080,
-    height: 1350,
-    fileName: `${job.country} Herohero.png`,
-    fileSize: 0,
-
-    previewLevel: "FIRST_LINES",
-    isAgeRestricted: false,
-    isSponsored: false,
-    isExcludedFromRss: false
-});
+                ...job,
+                postId: job.postId,
+                categoryId: job.categoryId,
+                title: job.job_title,
+                text: job.description,
+                textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
+                imageUrl,
+                width: 1080,
+                height: 1350,
+                fileName: `${job.country} Herohero.png`,
+                fileSize: 0,
+                previewLevel: "FIRST_LINES",
+                isAgeRestricted: false,
+                isSponsored: false,
+                isExcludedFromRss: false
+            });
 
             console.log("HERO PUSH OK");
         }
 
         // REELS
-
         for (const reel of reels) {
-
             console.log("REEL:", reel.job_title);
             console.log("COUNTRY CODE:", reel.country_code);
 
@@ -456,7 +403,6 @@ textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
 
         console.log("HERO COUNT:", herohero.length);
         console.log("INSTAGRAM COUNT:", instagram.length);
-
         console.log("POSILAM RESPONSE");
 
         res.json({
@@ -466,7 +412,6 @@ textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
         });
 
     } catch (err) {
-
         console.error("FULL ERROR:");
         console.dir(err, { depth: null });
 
@@ -489,12 +434,11 @@ textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
 
 app.get("/test-playwright", async (req, res) => {
     try {
-
         console.log("HOST:", require("os").hostname());
 
-const browser = await chromium.launch({
-    headless: true
-});
+        const browser = await chromium.launch({
+            headless: true
+        });
 
         const page = await browser.newPage();
 
@@ -506,61 +450,60 @@ const browser = await chromium.launch({
 
         await browser.close();
 
-      res.json({
-    success: true,
-    title,
-    hostname: require("os").hostname()
-});
+        res.json({
+            success: true,
+            title,
+            hostname: require("os").hostname()
+        });
 
     } catch (err) {
-
         console.error(err);
-
         res.status(500).json({
             success: false,
             error: err.message
         });
-
     }
 });
 
 app.post("/publishHeroHero", async (req, res) => {
+    const mod = require("./publishHeroHero");
 
-const mod = require("./publishHeroHero");
-
-console.log("EXPORT =", mod);
-console.log("KEYS =", Object.keys(mod));
-console.log("CACHE =", require.resolve("./publishHeroHero"));
+    console.log("EXPORT =", mod);
+    console.log("KEYS =", Object.keys(mod));
+    console.log("CACHE =", require.resolve("./publishHeroHero"));
     
     const publishHeroHero = require("./publishHeroHero");
 
-console.log("EXPORT =", publishHeroHero);
-console.log("KEYS =", Object.keys(publishHeroHero));
+    console.log("EXPORT =", publishHeroHero);
+    console.log("KEYS =", Object.keys(publishHeroHero));
     
     try {
-
-    await publishHeroHero(req.body);
-
-    res.json({
-        success: true
-    });
-
-} catch (e) {
-
-    console.error(e);
-
-    res.status(500).json({
-        success: false,
-        error: e.message
-    });
-
-}
-
-    });
+        await publishHeroHero(req.body);
+        res.json({
+            success: true
+        });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({
+            success: false,
+            error: e.message
+        });
+    }
+});
 
 app.post("/herohero/upload", upload.single("image"), async (req, res) => {
   console.log("HeroHero upload přijat");
   res.json({ success: true });
+});
+
+app.get("/debug", (req, res) => {
+    const file = path.join(__dirname, "debug.tar.gz");
+
+    if (!fs.existsSync(file)) {
+        return res.status(404).send("debug.tar.gz nebyl nalezen");
+    }
+
+    res.download(file);
 });
 
 app.listen(PORT, () => {
