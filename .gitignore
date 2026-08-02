@@ -1,0 +1,12 @@
+node_modules/
+.env
+.env.save
+herohero-auth.json
+.DS_Store
+
+error-screenshot-*.png
+
+node_modules/playwright-core/.local-browsers/
+node_modules/fsevents/
+
+*.log
