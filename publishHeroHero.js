@@ -980,7 +980,8 @@ async function createHeroHeroPost(page, job) {
   logStep("Vyplňuji nadpis.");
   await titleInput.scrollIntoViewIfNeeded();
   await titleInput.click({ force: true });
-  await page.keyboard.type(job.title || "Nová pracovní nabídka", { delay: 35 });
+  const cleanTitle = stripLeadingEmoji(job.title || job.job_title || "Nová pracovní nabídka");
+  await page.keyboard.type(`${relevantJobEmoji(cleanTitle)} ${cleanTitle}`, { delay: 35 });
   await logPageState(page, "Po vyplnění nadpisu");
 
   await page.waitForTimeout(10000);
