@@ -458,10 +458,16 @@ function normalizeTextLines(value) {
   }
 
   if (typeof value === "string") {
-    return value
+    const lines = value
       .split(/\r?\n/)
       .map(line => line.trim())
       .filter(Boolean);
+    // Make někdy převede pole na jeden řetězec oddělený čárkami. Krátké
+    // seznamy bezpečně rozbalíme, aby na HeroHero nevznikla jedna obří odrážka.
+    if (lines.length === 1 && (lines[0].match(/,/g) || []).length >= 2) {
+      return lines[0].split(/,\s+(?=[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ])/).map(line => line.trim()).filter(Boolean);
+    }
+    return lines;
   }
 
   return [];
@@ -628,18 +634,30 @@ function formatSalaryLine(job) {
   const original = /^(mzda\s*)?(neuvedena|neuvedeno|neuveden)$/i.test(rawSalary) ? "" : rawSalary;
   const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
 
-  if (!original && !czk) return "💰 Mzda: neuvedena";
+  if (czk) return `💰 ${/kč/i.test(czk) ? czk : `${czk} Kč / měsíc`}`;
+  if (original) return `💰 ${original}`;
+  return "💰 Mzda neuvedena";
+}
 
-  let result = `💰 Mzda: ${original || czk}`;
-  if (original && czk && !original.includes(czk)) {
-    const czkLabel = /kč/i.test(czk) ? czk : `${czk} Kč / měsíc`;
-    result += ` (cca ${czkLabel})`;
-  }
-  return result;
+function relevantJobEmoji(title) {
+  const value = String(title || "").toLowerCase();
+  if (/kuch|dish|nádob/.test(value)) return "🍴";
+  if (/mas|řez|uzen/.test(value)) return "🥩";
+  if (/květ|flower/.test(value)) return "🌷";
+  if (/ovoce|zelenin|fruit|farm|skliz/.test(value)) return "🍎";
+  if (/sklad|vychyst|picker|balen|logisti/.test(value)) return "📦";
+  if (/hotel|resort|pokoj|housekeep|úklid/.test(value)) return "🏨";
+  if (/výrob|potrav/.test(value)) return "🏭";
+  return "💼";
+}
+
+function stripLeadingEmoji(value) {
+  return String(value || "Pracovní nabídka").replace(/^\s*[\p{Extended_Pictographic}\uFE0F]+\s*/u, "").trim();
 }
 
 function formatJobPost(job) {
-  const title = job.title || "Pracovní nabídka";
+  const title = stripLeadingEmoji(job.title || job.job_title);
+  const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
   const locationValue = job.location || job.country;
   const location = `📍 ${hasUsefulJobValue(locationValue) ? locationValue : "Lokalita neuvedena"}`;
@@ -648,39 +666,39 @@ function formatJobPost(job) {
   const startDate = hasUsefulJobValue(rawStartDate) ? `⏰ Nástup ${rawStartDate}` : "⏰ Nástup neuveden";
   const contractType = hasUsefulJobValue(rawContractType) ? `🕒 ${rawContractType}` : "🕒 Typ úvazku neuveden";
   const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
-  const language = `🌍 ${!rawLanguage || /^jazyk\s+neuveden$/i.test(rawLanguage) ? "Jazyk neuveden" : `Jazyk: ${rawLanguage}`}`;
+  const language = `🌍 ${!rawLanguage || /^jazyk\s+neuveden$/i.test(rawLanguage) ? "Jazyk neuveden" : `Jazyk ${rawLanguage.replace(/^jazyk\s*:?\s*/i, "")}`}`;
   const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
 
-  let output = `💼 ${title}\n`;
+  let output = `${titleEmoji} ${title}\n`;
   output += `${salary}\n\n`;
-  output += `${location}\n`;
-  output += `${startDate}\n`;
-  output += `${contractType}\n`;
+  output += `${location}\n\n`;
+  output += `${startDate}\n\n`;
+  output += `${contractType}\n\n`;
   output += `${language}\n`;
   if (link) output += `\n${link}\n`;
 
   const descriptionLines = extractJobBodyLines(job);
   if (descriptionLines.length > 0) {
     output += `\n🔧 Náplň práce\n\n`;
-    for (const point of descriptionLines) output += `• ${point}\n`;
+    for (const point of descriptionLines) output += `• ${point}\n\n`;
   }
 
   output += `\n🏠 Ubytování\n\n`;
-  output += `• ${hasUsefulJobValue(job.accommodation) ? job.accommodation : "Ubytování neuvedeno"}\n`;
+  output += `• ${hasUsefulJobValue(job.accommodation) ? job.accommodation : "Ubytování neuvedeno"}\n\n`;
 
   output += `\n🍽️ Strava\n\n`;
-  output += `• ${hasUsefulJobValue(job.meals) ? job.meals : "Strava neuvedena"}\n`;
+  output += `• ${hasUsefulJobValue(job.meals) ? job.meals : "Strava neuvedena"}\n\n`;
 
   const requirementLines = normalizeTextLines(job.requirements);
   output += `\n📋 Požadavky\n\n`;
   if (requirementLines.length > 0) {
-    for (const point of requirementLines) output += `• ${point}\n`;
+    for (const point of requirementLines) output += `• ${point}\n\n`;
   } else output += `• Požadavky neuvedeny\n`;
 
   const advantageLines = normalizeTextLines(job.advantages);
   output += `\n⭐ Výhody\n\n`;
   if (advantageLines.length > 0) {
-    for (const point of advantageLines) output += `• ${point}\n`;
+    for (const point of advantageLines) output += `• ${point}\n\n`;
   } else output += `• Výhody neuvedeny\n`;
 
   output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.\n`;
@@ -806,6 +824,38 @@ async function downloadImageToTempFile(imageUrl) {
 
   logStep(`Obrázek stažen do: ${resolvedFilePath}`);
   return resolvedFilePath;
+}
+
+const HEROHERO_COUNTRY_CATEGORIES = {
+  Austria: "Rakousko", Belgium: "Belgie", Denmark: "Dánsko", Estonia: "Estonsko",
+  Finland: "Finsko", France: "Francie", Netherlands: "Holandsko", Ireland: "Irsko",
+  Italy: "Itálie", Cyprus: "Kypr", Malta: "Malta", Germany: "Německo",
+  Norway: "Norsko", Greece: "Řecko", Spain: "Španělsko", Sweden: "Švédsko"
+};
+
+async function selectCountryCategory(page, job) {
+  const countryKey = String(job.country_code || job.country || "").trim();
+  const label = HEROHERO_COUNTRY_CATEGORIES[countryKey] || countryKey;
+  if (!label) {
+    logStep("Země chybí, výběr kategorie přeskakuji.");
+    return;
+  }
+
+  logStep(`Vybírám kategorii země: ${label}`);
+  const matches = page.getByText(label, { exact: true });
+  await matches.first().waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
+  let category = null;
+  for (let index = 0; index < await matches.count(); index++) {
+    const candidate = matches.nth(index);
+    if (await candidate.isVisible().catch(() => false)) {
+      category = candidate;
+      break;
+    }
+  }
+  if (!category) throw new Error(`Kategorie země není viditelná: ${label}`);
+  await category.click({ timeout: 10000 });
+  await page.waitForTimeout(1000);
+  logStep(`Kategorie země vybrána: ${label}`);
 }
 
 async function createHeroHeroPost(page, job) {
@@ -972,6 +1022,8 @@ async function createHeroHeroPost(page, job) {
     return type === "submit" && form === "create-post-form" && text === "";
   });
   await page.waitForTimeout(10000);
+
+  await selectCountryCategory(page, job);
 
   // Na obrazovce Možnosti příspěvku je šipka router-link (<a>), ne <button>.
   // Geometrické hledání mezi buttony ji proto nikdy nemohlo najít.
