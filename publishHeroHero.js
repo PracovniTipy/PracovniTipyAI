@@ -835,14 +835,12 @@ async function createHeroHeroPost(page, job) {
 
   logStep("Vkládám formátovaný popisek nabídky.");
   const formattedText = formatJobPost(job);
-  await page.keyboard.press("Enter");
-  await page.keyboard.press("Enter");
-
-  const lines = formattedText.split("\n");
-  for (const line of lines) {
-    await page.keyboard.type(line, { delay: 10 });
-    await page.keyboard.press("Enter");
-  }
+  // Globální keyboard.type se v dynamickém editoru po jeho překreslení může
+  // zaseknout nebo psát do titulku. Tělo příspěvku má vlastní contenteditable
+  // pole; Playwright ho vyplní přímo a atomicky.
+  const bodyEditor = page.locator('div[contenteditable="true"]:visible, textarea:visible').first();
+  await bodyEditor.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
+  await bodyEditor.fill(formattedText);
   await logPageState(page, "Po vyplnění popisku");
 
   await page.waitForTimeout(10000);
