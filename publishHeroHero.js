@@ -833,7 +833,49 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(3000);
   await nukeOverlays(page);
 
-  const titleInput = await verifyCreateEditor(page, createUrl);
+  let titleInput;
+  try {
+    titleInput = await verifyCreateEditor(page, createUrl);
+  } catch (error) {
+    // Persistentní profil může po předchozím publikování obsahovat relaci,
+    // která je sice přihlášená, ale /create vrátí „K této stránce nemáš
+    // přístup“. V takovém případě login modal není vidět, takže běžná
+    // detekce přihlášení nestačí. Bezpečně obnovíme relaci ještě před tím,
+    // než se začne vyplňovat formulář; žádný příspěvek tedy nemůže vzniknout
+    // dvakrát.
+    if (!error?.heroHeroDetails?.heroHeroErrorPage) {
+      throw error;
+    }
+
+    const email = process.env.HEROHERO_EMAIL;
+    const password = process.env.HEROHERO_PASSWORD;
+    if (!email || !password) {
+      throw error;
+    }
+
+    logStep("/create vrátil stránku bez oprávnění. Obnovuji relaci autora.");
+    await page.context().clearCookies();
+    await page.evaluate(() => {
+      window.localStorage.clear();
+      window.sessionStorage.clear();
+    });
+
+    await page.goto(`${createUrl}?mode=signIn`, {
+      waitUntil: "domcontentloaded",
+      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+    });
+    await handleCookieBannerIfPresent(page);
+    await executeModalLogin(page, email, password);
+
+    await page.goto(createUrl, {
+      waitUntil: "domcontentloaded",
+      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+    });
+    await handleCookieBannerIfPresent(page);
+    await page.waitForTimeout(3000);
+    await nukeOverlays(page);
+    titleInput = await verifyCreateEditor(page, createUrl);
+  }
 
   await uploadImageIfPresent(page, job);
 
