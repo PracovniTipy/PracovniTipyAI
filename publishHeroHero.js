@@ -783,7 +783,9 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(10000);
   await nukeOverlays(page);
 
-  if (await isLoginScreen(page)) {
+  const loginScreenDetected = await isLoginScreen(page);
+  logStep(`isLoginScreen(page) = ${loginScreenDetected}`);
+  if (page.url().includes("mode=signIn") || loginScreenDetected) {
     const email = process.env.HEROHERO_EMAIL;
     const password = process.env.HEROHERO_PASSWORD;
 
@@ -792,6 +794,7 @@ async function createHeroHeroPost(page, job) {
     }
 
     logStep("Používám HeroHero přihlašovací údaje.");
+    logStep("Starting executeModalLogin");
     await executeModalLogin(page, email, password);
   }
 
