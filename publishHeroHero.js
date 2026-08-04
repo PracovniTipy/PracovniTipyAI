@@ -522,7 +522,10 @@ async function executeModalLogin(page, email, password) {
     throw error;
   }
 
-  const nextBtn = page.locator('input[type="email"] + button, input[type="email"] ~ button, button[aria-label*="pokrač" i], button[title*="pokrač" i], button:has-text("Pokračovat"), button:has-text("Continue")').first();
+  // V login dialogu jsou před e-mailem také tlačítka "Pokračovat Googlem",
+  // Facebookem a Applem. Textový selector proto omylem spouštěl Google OAuth.
+  // Poslední tlačítko dialogu je šipka přímo u e-mailového pole.
+  const nextBtn = page.getByRole("dialog").locator("button").last();
   logStep("Čekám na pokračovací tlačítko po emailu.");
   try {
     await nextBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
