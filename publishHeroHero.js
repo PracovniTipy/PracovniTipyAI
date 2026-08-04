@@ -388,11 +388,15 @@ async function findAndClickButton(page, stepDescription, identifierPredicate) {
       const text = (await btn.innerText()).trim();
       const ariaLabel = await btn.getAttribute("aria-label") || "";
       const className = await btn.getAttribute("class") || "";
+      const type = await btn.getAttribute("type") || "";
+      const form = await btn.getAttribute("form") || "";
+      const title = await btn.getAttribute("title") || "";
+      const isEnabled = await btn.isEnabled();
       const box = await btn.boundingBox();
 
-      logStep(`Button #${i}: text="${text}" aria="${ariaLabel}" class="${className}" box=${JSON.stringify(box)}`);
+      logStep(`Button #${i}: text="${text}" aria="${ariaLabel}" title="${title}" type="${type}" form="${form}" enabled=${isEnabled} class="${className}" box=${JSON.stringify(box)}`);
 
-      if (await identifierPredicate({ btn, text, ariaLabel, className, index: i })) {
+      if (isEnabled && await identifierPredicate({ btn, text, ariaLabel, title, type, form, className, index: i })) {
         targetButton = btn;
         logStep(`Vybrán button #${i} pro "${stepDescription}".`);
         break;
@@ -840,13 +844,26 @@ async function createHeroHeroPost(page, job) {
   // pole; Playwright ho vyplní přímo a atomicky.
   const bodyEditor = page.locator('div[contenteditable="true"]:visible, textarea:visible').first();
   await bodyEditor.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
-  await bodyEditor.fill(formattedText);
+  // HeroHero používá reaktivní rich-text editor. Samotné locator.fill() sice
+  // změnilo DOM, ale aplikace změnu nezaregistrovala a tlačítko Další zůstalo
+  // disabled. Vložení přes aktivní editor vyvolá skutečný input event bez
+  // pomalého psaní znak po znaku.
+  await bodyEditor.click({ force: true });
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.insertText(formattedText);
+
+  const insertedBody = (await bodyEditor.getAttribute("contenteditable")) === "true"
+    ? (await bodyEditor.innerText()).trim()
+    : (await bodyEditor.inputValue()).trim();
+  if (!insertedBody) {
+    throw new Error("HeroHero editor po vložení neobsahuje žádný text.");
+  }
+  logStep(`Popisek vložen do editoru (${insertedBody.length} znaků).`);
   await logPageState(page, "Po vyplnění popisku");
 
   await page.waitForTimeout(10000);
-  await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ btn, text }) => {
-    const box = await btn.boundingBox();
-    return box && box.y < 100 && box.x > 800 && text === "";
+  await findAndClickButton(page, "První šipka (Editor -> Možnosti příspěvku)", async ({ text, type, form }) => {
+    return type === "submit" && form === "create-post-form" && text === "";
   });
   await page.waitForTimeout(10000);
 
