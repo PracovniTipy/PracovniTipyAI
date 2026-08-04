@@ -842,7 +842,15 @@ async function createHeroHeroPost(page, job) {
   // Globální keyboard.type se v dynamickém editoru po jeho překreslení může
   // zaseknout nebo psát do titulku. Tělo příspěvku má vlastní contenteditable
   // pole; Playwright ho vyplní přímo a atomicky.
-  const bodyEditor = page.locator('div[contenteditable="true"]:visible, textarea:visible').first();
+  // Titulek je na HeroHero také textarea a je v DOM dříve než rich-text tělo.
+  // Smíšený selector s .first() proto omylem přepisoval titulek popiskem a
+  // formulář zůstal neplatný. Tělo příspěvku je samostatný contenteditable.
+  let bodyEditor = page.locator('div[contenteditable="true"]:visible').first();
+  if ((await bodyEditor.count()) === 0) {
+    // Záložní varianta pro případ změny HeroHero editoru: poslední textarea je
+    // tělo, zatímco první patří titulku.
+    bodyEditor = page.locator('textarea:visible').last();
+  }
   await bodyEditor.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
   // HeroHero používá reaktivní rich-text editor. Samotné locator.fill() sice
   // změnilo DOM, ale aplikace změnu nezaregistrovala a tlačítko Další zůstalo
