@@ -584,12 +584,15 @@ async function executeModalLogin(page, email, password) {
     throw error;
   }
 
-  logStep("Čekám na přesměrování po loginu.");
+  logStep("Čekám na dokončení přihlášení.");
   try {
-    await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
-    logStep(`Aktuální URL po loginu: ${page.url()}`);
+    // URL je /create už před odesláním formuláře, takže waitForURL by skončil
+    // okamžitě. Autoritativní signál je až zmizení password inputu po odpovědi
+    // /auth/v1/firebase/verify.
+    await passwordInput.waitFor({ state: "hidden", timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
+    logStep(`Přihlašovací formulář zmizel. Aktuální URL: ${page.url()}`);
   } catch (error) {
-    logStep(`Přesměrování po loginu selhalo: ${error?.message || error}`);
+    logStep(`Dokončení loginu selhalo: ${error?.message || error}`);
     throw error;
   }
 
