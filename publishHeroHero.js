@@ -779,10 +779,13 @@ async function createHeroHeroPost(page, job) {
 
   logStep("Čekám na stabilizaci SPA rozhraní.");
   await page.waitForTimeout(3000);
-  await nukeOverlays(page);
 
+  // Na odhlášené stránce /create je login zobrazen jako modal nad hláškou
+  // "K této stránce nemáš přístup". Escape modal zavře, proto se login musí
+  // detekovat ještě před jakýmkoli zavíráním překryvů.
   const loginScreenDetected = await isLoginScreen(page);
   logStep(`isLoginScreen(page) = ${loginScreenDetected}`);
+  let loginPerformed = false;
   if (page.url().includes("mode=signIn") || page.url().includes("/login") || loginScreenDetected) {
     const email = process.env.HEROHERO_EMAIL;
     const password = process.env.HEROHERO_PASSWORD;
@@ -794,9 +797,12 @@ async function createHeroHeroPost(page, job) {
     logStep("Používám HeroHero přihlašovací údaje.");
     logStep("Starting executeModalLogin");
     await executeModalLogin(page, email, password);
+    loginPerformed = true;
   }
 
-  if (!page.url().includes("/create")) {
+  // HeroHero po přihlášení často ponechá původní access-denied komponentu na
+  // stejné URL. Nová navigace načte stránku už s čerstvou autorizací.
+  if (loginPerformed || !page.url().includes("/create")) {
     logStep(`Otevírám stránku: ${createUrl}`);
     await page.goto(createUrl, {
       waitUntil: "domcontentloaded",
