@@ -6,14 +6,12 @@ const os = require("os");
 const path = require("path");
 
 console.log("==========================================");
-console.log("🚀 HEROHERO PUBLISHER - PERSISTENT PROFILE");
+console.log("🚀 HEROHERO PUBLISHER");
 console.log("==========================================");
 
 const CONFIG = {
-  PROFILE_DIR: path.resolve(process.env.HEROHERO_PROFILE_DIR || path.join(__dirname, "herohero-profile")),
   DEBUG_DIR: path.resolve(process.env.HEROHERO_DEBUG_DIR || path.join(__dirname, "herohero-debug")),
   HEADLESS: process.env.HEADLESS !== "false",
-  FRESH_PROFILE: process.env.HEROHERO_FRESH_PROFILE === "true",
   TIMEOUTS: {
     PAGE_NAVIGATION: 60000,
     ELEMENT_WAIT: 30000,
@@ -802,37 +800,21 @@ async function publishHeroHero(inputJob) {
   let page;
 
   try {
-    if (CONFIG.FRESH_PROFILE) {
-      logStep("[HEROHERO] Running with fresh temporary profile");
-      browser = await chromium.launch({
-        headless: CONFIG.HEADLESS,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-blink-features=AutomationControlled"
-        ]
-      });
+    browser = await chromium.launch({
+      headless: CONFIG.HEADLESS,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-blink-features=AutomationControlled"
+      ]
+    });
 
-      context = await browser.newContext({
-        viewport: CONFIG.VIEWPORT,
-        userAgent: CONFIG.USER_AGENT,
-        locale: CONFIG.LOCALE,
-      });
-    } else {
-      context = await chromium.launchPersistentContext(CONFIG.PROFILE_DIR, {
-        headless: CONFIG.HEADLESS,
-        viewport: CONFIG.VIEWPORT,
-        userAgent: CONFIG.USER_AGENT,
-        locale: CONFIG.LOCALE,
-        args: [
-          "--no-sandbox",
-          "--disable-setuid-sandbox",
-          "--disable-dev-shm-usage",
-          "--disable-blink-features=AutomationControlled"
-        ]
-      });
-    }
+    context = await browser.newContext({
+      viewport: CONFIG.VIEWPORT,
+      userAgent: CONFIG.USER_AGENT,
+      locale: CONFIG.LOCALE,
+    });
 
     page = await context.newPage();
     attachDiagnostics(page, diagnostics);
