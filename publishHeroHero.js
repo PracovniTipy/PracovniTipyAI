@@ -864,13 +864,33 @@ async function createHeroHeroPost(page, job) {
       waitUntil: "domcontentloaded",
       timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
     });
+    // Cookie dialog se po čisté navigaci vykreslí až s krátkým zpožděním.
+    // Bez tohoto čekání ho handler mine a executeModalLogin pak omylem vezme
+    // cookie dialog jako přihlašovací dialog.
+    await page.waitForTimeout(3000);
     await handleCookieBannerIfPresent(page);
-    await executeModalLogin(page, email, password);
 
-    await page.goto(createUrl, {
-      waitUntil: "domcontentloaded",
-      timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
-    });
+    // HeroHero ukládá část přihlášení mimo cookies/localStorage. Po jejich
+    // vyčištění proto může být editor znovu dostupný rovnou a žádný login
+    // dialog se neotevře. Login provádíme jen tehdy, když je formulář opravdu
+    // viditelný; jinak pokračujeme s obnoveným editorem.
+    const recoveryLoginVisible = await isLoginScreen(page);
+    logStep(`Recovery isLoginScreen(page) = ${recoveryLoginVisible}`);
+    if (recoveryLoginVisible) {
+      await executeModalLogin(page, email, password);
+      await page.goto(createUrl, {
+        waitUntil: "domcontentloaded",
+        timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+      });
+    } else {
+      logStep("Přihlašovací dialog se neotevřel; ověřuji obnovený editor bez dalšího loginu.");
+      if (!page.url().includes("/create")) {
+        await page.goto(createUrl, {
+          waitUntil: "domcontentloaded",
+          timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
+        });
+      }
+    }
     await handleCookieBannerIfPresent(page);
     await page.waitForTimeout(3000);
     await nukeOverlays(page);
