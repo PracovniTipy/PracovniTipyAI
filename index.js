@@ -117,6 +117,16 @@ function wrapText(ctx, text, maxWidth, startSize) {
     };
 }
 
+function isMissingValue(value) {
+    if (value === null || value === undefined) return true;
+    const normalized = String(value).trim().toLowerCase();
+    return !normalized || ["neuvedeno", "neuvedena", "neuveden", "není uvedeno", "n/a", "unknown"].includes(normalized);
+}
+
+function naturalFallback(value, fallback) {
+    return isMissingValue(value) ? fallback : String(value).trim();
+}
+
 async function createImage(job, templateFile) {
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
 
@@ -147,18 +157,14 @@ async function createImage(job, templateFile) {
         jobSize = Math.max(35, jobSize - 10);
     }
 
-    // 3. SALARY - opraveno: pokud objekt obsahuje mzdu přímo (např. job.salary), zkontrolujeme ji, jinak zkusíme salary_czk_month. Pokud neexistuje vůbec nebo je NEUVEDENO, nezobrazí se.
-    let salarySize = 75;
-    let salaryText = "";
-    const rawSalary = job.salary || job.salary_czk_month;
-    if (rawSalary && typeof rawSalary === "string" && rawSalary.trim() !== "" && rawSalary !== "NEUVEDENO") {
-        salaryText = rawSalary;
-    }
+    // Všechny texty na obrázku vycházejí ze stejných polí jako popisek.
+    // Žádné natvrdo zadané „ubytování zajištěno“ ani „angličtina“.
+    const salaryText = naturalFallback(job.salary, "Mzda neuvedena").toUpperCase();
+    const accommodationText = naturalFallback(job.accommodation, "Ubytování neuvedeno").toUpperCase();
+    const languageText = naturalFallback(job.language, "Jazyk neuveden").toUpperCase();
 
     // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
     let bottomSize = 48;
-    let ubytovaniText = "UBYTOVÁNÍ ZAJIŠTĚNO.";
-    let anglictinaText = "ANGLIČTINA";
 
     const drawLineWithStroke = (text, x, y, size, lineWidth = 5) => {
         if (!text) return;
@@ -179,6 +185,15 @@ async function createImage(job, templateFile) {
         ctx.restore();
     };
 
+    const drawWrappedTextWithStroke = (text, x, y, maxLineWidth, startSize, lineWidth = 5, maxLines = 2) => {
+        const wrapped = wrapText(ctx, text, maxLineWidth, startSize);
+        const lines = wrapped.lines.slice(0, maxLines);
+        lines.forEach((line, index) => {
+            drawLineWithStroke(line, x, y + (index * wrapped.size * 1.12), wrapped.size, lineWidth);
+        });
+        return lines.length * wrapped.size * 1.12;
+    };
+
     let currentY = startY;
 
     // Render Country
@@ -193,18 +208,16 @@ async function createImage(job, templateFile) {
     });
     currentY += currentJobWrapped.lines.length * jobSize * 1.15 + 20; // Zvětšený rozestup pod pozicí
 
-    // Render Salary (pouze pokud je reálně k dispozici)
-    if (salaryText) {
-        drawLineWithStroke(salaryText, startX, currentY, salarySize, 6);
-        currentY += salarySize * 1.25; // Zvětšený rozestup pod mzdou
-    }
+    // Render Salary. Dlouhá mzda se zmenší nebo zalomí maximálně na 2 řádky,
+    // takže už nikdy nepřeteče mimo obrázek.
+    currentY += drawWrappedTextWithStroke(salaryText, startX, currentY, maxWidth, 72, 6, 2) + 14;
 
     // Render Ubytování
-    drawLineWithStroke(ubytovaniText, startX, currentY, bottomSize, 5);
+    currentY += drawWrappedTextWithStroke(accommodationText, startX, currentY, maxWidth, bottomSize, 5, 2);
     currentY += bottomSize * 1.25; // Zvětšený rozestup mezi ubytováním a angličtinou
 
-    // Render Angličtina
-    drawLineWithStroke(anglictinaText, startX, currentY, bottomSize, 5);
+    // Render Jazyk
+    drawWrappedTextWithStroke(languageText, startX, currentY, maxWidth, bottomSize, 5, 2);
 
     return canvas.toBuffer("image/png");
 }
@@ -312,16 +325,16 @@ app.post("/generate", async (req, res) => {
     console.log("REQUEST PRIJATA");
     console.dir(req.body, { depth: null });
 
-    const jobs = Array.isArray(req.body.jobs) ? req.body.jobs : [];
-    const reels = Array.isArray(req.body.reels) ? req.body.reels : [];
+    const jobs = Array.isArray(req.body.jobs) ? req.body.jobs.slice(0, 5) : [];
+    const reels = Array.isArray(req.body.reels) ? req.body.reels.slice(0, 2) : [];
 
     console.log("JOBS COUNT:", jobs.length);
     console.log("REELS COUNT:", reels.length);
 
-    if (jobs.length === 0 && reels.length === 0) {
-        return res.status(400).json({
+    if (jobs.length !== 5 || reels.length !== 2) {
+        return res.status(422).json({
             success: false,
-            error: "Musí být předáno jobs nebo reels"
+            error: `Očekávám přesně 5 jobs a 2 reels, přijato ${jobs.length} jobs a ${reels.length} reels.`
         });
     }
 
@@ -350,13 +363,17 @@ app.post("/generate", async (req, res) => {
 
             console.log("HERO IMAGE URL:", imageUrl);
 
+            const descriptionLines = Array.isArray(job.description)
+                ? job.description
+                : String(job.description || "").split(/\r?\n/).filter(Boolean);
+
             herohero.push({
                 ...job,
                 postId: job.postId,
                 categoryId: job.categoryId,
-                title: job.job_title,
+                title: job.herohero_title || job.job_title,
                 text: job.description,
-                textHtml: `<p>${(job.description || "").replace(/\n/g, "</p><p>")}</p>`,
+                textHtml: descriptionLines.map(line => `<p>${line}</p>`).join(""),
                 imageUrl,
                 width: 1080,
                 height: 1350,
@@ -372,7 +389,23 @@ app.post("/generate", async (req, res) => {
         }
 
         // REELS
-        for (const reel of reels) {
+        for (const rawReel of reels) {
+            const matchingJob = jobs.find(job =>
+                (job.link && rawReel.link && job.link === rawReel.link) ||
+                (job.job_title === rawReel.job_title && job.country_code === rawReel.country_code)
+            );
+
+            if (!matchingJob) {
+                throw new Error(`Reel "${rawReel.job_title}" neodpovídá žádné z 5 HeroHero nabídek.`);
+            }
+
+            // Sdílená fakta vždy převezmeme z objektu jobs. Reel si ponechá
+            // pouze vlastní caption, takže mzda, jazyk i ubytování nemohou
+            // být mezi IG a HeroHero rozdílné.
+            const reel = {
+                ...matchingJob,
+                caption: rawReel.caption
+            };
             console.log("REEL:", reel.job_title);
             console.log("COUNTRY CODE:", reel.country_code);
 
