@@ -1,4 +1,5 @@
 const { chromium } = require("playwright");
+const crypto = require("crypto");
 const fs = require("fs");
 const http = require("http");
 const https = require("https");
@@ -1017,10 +1018,67 @@ async function publishHeroHero(inputJob) {
 
 // Make může poslat několik položek téměř současně. Chromium nedovolí dvěma
 // procesům používat stejný persistentní profil; lokální fronta je serializuje.
+// HTTP modul ale může dlouho čekající požadavek zopakovat. Bez idempotence by
+// se retry zařadil znovu a publikoval totožný příspěvek podruhé.
 let publishQueue = Promise.resolve();
+const inFlightPublishes = new Map();
+const recentPublishes = new Map();
+const PUBLISH_DEDUPE_TTL_MS = 30 * 60 * 1000;
+
+function stableSerialize(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableSerialize).join(",")}]`;
+  }
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value)
+      .sort()
+      .map(key => `${JSON.stringify(key)}:${stableSerialize(value[key])}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function publishKey(inputJob) {
+  return crypto.createHash("sha256").update(stableSerialize(inputJob || {})).digest("hex");
+}
+
+function pruneRecentPublishes(now = Date.now()) {
+  for (const [key, item] of recentPublishes) {
+    if (item.expiresAt <= now) recentPublishes.delete(key);
+  }
+}
 
 module.exports = function queuedPublishHeroHero(inputJob) {
-  const run = publishQueue.then(() => publishHeroHero(inputJob));
+  const key = publishKey(inputJob);
+  const now = Date.now();
+  pruneRecentPublishes(now);
+
+  const recent = recentPublishes.get(key);
+  if (recent) {
+    logStep(`Duplicitní požadavek ${key.slice(0, 10)} vrací nedávný úspěšný výsledek.`);
+    return Promise.resolve(recent.result);
+  }
+
+  const existing = inFlightPublishes.get(key);
+  if (existing) {
+    logStep(`Duplicitní požadavek ${key.slice(0, 10)} se připojuje k probíhající publikaci.`);
+    return existing;
+  }
+
+  const run = publishQueue
+    .then(() => publishHeroHero(inputJob))
+    .then(result => {
+      recentPublishes.set(key, {
+        result,
+        expiresAt: Date.now() + PUBLISH_DEDUPE_TTL_MS,
+      });
+      return result;
+    })
+    .finally(() => {
+      inFlightPublishes.delete(key);
+    });
+
+  inFlightPublishes.set(key, run);
   publishQueue = run.catch(() => {});
   return run;
 };
