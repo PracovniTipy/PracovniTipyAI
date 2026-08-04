@@ -127,6 +127,70 @@ function naturalFallback(value, fallback) {
     return isMissingValue(value) ? fallback : String(value).trim();
 }
 
+const CZK_RATES = {
+    EUR: Number(process.env.EUR_CZK || 24.5),
+    NOK: Number(process.env.NOK_CZK || 2.1),
+    SEK: Number(process.env.SEK_CZK || 2.2),
+    DKK: Number(process.env.DKK_CZK || 3.28),
+    CZK: 1
+};
+
+function formatCzk(value) {
+    return Math.round(value / 500) * 500;
+}
+
+function convertSalaryToCzkMonth(job) {
+    if (!isMissingValue(job.salary_czk_month)) {
+        const supplied = String(job.salary_czk_month).trim();
+        return /kč/i.test(supplied) ? supplied : `${supplied} Kč / měsíc`;
+    }
+
+    const raw = naturalFallback(job.salary, "");
+    if (!raw) return "Mzda neuvedena";
+    const lower = raw.toLowerCase();
+    const currency = /(?:€|\beur\b)/i.test(raw) ? "EUR"
+        : /\bnok\b/i.test(raw) ? "NOK"
+        : /\bsek\b/i.test(raw) ? "SEK"
+        : /\bdkk\b/i.test(raw) ? "DKK"
+        : /(?:kč|\bczk\b)/i.test(raw) ? "CZK" : null;
+    if (!currency) return raw;
+
+    const values = [...raw.matchAll(/\d[\d\s.,]*/g)]
+        .map(match => {
+            let value = match[0].replace(/\s/g, "");
+            if (value.includes(",") && value.includes(".")) value = value.replace(/\./g, "").replace(",", ".");
+            else if (value.includes(",")) value = value.replace(",", ".");
+            else if (/^\d{1,3}(?:\.\d{3})+$/.test(value)) value = value.replace(/\./g, "");
+            return Number(value);
+        })
+        .filter(Number.isFinite)
+        .slice(0, 2);
+    if (values.length === 0) return raw;
+
+    const multiplier = /(hod|hour|uur|\/h\b|per h)/i.test(lower) ? 173.33
+        : /(týd|week|weekly)/i.test(lower) ? 4.333
+        : /(rok|year|annual)/i.test(lower) ? 1 / 12 : 1;
+    const label = /netto|net\b|čist/i.test(lower) ? " netto" : /brutto|gross|hrub/i.test(lower) ? " brutto" : "";
+    const converted = values.map(value => formatCzk(value * CZK_RATES[currency] * multiplier));
+    const amount = converted.length > 1 && converted[1] !== converted[0]
+        ? `${converted[0].toLocaleString("cs-CZ")}–${converted[1].toLocaleString("cs-CZ")}`
+        : converted[0].toLocaleString("cs-CZ");
+    return `cca ${amount} Kč${label} / měsíc`;
+}
+
+function isDirectJobLink(value) {
+    if (isMissingValue(value)) return false;
+    try {
+        const url = new URL(String(value).trim());
+        const pathName = url.pathname.replace(/\/+$/, "");
+        if (!/^https?:$/.test(url.protocol) || !pathName || pathName === "/") return false;
+        const genericPaths = /^\/(jobs?|vacancies|careers?|search|find-a-job|work|home|en|cs|nl|de|fr)?$/i;
+        return !genericPaths.test(pathName);
+    } catch (_) {
+        return false;
+    }
+}
+
 async function createImage(job, templateFile) {
     const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
 
@@ -140,18 +204,22 @@ async function createImage(job, templateFile) {
 
     ctx.drawImage(template, 0, 0);
 
-    const startX = 90;
-    const startY = 220;
+    const isReel = templateFile.startsWith("reel/");
+    const layout = isReel
+        ? { startX: 90, startY: 220, country: 135, title: 85, salary: 72, detail: 48, countryGap: 45, titleGap: 22, salaryGap: 20, detailGap: 34 }
+        : { startX: 82, startY: 92, country: 112, title: 69, salary: 58, detail: 40, countryGap: 12, titleGap: 16, salaryGap: 12, detailGap: 22 };
+    const startX = layout.startX;
+    const startY = layout.startY;
     const maxWidth = template.width - (startX * 2);
 
     // 1. COUNTRY
-    let countrySize = 135;
+    let countrySize = layout.country;
     ctx.font = `bold ${countrySize}px Bebas Neue`;
     const countryText = (job.country || "").toUpperCase();
 
     // 2. JOB TITLE
     let jobTitleText = (job.job_title || "").toUpperCase();
-    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, 85);
+    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, layout.title);
     let jobSize = jobWrapped.size;
     if (jobWrapped.lines.length > 2) {
         jobSize = Math.max(35, jobSize - 10);
@@ -159,12 +227,12 @@ async function createImage(job, templateFile) {
 
     // Všechny texty na obrázku vycházejí ze stejných polí jako popisek.
     // Žádné natvrdo zadané „ubytování zajištěno“ ani „angličtina“.
-    const salaryText = naturalFallback(job.salary, "Mzda neuvedena").toUpperCase();
+    const salaryText = naturalFallback(job.salary_czk_month, naturalFallback(job.salary, "Mzda neuvedena")).toUpperCase();
     const accommodationText = naturalFallback(job.accommodation, "Ubytování neuvedeno").toUpperCase();
     const languageText = naturalFallback(job.language, "Jazyk neuveden").toUpperCase();
 
     // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
-    let bottomSize = 48;
+    let bottomSize = layout.detail;
 
     const drawLineWithStroke = (text, x, y, size, lineWidth = 5) => {
         if (!text) return;
@@ -198,7 +266,7 @@ async function createImage(job, templateFile) {
 
     // Render Country
     drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
-    currentY += countrySize * 0.95; // Zvětšený rozestup pod zemí
+    currentY += countrySize * 0.95 + layout.countryGap;
 
     // Render Job Title
     ctx.font = `bold ${jobSize}px Bebas Neue`;
@@ -206,15 +274,15 @@ async function createImage(job, templateFile) {
     currentJobWrapped.lines.forEach((line, index) => {
         drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.15), jobSize, 7);
     });
-    currentY += currentJobWrapped.lines.length * jobSize * 1.15 + 20; // Zvětšený rozestup pod pozicí
+    currentY += currentJobWrapped.lines.length * jobSize * 1.15 + layout.titleGap;
 
     // Render Salary. Dlouhá mzda se zmenší nebo zalomí maximálně na 2 řádky,
     // takže už nikdy nepřeteče mimo obrázek.
-    currentY += drawWrappedTextWithStroke(salaryText, startX, currentY, maxWidth, 72, 6, 2) + 14;
+    currentY += drawWrappedTextWithStroke(salaryText, startX, currentY, maxWidth, layout.salary, 6, 2) + layout.salaryGap;
 
     // Render Ubytování
     currentY += drawWrappedTextWithStroke(accommodationText, startX, currentY, maxWidth, bottomSize, 5, 2);
-    currentY += bottomSize * 1.25; // Zvětšený rozestup mezi ubytováním a angličtinou
+    currentY += layout.detailGap;
 
     // Render Jazyk
     drawWrappedTextWithStroke(languageText, startX, currentY, maxWidth, bottomSize, 5, 2);
@@ -325,8 +393,25 @@ app.post("/generate", async (req, res) => {
     console.log("REQUEST PRIJATA");
     console.dir(req.body, { depth: null });
 
-    const jobs = Array.isArray(req.body.jobs) ? req.body.jobs.slice(0, 5) : [];
-    const reels = Array.isArray(req.body.reels) ? req.body.reels.slice(0, 2) : [];
+    const seenLinks = new Set();
+    const jobs = Array.isArray(req.body.jobs)
+        ? req.body.jobs
+            .filter(job => {
+                if (!isDirectJobLink(job.link)) {
+                    console.log("SKIPPING NON-DIRECT JOB LINK:", job.link);
+                    return false;
+                }
+                const normalizedLink = String(job.link).trim().toLowerCase();
+                if (seenLinks.has(normalizedLink)) return false;
+                seenLinks.add(normalizedLink);
+                return true;
+            })
+            .slice(0, 5)
+            .map(job => ({ ...job, salary_czk_month: convertSalaryToCzkMonth(job) }))
+        : [];
+    const reels = Array.isArray(req.body.reels)
+        ? req.body.reels.filter(reel => seenLinks.has(String(reel.link || "").trim().toLowerCase())).slice(0, 2)
+        : [];
 
     console.log("JOBS COUNT:", jobs.length);
     console.log("REELS COUNT:", reels.length);
