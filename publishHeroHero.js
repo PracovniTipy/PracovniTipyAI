@@ -11,6 +11,7 @@ console.log("==========================================");
 
 const CONFIG = {
   DEBUG_DIR: path.resolve(process.env.HEROHERO_DEBUG_DIR || path.join(__dirname, "herohero-debug")),
+  PROFILE_DIR: path.resolve(process.env.HEROHERO_PROFILE_DIR || path.join(__dirname, "herohero-profile")),
   HEADLESS: process.env.HEADLESS !== "false",
   TIMEOUTS: {
     PAGE_NAVIGATION: 60000,
@@ -763,29 +764,26 @@ async function downloadImageToTempFile(imageUrl) {
 
 async function createHeroHeroPost(page, job) {
   logStep(`Vytvářím příspěvek pro pozici: ${job.title}`);
-  const initialSignInUrl = "https://herohero.co/?mode=signIn";
   const createUrl = "https://herohero.co/create";
 
-  logStep(`Otevírám stránku: ${initialSignInUrl}`);
-  await page.goto(initialSignInUrl, {
+  // Nejdřív vždy zkus existující session. Otevření mode=signIn při každém
+  // requestu zahazovalo výhodu persistentního profilu a nutilo nový login.
+  logStep(`Otevírám stránku s existující session: ${createUrl}`);
+  await page.goto(createUrl, {
     waitUntil: "domcontentloaded",
     timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION,
   });
-  await logPageState(page, "Po otevření login režimu");
+  await logPageState(page, "Po otevření /create s existující session");
 
   await handleCookieBannerIfPresent(page);
 
   logStep("Čekám na stabilizaci SPA rozhraní.");
-  await page.waitForTimeout(10000);
-  await page.mouse.move(200, 200);
-  await page.mouse.down();
-  await page.mouse.up();
-  await page.waitForTimeout(10000);
+  await page.waitForTimeout(3000);
   await nukeOverlays(page);
 
   const loginScreenDetected = await isLoginScreen(page);
   logStep(`isLoginScreen(page) = ${loginScreenDetected}`);
-  if (page.url().includes("mode=signIn") || loginScreenDetected) {
+  if (page.url().includes("mode=signIn") || page.url().includes("/login") || loginScreenDetected) {
     const email = process.env.HEROHERO_EMAIL;
     const password = process.env.HEROHERO_PASSWORD;
 
@@ -808,7 +806,7 @@ async function createHeroHeroPost(page, job) {
   await logPageState(page, "Po otevření /create");
 
   await handleCookieBannerIfPresent(page);
-  await page.waitForTimeout(10000);
+  await page.waitForTimeout(3000);
   await nukeOverlays(page);
 
   const titleInput = await verifyCreateEditor(page, createUrl);
@@ -864,17 +862,21 @@ async function publishHeroHero(inputJob) {
 
   logStep(`Používám data pro pozici: ${job.title}`);
   logStep(`Debug dir: ${CONFIG.DEBUG_DIR}`);
+  logStep(`Persistent profile: ${CONFIG.PROFILE_DIR}`);
 
   ensureDir(CONFIG.DEBUG_DIR);
+  ensureDir(CONFIG.PROFILE_DIR);
 
   const diagnostics = createDiagnostics();
-  let browser;
   let context;
   let page;
 
   try {
-    browser = await chromium.launch({
+    context = await chromium.launchPersistentContext(CONFIG.PROFILE_DIR, {
       headless: CONFIG.HEADLESS,
+      viewport: CONFIG.VIEWPORT,
+      userAgent: CONFIG.USER_AGENT,
+      locale: CONFIG.LOCALE,
       args: [
         "--no-sandbox",
         "--disable-setuid-sandbox",
@@ -883,13 +885,7 @@ async function publishHeroHero(inputJob) {
       ]
     });
 
-    context = await browser.newContext({
-      viewport: CONFIG.VIEWPORT,
-      userAgent: CONFIG.USER_AGENT,
-      locale: CONFIG.LOCALE,
-    });
-
-    page = await context.newPage();
+    page = context.pages()[0] || await context.newPage();
     attachDiagnostics(page, diagnostics);
 
     await page.addInitScript(() => {
@@ -908,8 +904,15 @@ async function publishHeroHero(inputJob) {
     throw err;
   } finally {
     if (context) await context.close().catch(() => {});
-    if (browser) await browser.close().catch(() => {});
   }
 }
 
-module.exports = publishHeroHero;
+// Make může poslat několik položek téměř současně. Chromium nedovolí dvěma
+// procesům používat stejný persistentní profil; lokální fronta je serializuje.
+let publishQueue = Promise.resolve();
+
+module.exports = function queuedPublishHeroHero(inputJob) {
+  const run = publishQueue.then(() => publishHeroHero(inputJob));
+  publishQueue = run.catch(() => {});
+  return run;
+};
