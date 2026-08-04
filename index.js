@@ -331,10 +331,11 @@ app.post("/generate", async (req, res) => {
     console.log("JOBS COUNT:", jobs.length);
     console.log("REELS COUNT:", reels.length);
 
-    if (jobs.length !== 5 || reels.length !== 2) {
+    const expectedReels = Math.min(2, jobs.length);
+    if (jobs.length === 0 || reels.length !== expectedReels) {
         return res.status(422).json({
             success: false,
-            error: `Očekávám přesně 5 jobs a 2 reels, přijato ${jobs.length} jobs a ${reels.length} reels.`
+            error: `Očekávám 1 až 5 jobs a ${expectedReels} reels, přijato ${jobs.length} jobs a ${reels.length} reels.`
         });
     }
 
