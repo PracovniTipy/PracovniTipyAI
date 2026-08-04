@@ -875,10 +875,13 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(10000);
 
-  await findAndClickButton(page, "Druhá šipka (Možnosti příspěvku -> Náhled)", async ({ btn, text }) => {
-    const box = await btn.boundingBox();
-    return box && box.y < 100 && box.x > 800 && text === "";
-  });
+  // Na obrazovce Možnosti příspěvku je šipka router-link (<a>), ne <button>.
+  // Geometrické hledání mezi buttony ji proto nikdy nemohlo najít.
+  const previewLink = page.locator('a[href="/create/post/preview"]:visible').first();
+  await previewLink.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
+  logStep("Klikám: Druhá šipka (Možnosti příspěvku -> Náhled)");
+  await previewLink.click({ timeout: 10000 });
+  await logPageState(page, "Po kliknutí: Druhá šipka (Možnosti příspěvku -> Náhled)");
   await page.waitForTimeout(10000);
 
   await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {
