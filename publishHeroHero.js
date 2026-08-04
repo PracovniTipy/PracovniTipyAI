@@ -699,11 +699,14 @@ async function uploadImageIfPresent(page, job) {
     return;
   }
 
-  let filePath = job.imagePath || job.image;
+  // Make může URL obrázku poslat nejen v imageUrl, ale také v poli image.
+  // URL se nesmí ověřovat přes fs.existsSync; nejdřív ji stáhneme do /tmp.
+  const imageSource = job.imagePath || job.imageUrl || job.image;
+  let filePath = imageSource;
   let tempFilePath = null;
 
-  if (!filePath && job.imageUrl) {
-    tempFilePath = await downloadImageToTempFile(job.imageUrl);
+  if (typeof imageSource === "string" && /^https?:\/\//i.test(imageSource)) {
+    tempFilePath = await downloadImageToTempFile(imageSource);
     filePath = tempFilePath;
   }
 
