@@ -788,10 +788,8 @@ async function publishHeroHero(inputJob) {
     : inputJob;
 
   logStep(`Používám data pro pozici: ${job.title}`);
-  logStep(`Persistent profile: ${CONFIG.PROFILE_DIR}`);
   logStep(`Debug dir: ${CONFIG.DEBUG_DIR}`);
 
-  ensureDir(CONFIG.PROFILE_DIR);
   ensureDir(CONFIG.DEBUG_DIR);
 
   const diagnostics = createDiagnostics();
