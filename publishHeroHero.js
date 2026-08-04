@@ -617,22 +617,45 @@ async function executeModalLogin(page, email, password) {
   logStep("HeroHero login úspěšně dokončen.");
 }
 
+function hasUsefulJobValue(value) {
+  if (value === null || value === undefined) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return Boolean(normalized) && !["neuvedeno", "neuvedena", "neuveden", "není uvedeno", "n/a", "unknown"].includes(normalized);
+}
+
+function formatSalaryLine(job) {
+  const original = hasUsefulJobValue(job.salary) ? String(job.salary).trim() : "";
+  const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
+
+  if (!original && !czk) return "💰 Mzda: neuvedena";
+
+  let result = `💰 Mzda: ${original || czk}`;
+  if (original && czk && !original.includes(czk)) {
+    const czkLabel = /kč/i.test(czk) ? czk : `${czk} Kč / měsíc`;
+    result += ` (cca ${czkLabel})`;
+  }
+  return result;
+}
+
 function formatJobPost(job) {
   const title = job.title || "Pracovní nabídka";
-  const salary = job.salary ? `💰 cca ${job.salary} Kč / měsíc` : null;
-  const location = job.location ? `📍 ${job.location}` : null;
-  const startDate = job.startDate ? `⏰ Nástup ${job.startDate}` : null;
-  const contractType = job.contractType ? `🕒 ${job.contractType}` : null;
-  const language = job.language ? `🌍 Jazyk: ${job.language}` : null;
+  const salary = formatSalaryLine(job);
+  const locationValue = job.location || job.country;
+  const location = `📍 ${hasUsefulJobValue(locationValue) ? locationValue : "Lokalita neuvedena"}`;
+  const rawStartDate = job.startDate || job.start_date;
+  const rawContractType = job.contractType || job.contract_type;
+  const startDate = hasUsefulJobValue(rawStartDate) ? `⏰ Nástup ${rawStartDate}` : "⏰ Nástup neuveden";
+  const contractType = hasUsefulJobValue(rawContractType) ? `🕒 ${rawContractType}` : "🕒 Typ úvazku neuveden";
+  const language = `🌍 ${hasUsefulJobValue(job.language) ? `Jazyk: ${job.language}` : "Jazyk neuveden"}`;
   const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
 
-  let output = `${title}\n\n`;
-  if (salary) output += `${salary}\n\n`;
-  if (location) output += `${location}\n`;
-  if (startDate) output += `${startDate}\n`;
-  if (contractType) output += `${contractType}\n`;
-  if (language) output += `${language}\n`;
-  if (link) output += `${link}\n`;
+  let output = `💼 ${title}\n`;
+  output += `${salary}\n\n`;
+  output += `${location}\n`;
+  output += `${startDate}\n`;
+  output += `${contractType}\n`;
+  output += `${language}\n`;
+  if (link) output += `\n${link}\n`;
 
   const descriptionLines = extractJobBodyLines(job);
   if (descriptionLines.length > 0) {
@@ -640,23 +663,25 @@ function formatJobPost(job) {
     for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  const accommodationLines = normalizeTextLines(job.accommodation);
-  if (accommodationLines.length > 0) {
-    output += `\n🏠 Ubytování\n\n`;
-    for (const point of accommodationLines) output += `• ${point}\n`;
-  }
+  output += `\n🏠 Ubytování\n\n`;
+  output += `• ${hasUsefulJobValue(job.accommodation) ? job.accommodation : "Ubytování neuvedeno"}\n`;
+
+  output += `\n🍽️ Strava\n\n`;
+  output += `• ${hasUsefulJobValue(job.meals) ? job.meals : "Strava neuvedena"}\n`;
 
   const requirementLines = normalizeTextLines(job.requirements);
+  output += `\n📋 Požadavky\n\n`;
   if (requirementLines.length > 0) {
-    output += `\n📋 Požadavky\n\n`;
     for (const point of requirementLines) output += `• ${point}\n`;
-  }
+  } else output += `• Požadavky neuvedeny\n`;
 
   const advantageLines = normalizeTextLines(job.advantages);
+  output += `\n⭐ Výhody\n\n`;
   if (advantageLines.length > 0) {
-    output += `\n⭐ Výhody\n\n`;
     for (const point of advantageLines) output += `• ${point}\n`;
-  }
+  } else output += `• Výhody neuvedeny\n`;
+
+  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.\n`;
 
   return output.trim();
 }
