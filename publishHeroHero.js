@@ -501,31 +501,103 @@ async function executeModalLogin(page, email, password) {
   logStep("Zahajuji proces přihlášení.");
 
   const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
-  await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await emailInput.click();
-  await emailInput.fill(email);
-  logStep("E-mail vyplněn.");
+  logStep("Čekám na nalezení email inputu.");
+  try {
+    await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+    logStep("Email input nalezen.");
+  } catch (error) {
+    logStep(`Email input se nepodařilo najít: ${error?.message || error}`);
+    throw error;
+  }
+
+  try {
+    logStep("Klikám do email inputu.");
+    await emailInput.click();
+    logStep("Vyplňuji email.");
+    await emailInput.fill(email);
+    logStep("E-mail vyplněn.");
+  } catch (error) {
+    logStep(`Práce s email inputem selhala: ${error?.message || error}`);
+    throw error;
+  }
 
   const nextBtn = page.locator('input[type="email"] + button, input[type="email"] ~ button, button[aria-label*="pokrač" i], button[title*="pokrač" i], button:has-text("Pokračovat"), button:has-text("Continue")').first();
-  await nextBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await nextBtn.click({ timeout: 10000 });
+  logStep("Čekám na pokračovací tlačítko po emailu.");
+  try {
+    await nextBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+    logStep("Pokračovací tlačítko po emailu nalezeno.");
+  } catch (error) {
+    logStep(`Pokračovací tlačítko po emailu se nepodařilo najít: ${error?.message || error}`);
+    throw error;
+  }
+
+  try {
+    logStep("Klikám na pokračovací tlačítko po emailu.");
+    await nextBtn.click({ timeout: 10000 });
+    logStep("Kliknuto na pokračovací tlačítko po emailu.");
+  } catch (error) {
+    logStep(`Kliknutí na pokračovací tlačítko po emailu selhalo: ${error?.message || error}`);
+    throw error;
+  }
 
   const passwordInput = page.locator('input[type="password"]');
-  await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await passwordInput.click();
-  await passwordInput.fill(password);
-  logStep("Heslo vyplněno.");
+  logStep("Čekám na nalezení password inputu.");
+  try {
+    await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+    logStep("Password input nalezen.");
+  } catch (error) {
+    logStep(`Password input se nepodařilo najít: ${error?.message || error}`);
+    throw error;
+  }
+
+  try {
+    logStep("Klikám do password inputu.");
+    await passwordInput.click();
+    logStep("Vyplňuji heslo.");
+    await passwordInput.fill(password);
+    logStep("Heslo vyplněno.");
+  } catch (error) {
+    logStep(`Práce s password inputem selhala: ${error?.message || error}`);
+    throw error;
+  }
 
   const submitBtn = page.locator('button[aria-label*="přihl" i], button[aria-label*="log in" i], button[aria-label*="sign in" i], button[title*="přihl" i], button:has-text("Pokračovat"), button:has-text("Přihlásit"), button:has-text("Log in"), button:has-text("Sign in")').first();
-  await submitBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
-  await submitBtn.click({ timeout: 10000 });
+  logStep("Čekám na finální přihlašovací tlačítko.");
+  try {
+    await submitBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+    logStep("Finální přihlašovací tlačítko nalezeno.");
+  } catch (error) {
+    logStep(`Finální přihlašovací tlačítko se nepodařilo najít: ${error?.message || error}`);
+    throw error;
+  }
 
-  await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
+  try {
+    logStep("Klikám na finální přihlašovací tlačítko.");
+    await submitBtn.click({ timeout: 10000 });
+    logStep("Kliknuto na finální přihlašovací tlačítko.");
+  } catch (error) {
+    logStep(`Kliknutí na finální přihlašovací tlačítko selhalo: ${error?.message || error}`);
+    throw error;
+  }
+
+  logStep("Čekám na přesměrování po loginu.");
+  try {
+    await page.waitForURL("**/create**", { timeout: CONFIG.TIMEOUTS.PAGE_NAVIGATION });
+    logStep(`Aktuální URL po loginu: ${page.url()}`);
+  } catch (error) {
+    logStep(`Přesměrování po loginu selhalo: ${error?.message || error}`);
+    throw error;
+  }
+
   const passwordStillVisible = await passwordInput.isVisible().catch(() => false);
   if (passwordStillVisible) {
+    logStep("Password input po loginu je stále viditelný.");
+    logStep("HeroHero login failed.");
     throw new Error("HeroHero login failed.");
   }
+  logStep("Login potvrzen, login formulář zmizel.");
   await page.waitForTimeout(12000);
+  logStep("HeroHero login úspěšně dokončen.");
 }
 
 function formatJobPost(job) {
