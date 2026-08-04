@@ -505,7 +505,11 @@ async function isLoginScreen(page) {
 async function executeModalLogin(page, email, password) {
   logStep("Zahajuji proces přihlášení.");
 
-  const emailInput = page.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
+  // HeroHero někdy ponechá více dialogů/overlayů v DOM. Vždy pracujeme s
+  // posledním (horním) dialogem, jinak locator vybere pole pod overlayem.
+  const emailDialog = page.getByRole("dialog").last();
+  await emailDialog.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
+  const emailInput = emailDialog.locator('input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]').first();
   logStep("Čekám na nalezení email inputu.");
   try {
     await emailInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
@@ -517,7 +521,7 @@ async function executeModalLogin(page, email, password) {
 
   try {
     logStep("Klikám do email inputu.");
-    await emailInput.click();
+    await emailInput.click({ force: true });
     logStep("Vyplňuji email.");
     await emailInput.fill(email);
     logStep("E-mail vyplněn.");
@@ -529,7 +533,7 @@ async function executeModalLogin(page, email, password) {
   // V login dialogu jsou před e-mailem také tlačítka "Pokračovat Googlem",
   // Facebookem a Applem. Textový selector proto omylem spouštěl Google OAuth.
   // Poslední tlačítko dialogu je šipka přímo u e-mailového pole.
-  const nextBtn = page.getByRole("dialog").locator("button").last();
+  const nextBtn = emailDialog.locator("button").last();
   logStep("Čekám na pokračovací tlačítko po emailu.");
   try {
     await nextBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
@@ -541,14 +545,15 @@ async function executeModalLogin(page, email, password) {
 
   try {
     logStep("Klikám na pokračovací tlačítko po emailu.");
-    await nextBtn.click({ timeout: 10000 });
+    await nextBtn.click({ timeout: 10000, force: true });
     logStep("Kliknuto na pokračovací tlačítko po emailu.");
   } catch (error) {
     logStep(`Kliknutí na pokračovací tlačítko po emailu selhalo: ${error?.message || error}`);
     throw error;
   }
 
-  const passwordInput = page.locator('input[type="password"]');
+  const passwordDialog = page.getByRole("dialog").last();
+  const passwordInput = passwordDialog.locator('input[type="password"]').first();
   logStep("Čekám na nalezení password inputu.");
   try {
     await passwordInput.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
@@ -560,7 +565,7 @@ async function executeModalLogin(page, email, password) {
 
   try {
     logStep("Klikám do password inputu.");
-    await passwordInput.click();
+    await passwordInput.click({ force: true });
     logStep("Vyplňuji heslo.");
     await passwordInput.fill(password);
     logStep("Heslo vyplněno.");
@@ -569,7 +574,7 @@ async function executeModalLogin(page, email, password) {
     throw error;
   }
 
-  const submitBtn = page.locator('button[aria-label*="přihl" i], button[aria-label*="log in" i], button[aria-label*="sign in" i], button[title*="přihl" i], button:has-text("Pokračovat"), button:has-text("Přihlásit"), button:has-text("Log in"), button:has-text("Sign in")').first();
+  const submitBtn = passwordDialog.locator('button[aria-label*="přihl" i], button[aria-label*="log in" i], button[aria-label*="sign in" i], button[title*="přihl" i], button:has-text("Pokračovat"), button:has-text("Přihlásit"), button:has-text("Log in"), button:has-text("Sign in")').first();
   logStep("Čekám na finální přihlašovací tlačítko.");
   try {
     await submitBtn.waitFor({ state: "visible", timeout: CONFIG.TIMEOUTS.ELEMENT_WAIT });
@@ -581,7 +586,7 @@ async function executeModalLogin(page, email, password) {
 
   try {
     logStep("Klikám na finální přihlašovací tlačítko.");
-    await submitBtn.click({ timeout: 10000 });
+    await submitBtn.click({ timeout: 10000, force: true });
     logStep("Kliknuto na finální přihlašovací tlačítko.");
   } catch (error) {
     logStep(`Kliknutí na finální přihlašovací tlačítko selhalo: ${error?.message || error}`);
