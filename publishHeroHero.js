@@ -624,7 +624,8 @@ function hasUsefulJobValue(value) {
 }
 
 function formatSalaryLine(job) {
-  const original = hasUsefulJobValue(job.salary) ? String(job.salary).trim() : "";
+  const rawSalary = hasUsefulJobValue(job.salary) ? String(job.salary).trim() : "";
+  const original = /^(mzda\s*)?(neuvedena|neuvedeno|neuveden)$/i.test(rawSalary) ? "" : rawSalary;
   const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
 
   if (!original && !czk) return "💰 Mzda: neuvedena";
@@ -646,7 +647,8 @@ function formatJobPost(job) {
   const rawContractType = job.contractType || job.contract_type;
   const startDate = hasUsefulJobValue(rawStartDate) ? `⏰ Nástup ${rawStartDate}` : "⏰ Nástup neuveden";
   const contractType = hasUsefulJobValue(rawContractType) ? `🕒 ${rawContractType}` : "🕒 Typ úvazku neuveden";
-  const language = `🌍 ${hasUsefulJobValue(job.language) ? `Jazyk: ${job.language}` : "Jazyk neuveden"}`;
+  const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
+  const language = `🌍 ${!rawLanguage || /^jazyk\s+neuveden$/i.test(rawLanguage) ? "Jazyk neuveden" : `Jazyk: ${rawLanguage}`}`;
   const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
 
   let output = `💼 ${title}\n`;
@@ -1064,7 +1066,18 @@ function stableSerialize(value) {
 }
 
 function publishKey(inputJob) {
-  return crypto.createHash("sha256").update(stableSerialize(inputJob || {})).digest("hex");
+  const job = inputJob || {};
+  // Stejná nabídka může při opakovaném běhu dostat lehce jiný text od AI.
+  // Zdrojový odkaz je proto stabilnější idempotency klíč než celý JSON.
+  const identity = hasUsefulJobValue(job.link)
+    ? `link:${String(job.link).trim().toLowerCase()}`
+    : stableSerialize({
+        title: job.job_title || job.title || "",
+        country: job.country_code || job.country || "",
+        salary: job.salary || "",
+        location: job.location || "",
+      });
+  return crypto.createHash("sha256").update(identity).digest("hex");
 }
 
 function pruneRecentPublishes(now = Date.now()) {
