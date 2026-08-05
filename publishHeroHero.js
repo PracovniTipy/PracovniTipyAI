@@ -630,13 +630,12 @@ function hasUsefulJobValue(value) {
 }
 
 function formatSalaryLine(job) {
-  const rawSalary = hasUsefulJobValue(job.salary) ? String(job.salary).trim() : "";
-  const original = /^(mzda\s*)?(neuvedena|neuvedeno|neuveden)$/i.test(rawSalary) ? "" : rawSalary;
   const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
-
-  if (czk) return `💰 ${/kč/i.test(czk) ? czk : `${czk} Kč / měsíc`}`;
-  if (original) return `💰 ${original}`;
-  return "💰 Mzda neuvedena";
+  // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
+  // původní eura ani náhradní text, pokud mzda v nabídce chybí.
+  if (!czk || !/(kč|czk)/i.test(czk)) return null;
+  const monthly = /měs/i.test(czk) ? czk : `${czk} / měsíc`;
+  return `💰 ${monthly}`;
 }
 
 function relevantJobEmoji(title) {
@@ -660,48 +659,50 @@ function formatJobPost(job) {
   const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
   const locationValue = job.location || job.country;
-  const location = `📍 ${hasUsefulJobValue(locationValue) ? locationValue : "Lokalita neuvedena"}`;
   const rawStartDate = job.startDate || job.start_date;
   const rawContractType = job.contractType || job.contract_type;
-  const startDate = hasUsefulJobValue(rawStartDate) ? `⏰ Nástup ${rawStartDate}` : "⏰ Nástup neuveden";
-  const contractType = hasUsefulJobValue(rawContractType) ? `🕒 ${rawContractType}` : "🕒 Typ úvazku neuveden";
   const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
-  const language = `🌍 ${!rawLanguage || /^jazyk\s+neuveden$/i.test(rawLanguage) ? "Jazyk neuveden" : `Jazyk ${rawLanguage.replace(/^jazyk\s*:?\s*/i, "")}`}`;
-  const link = job.link ? `🔗 Odkaz: ${job.link}` : null;
+  const directLink = hasUsefulJobValue(job.link) ? String(job.link).trim() : "";
+  const lines = [`${titleEmoji} ${title}`];
 
-  let output = `${titleEmoji} ${title}\n`;
-  output += `${salary}\n\n`;
-  output += `${location}\n\n`;
-  output += `${startDate}\n\n`;
-  output += `${contractType}\n\n`;
-  output += `${language}\n`;
-  if (link) output += `\n${link}\n`;
+  if (salary) lines.push(salary);
+  if (hasUsefulJobValue(locationValue)) lines.push(`📍 ${locationValue}`);
+  if (hasUsefulJobValue(rawStartDate)) lines.push(`⏰ Nástup ${rawStartDate}`);
+  if (hasUsefulJobValue(rawContractType)) lines.push(`🕒 ${rawContractType}`);
+  if (rawLanguage && !/^jazyk\s+neuveden$/i.test(rawLanguage)) {
+    lines.push(`🌍 Jazyk ${rawLanguage.replace(/^jazyk\s*:?\s*/i, "")}`);
+  }
+  if (directLink) lines.push(`🔗 Odkaz: ${directLink}`);
+
+  let output = lines.join("\n");
 
   const descriptionLines = extractJobBodyLines(job);
   if (descriptionLines.length > 0) {
-    output += `\n🔧 Náplň práce\n\n`;
-    for (const point of descriptionLines) output += `• ${point}\n\n`;
+    output += `\n\n🔧 Náplň práce\n`;
+    for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  output += `\n🏠 Ubytování\n\n`;
-  output += `• ${hasUsefulJobValue(job.accommodation) ? job.accommodation : "Ubytování neuvedeno"}\n\n`;
+  if (hasUsefulJobValue(job.accommodation)) {
+    output += `\n🏠 Ubytování\n• ${job.accommodation}\n`;
+  }
 
-  output += `\n🍽️ Strava\n\n`;
-  output += `• ${hasUsefulJobValue(job.meals) ? job.meals : "Strava neuvedena"}\n\n`;
+  if (hasUsefulJobValue(job.meals)) {
+    output += `\n🍽️ Strava\n• ${job.meals}\n`;
+  }
 
   const requirementLines = normalizeTextLines(job.requirements);
-  output += `\n📋 Požadavky\n\n`;
   if (requirementLines.length > 0) {
-    for (const point of requirementLines) output += `• ${point}\n\n`;
-  } else output += `• Požadavky neuvedeny\n`;
+    output += `\n📋 Požadavky\n`;
+    for (const point of requirementLines) output += `• ${point}\n`;
+  }
 
   const advantageLines = normalizeTextLines(job.advantages);
-  output += `\n⭐ Výhody\n\n`;
   if (advantageLines.length > 0) {
-    for (const point of advantageLines) output += `• ${point}\n\n`;
-  } else output += `• Výhody neuvedeny\n`;
+    output += `\n⭐ Výhody\n`;
+    for (const point of advantageLines) output += `• ${point}\n`;
+  }
 
-  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.\n`;
+  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.`;
 
   return output.trim();
 }
