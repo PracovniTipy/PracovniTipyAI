@@ -827,35 +827,62 @@ async function downloadImageToTempFile(imageUrl) {
 }
 
 const HEROHERO_COUNTRY_CATEGORIES = {
-  Austria: "Rakousko", Belgium: "Belgie", Denmark: "Dánsko", Estonia: "Estonsko",
-  Finland: "Finsko", France: "Francie", Netherlands: "Holandsko", Ireland: "Irsko",
-  Italy: "Itálie", Cyprus: "Kypr", Malta: "Malta", Germany: "Německo",
-  Norway: "Norsko", Greece: "Řecko", Spain: "Španělsko", Sweden: "Švédsko"
+  Austria: ["Rakousko"], Belgium: ["Belgie"], Denmark: ["Dánsko"], Estonia: ["Estonsko"],
+  Finland: ["Finsko"], France: ["Francie"], Netherlands: ["Nizozemsko"], Ireland: ["Irsko"],
+  Italy: ["Itálie"], Cyprus: ["Kypr"], Malta: ["Malta"], Germany: ["Německo"],
+  Norway: ["Norsko"], Greece: ["Řecko"], Spain: ["Španělsko"], Sweden: ["Švédsko"]
 };
 
 async function selectCountryCategory(page, job) {
   const countryKey = String(job.country_code || job.country || "").trim();
-  const label = HEROHERO_COUNTRY_CATEGORIES[countryKey] || countryKey;
-  if (!label) {
+  const labels = HEROHERO_COUNTRY_CATEGORIES[countryKey] || (countryKey ? [countryKey] : []);
+  if (labels.length === 0) {
     logStep("Země chybí, výběr kategorie přeskakuji.");
-    return;
+    return false;
   }
 
-  logStep(`Vybírám kategorii země: ${label}`);
-  const matches = page.getByText(label, { exact: true });
-  await matches.first().waitFor({ state: "attached", timeout: CONFIG.TIMEOUTS.EDITOR_WAIT });
-  let category = null;
-  for (let index = 0; index < await matches.count(); index++) {
-    const candidate = matches.nth(index);
-    if (await candidate.isVisible().catch(() => false)) {
-      category = candidate;
-      break;
+  logStep(`Vybírám kategorii země, podporované názvy: ${labels.join(" / ")}`);
+
+  // HeroHero seznam kategorií nenačte, dokud uživatel neotevře pole
+  // „Přidat kategorii“. Přímé čekání na název země proto končilo timeoutem.
+  const categoryOpeners = ["Přidat kategorii", "Add category"];
+  for (const openerText of categoryOpeners) {
+    const openers = page.getByText(openerText, { exact: true });
+    for (let index = 0; index < await openers.count(); index++) {
+      const opener = openers.nth(index);
+      if (await opener.isVisible().catch(() => false)) {
+        await opener.click({ timeout: 10000 }).catch(error => {
+          logStep(`Otevření seznamu kategorií přes „${openerText}“ selhalo: ${error.message}`);
+        });
+        await page.waitForTimeout(800);
+        break;
+      }
     }
   }
-  if (!category) throw new Error(`Kategorie země není viditelná: ${label}`);
-  await category.click({ timeout: 10000 });
-  await page.waitForTimeout(1000);
-  logStep(`Kategorie země vybrána: ${label}`);
+
+  // Krátce prohledáváme všechny povolené názvy a klikáme jen na viditelnou
+  // kategorii.
+  const deadline = Date.now() + 10000;
+  while (Date.now() < deadline) {
+    for (const label of labels) {
+      const matches = page.getByText(label, { exact: true });
+      for (let index = 0; index < await matches.count(); index++) {
+        const candidate = matches.nth(index);
+        if (await candidate.isVisible().catch(() => false)) {
+          await candidate.click({ timeout: 10000 });
+          await page.waitForTimeout(1000);
+          logStep(`Kategorie země vybrána: ${label}`);
+          return true;
+        }
+      }
+    }
+    await page.waitForTimeout(400);
+  }
+
+  // Kategorie je užitečná, ale její dočasná nedostupnost nesmí zablokovat
+  // zveřejnění celé dávky pracovních nabídek.
+  logStep(`Kategorie země nebyla dostupná (${labels.join(" / ")}); pokračuji bez kategorie.`);
+  return false;
 }
 
 async function createHeroHeroPost(page, job) {
