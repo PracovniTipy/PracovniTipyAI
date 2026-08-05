@@ -310,25 +310,68 @@ async function createImage(job, templateFile) {
     return canvas.toBuffer("image/png");
 }
 
+function shortenHeroTitle(value) {
+    // HeroHero obrázek není Reel: potřebuje krátký, klidný titulek bez města,
+    // mezd a technických dodatků. Celý název zůstává v textu příspěvku.
+    const clean = String(value || "Pracovní nabídka")
+        .replace(/\s*[|–—-]\s*(?:v|ve|pro)\s+.+$/i, "")
+        .replace(/\s+\([^)]*\)/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    if (clean.length <= 42) return clean;
+    const shortened = clean.slice(0, 42).replace(/\s+\S*$/, "").trim();
+    return shortened || clean.slice(0, 42).trim();
+}
+
+function heroFact(value, fallback) {
+    const clean = naturalFallback(value, "");
+    return clean ? String(clean).replace(/^\s*(ubytování|mzda)\s*:?\s*/i, "").trim() : fallback;
+}
+
 function createHeroHeroImage(job, template, canvas, ctx) {
-    // HeroHero má vlastní kompozici 1080×1350: název je nahoře, faktické
-    // údaje vpravo od vlajky a nad fotografií. Text proto nezasahuje do vlajky.
+    // HeroHero má vlastní kompozici. Nevyužívá souřadnice Reelu: název a město
+    // jsou přesně uprostřed nahoře, vlajka vlevo a dva krátké fakty vpravo.
     const { drawWrapped } = createTextRenderer(ctx);
-    const title = String(job.herohero_title || job.job_title || "").toUpperCase();
-    const location = naturalFallback(job.location, "").toUpperCase();
-    const salary = naturalFallback(job.salary_czk_month, "").toUpperCase();
-    const accommodation = naturalFallback(job.accommodation, "").toUpperCase();
+    const title = shortenHeroTitle(job.herohero_title || job.job_title).toUpperCase();
+    const location = naturalFallback(job.location || job.city, "").toUpperCase();
+    const salary = heroFact(job.salary_czk_month, "").toUpperCase();
+    const accommodation = heroFact(job.accommodation, "").toUpperCase();
 
-    let currentY = 105;
-    currentY += drawWrapped(title, 540, currentY, 860, 74, { lineWidth: 7, maxLines: 2, align: "center" }) + 20;
-    if (location) currentY += drawWrapped(location, 540, currentY, 620, 42, { lineWidth: 4, maxLines: 1, align: "center" }) + 100;
-    else currentY += 100;
+    const centerX = Math.round(template.width / 2);
+    let titleY = 110;
+    titleY += drawWrapped(title, centerX, titleY, 780, 66, {
+        lineWidth: 6,
+        maxLines: 2,
+        align: "center"
+    }) + 12;
 
-    // Levý okraj 430 ponechá celý prostor pro vlajku v každé šabloně.
-    const factX = 710;
-    const factWidth = 600;
-    if (accommodation) currentY += drawWrapped(accommodation, factX, currentY, factWidth, 48, { lineWidth: 5, maxLines: 2, align: "center" }) + 22;
-    if (salary) drawWrapped(salary, factX, currentY, factWidth, 52, { lineWidth: 5, maxLines: 2, align: "center" });
+    if (location) {
+        drawWrapped(location, centerX, titleY, 540, 38, {
+            lineWidth: 4,
+            maxLines: 1,
+            align: "center"
+        });
+    }
+
+    // Všechny Hero šablony mají vlajku vlevo. Fakta jsou krátká a zůstávají
+    // v bezpečné pravé části nad fotkou, nikdy přes vlajku.
+    const factX = 755;
+    const factWidth = 470;
+    let factY = 300;
+    if (accommodation) {
+        factY += drawWrapped(accommodation, factX, factY, factWidth, 42, {
+            lineWidth: 4,
+            maxLines: 1,
+            align: "center"
+        }) + 16;
+    }
+    if (salary) {
+        drawWrapped(salary, factX, factY, factWidth, 40, {
+            lineWidth: 4,
+            maxLines: 1,
+            align: "center"
+        });
+    }
 
     return canvas.toBuffer("image/png");
 }
