@@ -87,7 +87,7 @@ const reelTemplates = {
     Sweden: "reel/Svedsko reel.png"
 };
 
-function wrapText(ctx, text, maxWidth, startSize) {
+function wrapText(ctx, text, maxWidth, startSize, maxLines = 2) {
     let size = startSize;
     while (size >= 20) {
         ctx.font = `bold ${size}px Bebas Neue`;
@@ -106,7 +106,7 @@ function wrapText(ctx, text, maxWidth, startSize) {
         }
         if (line) lines.push(line);
 
-        if (lines.length <= 2) {
+        if (lines.length <= maxLines && lines.every(line => ctx.measureText(line).width <= maxWidth)) {
             return { size, lines };
         }
         size--;
@@ -142,18 +142,24 @@ function formatCzk(value) {
 function convertSalaryToCzkMonth(job) {
     if (!isMissingValue(job.salary_czk_month)) {
         const supplied = String(job.salary_czk_month).trim();
-        return /kč/i.test(supplied) ? supplied : `${supplied} Kč / měsíc`;
+        // Do HeroHero ani do obrázku nikdy neposíláme cizí měnu. Hodnotu
+        // z tohoto pole proto bereme jen tehdy, když je už opravdu v Kč.
+        if (/(kč|czk)/i.test(supplied)) {
+            return /měs/i.test(supplied) ? supplied : `${supplied} / měsíc`;
+        }
     }
 
     const raw = naturalFallback(job.salary, "");
-    if (!raw) return "Mzda neuvedena";
+    if (!raw) return "";
     const lower = raw.toLowerCase();
     const currency = /(?:€|\beur\b)/i.test(raw) ? "EUR"
         : /\bnok\b/i.test(raw) ? "NOK"
         : /\bsek\b/i.test(raw) ? "SEK"
         : /\bdkk\b/i.test(raw) ? "DKK"
         : /(?:kč|\bczk\b)/i.test(raw) ? "CZK" : null;
-    if (!currency) return raw;
+    // Neznámou měnu raději nezobrazíme, než abychom zveřejnili eura nebo
+    // nesprávně označenou částku jako Kč/měsíc.
+    if (!currency) return "";
 
     const values = [...raw.matchAll(/\d[\d\s.,]*/g)]
         .map(match => {
@@ -165,7 +171,7 @@ function convertSalaryToCzkMonth(job) {
         })
         .filter(Number.isFinite)
         .slice(0, 2);
-    if (values.length === 0) return raw;
+    if (values.length === 0) return "";
 
     const multiplier = /(hod|hour|uur|\/h\b|per h)/i.test(lower) ? 173.33
         : /(týd|week|weekly)/i.test(lower) ? 4.333
@@ -185,10 +191,50 @@ function isDirectJobLink(value) {
         const pathName = url.pathname.replace(/\/+$/, "");
         if (!/^https?:$/.test(url.protocol) || !pathName || pathName === "/") return false;
         const genericPaths = /^\/(jobs?|vacancies|careers?|search|find-a-job|work|home|en|cs|nl|de|fr)?$/i;
-        return !genericPaths.test(pathName);
+        if (genericPaths.test(pathName)) return false;
+
+        // Odkazy na menu, vyhledávání nebo přehled pozic nejsou konkrétní
+        // inzerát. Konkrétní nabídka má vždy další identifikátor/název.
+        const segments = pathName.split("/").filter(Boolean).map(value => value.toLowerCase());
+        const genericSegment = /^(jobs?|vacancies|careers?|search|find-a-job|work|home|en|cs|nl|de|fr|offers?|positions?|job-?board|all|list)$/i;
+        if (segments.length < 2 || genericSegment.test(segments.at(-1))) return false;
+        return true;
     } catch (_) {
         return false;
     }
+}
+
+function createTextRenderer(ctx) {
+    const drawLineWithStroke = (text, x, y, size, options = {}) => {
+        if (!text) return;
+        const { lineWidth = 5, align = "left", font = "Bebas Neue" } = options;
+        ctx.font = `bold ${size}px ${font}`;
+        ctx.textAlign = align;
+        ctx.textBaseline = "top";
+        ctx.save();
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.miterLimit = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = lineWidth;
+        ctx.strokeText(text, x, y);
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(text, x, y);
+        ctx.restore();
+    };
+
+    const drawWrapped = (text, x, y, maxLineWidth, startSize, options = {}) => {
+        if (!text) return 0;
+        const { lineWidth = 5, maxLines = 2, align = "left" } = options;
+        const wrapped = wrapText(ctx, text, maxLineWidth, startSize, maxLines);
+        const lines = wrapped.lines.slice(0, maxLines);
+        lines.forEach((line, index) => {
+            drawLineWithStroke(line, x, y + index * wrapped.size * 1.12, wrapped.size, { lineWidth, align });
+        });
+        return lines.length * wrapped.size * 1.12;
+    };
+
+    return { drawLineWithStroke, drawWrapped };
 }
 
 async function createImage(job, templateFile) {
@@ -205,9 +251,11 @@ async function createImage(job, templateFile) {
     ctx.drawImage(template, 0, 0);
 
     const isReel = templateFile.startsWith("reel/");
-    const layout = isReel
-        ? { startX: 90, startY: 220, country: 135, title: 85, salary: 72, detail: 48, countryGap: 45, titleGap: 22, salaryGap: 20, detailGap: 34 }
-        : { startX: 82, startY: 92, country: 112, title: 69, salary: 58, detail: 40, countryGap: 12, titleGap: 16, salaryGap: 12, detailGap: 22 };
+    if (!isReel) return createHeroHeroImage(job, template, canvas, ctx);
+
+    // Název země zůstává nahoře. Všechno pod ním je posunuté níž, aby text
+    // nešel přes vlajku ani obličej avatarky ve spodní části Reelu.
+    const layout = { startX: 90, startY: 220, country: 135, title: 78, salary: 64, detail: 46, countryGap: 95, titleGap: 24, salaryGap: 22, detailGap: 30 };
     const startX = layout.startX;
     const startY = layout.startY;
     const maxWidth = template.width - (startX * 2);
@@ -219,73 +267,68 @@ async function createImage(job, templateFile) {
 
     // 2. JOB TITLE
     let jobTitleText = (job.job_title || "").toUpperCase();
-    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, layout.title);
+    let jobWrapped = wrapText(ctx, jobTitleText, maxWidth, layout.title, 3);
     let jobSize = jobWrapped.size;
-    if (jobWrapped.lines.length > 2) {
-        jobSize = Math.max(35, jobSize - 10);
+    if (jobWrapped.lines.length > 3) {
+        jobSize = Math.max(32, jobSize - 10);
     }
 
-    // Všechny texty na obrázku vycházejí ze stejných polí jako popisek.
-    // Žádné natvrdo zadané „ubytování zajištěno“ ani „angličtina“.
-    const salaryText = naturalFallback(job.salary_czk_month, naturalFallback(job.salary, "Mzda neuvedena")).toUpperCase();
-    const accommodationText = naturalFallback(job.accommodation, "Ubytování neuvedeno").toUpperCase();
-    const languageText = naturalFallback(job.language, "Jazyk neuveden").toUpperCase();
+    const salaryText = naturalFallback(job.salary_czk_month, "").toUpperCase();
+    const accommodationText = naturalFallback(job.accommodation, "").toUpperCase();
+    const languageText = naturalFallback(job.language, "").toUpperCase();
 
     // 4 & 5. UBYTOVÁNÍ & ANGLIČTINA
     let bottomSize = layout.detail;
 
-    const drawLineWithStroke = (text, x, y, size, lineWidth = 5) => {
-        if (!text) return;
-        ctx.font = `bold ${size}px Bebas Neue`;
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
-
-        ctx.save();
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.miterLimit = 2;
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = lineWidth;
-        ctx.strokeText(text, x, y);
-
-        ctx.fillStyle = "#ffffff";
-        ctx.fillText(text, x, y);
-        ctx.restore();
-    };
-
-    const drawWrappedTextWithStroke = (text, x, y, maxLineWidth, startSize, lineWidth = 5, maxLines = 2) => {
-        const wrapped = wrapText(ctx, text, maxLineWidth, startSize);
-        const lines = wrapped.lines.slice(0, maxLines);
-        lines.forEach((line, index) => {
-            drawLineWithStroke(line, x, y + (index * wrapped.size * 1.12), wrapped.size, lineWidth);
-        });
-        return lines.length * wrapped.size * 1.12;
-    };
+    const { drawLineWithStroke, drawWrapped } = createTextRenderer(ctx);
 
     let currentY = startY;
 
     // Render Country
-    drawLineWithStroke(countryText, startX, currentY, countrySize, 9);
+    drawLineWithStroke(countryText, startX, currentY, countrySize, { lineWidth: 9 });
     currentY += countrySize * 0.95 + layout.countryGap;
 
     // Render Job Title
     ctx.font = `bold ${jobSize}px Bebas Neue`;
-    const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize);
+    const currentJobWrapped = wrapText(ctx, jobTitleText, maxWidth, jobSize, 3);
     currentJobWrapped.lines.forEach((line, index) => {
-        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.15), jobSize, 7);
+        drawLineWithStroke(line, startX, currentY + (index * jobSize * 1.15), jobSize, { lineWidth: 7 });
     });
     currentY += currentJobWrapped.lines.length * jobSize * 1.15 + layout.titleGap;
 
     // Render Salary. Dlouhá mzda se zmenší nebo zalomí maximálně na 2 řádky,
     // takže už nikdy nepřeteče mimo obrázek.
-    currentY += drawWrappedTextWithStroke(salaryText, startX, currentY, maxWidth, layout.salary, 6, 2) + layout.salaryGap;
+    currentY += drawWrapped(salaryText, startX, currentY, maxWidth, layout.salary, { lineWidth: 6, maxLines: 2 }) + layout.salaryGap;
 
     // Render Ubytování
-    currentY += drawWrappedTextWithStroke(accommodationText, startX, currentY, maxWidth, bottomSize, 5, 2);
+    currentY += drawWrapped(accommodationText, startX, currentY, maxWidth, bottomSize, { lineWidth: 5, maxLines: 2 });
     currentY += layout.detailGap;
 
     // Render Jazyk
-    drawWrappedTextWithStroke(languageText, startX, currentY, maxWidth, bottomSize, 5, 2);
+    drawWrapped(languageText, startX, currentY, maxWidth, bottomSize, { lineWidth: 5, maxLines: 2 });
+
+    return canvas.toBuffer("image/png");
+}
+
+function createHeroHeroImage(job, template, canvas, ctx) {
+    // HeroHero má vlastní kompozici 1080×1350: název je nahoře, faktické
+    // údaje vpravo od vlajky a nad fotografií. Text proto nezasahuje do vlajky.
+    const { drawWrapped } = createTextRenderer(ctx);
+    const title = String(job.herohero_title || job.job_title || "").toUpperCase();
+    const location = naturalFallback(job.location, "").toUpperCase();
+    const salary = naturalFallback(job.salary_czk_month, "").toUpperCase();
+    const accommodation = naturalFallback(job.accommodation, "").toUpperCase();
+
+    let currentY = 105;
+    currentY += drawWrapped(title, 540, currentY, 860, 74, { lineWidth: 7, maxLines: 2, align: "center" }) + 20;
+    if (location) currentY += drawWrapped(location, 540, currentY, 620, 42, { lineWidth: 4, maxLines: 1, align: "center" }) + 100;
+    else currentY += 100;
+
+    // Levý okraj 430 ponechá celý prostor pro vlajku v každé šabloně.
+    const factX = 710;
+    const factWidth = 600;
+    if (accommodation) currentY += drawWrapped(accommodation, factX, currentY, factWidth, 48, { lineWidth: 5, maxLines: 2, align: "center" }) + 22;
+    if (salary) drawWrapped(salary, factX, currentY, factWidth, 52, { lineWidth: 5, maxLines: 2, align: "center" });
 
     return canvas.toBuffer("image/png");
 }
