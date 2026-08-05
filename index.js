@@ -34,9 +34,7 @@ const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
 registerFont(
     path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
-    {
-        family: "Bebas Neue"
-    }
+    { family: "Bebas Neue" }
 );
 
 const heroTemplates = {
@@ -77,176 +75,134 @@ const reelTemplates = {
     Sweden: "reel/Svedsko reel.png"
 };
 
-function wrapText(ctx, text, maxWidth, startSize) {
-    let size = startSize;
+const countryNamesCz = {
+    Austria: "Rakousko",
+    Belgium: "Belgie",
+    Denmark: "Dánsko",
+    Estonia: "Estonsko",
+    Finland: "Finsko",
+    France: "Francie",
+    Netherlands: "Nizozemsko",
+    Ireland: "Irsko",
+    Italy: "Itálie",
+    Cyprus: "Kypr",
+    Malta: "Malta",
+    Germany: "Německo",
+    Norway: "Norsko",
+    Greece: "Řecko",
+    Spain: "Španělsko",
+    Sweden: "Švédsko"
+};
 
-    while (size >= 20) {
-        ctx.font = `bold ${size}px Bebas Neue`;
-
-        const words = (text || "").split(" ");
-        const lines = [];
-        let line = "";
-
-        for (const word of words) {
-            const test = line ? `${line} ${word}` : word;
-
-            if (ctx.measureText(test).width <= maxWidth) {
-                line = test;
-            } else {
-                if (line) lines.push(line);
-                line = word;
-            }
-        }
-
-        if (line) lines.push(line);
-
-        if (lines.length <= 2) {
-            return {
-                size,
-                lines
-            };
-        }
-
-        size--;
-    }
-
-    return {
-        size: 20,
-        lines: [text]
-    };
+function cleanText(value) {
+    return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
-async function createHeroImage(job, templateFile) {
-    const fullPath = path.join(TEMPLATE_FOLDER, templateFile);
+function getCountryCz(item) {
+    const countryCode = cleanText(item.country_code);
+    const country = cleanText(item.country);
 
-    if (!fs.existsSync(fullPath)) {
-        throw new Error(`Template not found: ${fullPath}`);
+    return (
+        countryNamesCz[countryCode] ||
+        countryNamesCz[country] ||
+        country ||
+        "Země neuvedena"
+    );
+}
+
+function normalizeHousing(value) {
+    const raw = cleanText(value);
+    const lower = raw.toLowerCase();
+
+    if (!raw || /neuved|not specified|unknown|n\/a/.test(lower)) {
+        return "Ubytování neuvedeno";
     }
 
-    const template = await loadImage(fullPath);
-    const canvas = createCanvas(template.width, template.height);
-    const ctx = canvas.getContext("2d");
+    if (/not provided|no accommodation|bez ubyt|nezajiště/.test(lower)) {
+        return "Ubytování nezajištěno";
+    }
 
-    ctx.drawImage(template, 0, 0);
+    if (/free|included|zdarma/.test(lower)) {
+        return "Ubytování zdarma";
+    }
 
-    const scaleX = template.width / 1080;
-    const scaleY = template.height / 1350;
-    const fontScale = Math.min(scaleX, scaleY);
+    if (/allowance|contribution|příspěvek/.test(lower)) {
+        return "Příspěvek na ubytování";
+    }
 
-    const heroFont = "serif";
+    if (/provided|available|arranged|zajiště|poskyt/.test(lower)) {
+        return "Ubytování zajištěno";
+    }
 
-    const cleanText = value =>
-        String(value ?? "")
-            .replace(/\s+/g, " ")
-            .trim();
+    return raw
+        .replace(/accommodation/gi, "ubytování")
+        .replace(/provided/gi, "zajištěno")
+        .replace(/available/gi, "k dispozici")
+        .replace(/free/gi, "zdarma")
+        .replace(/not specified/gi, "neuvedeno");
+}
 
-    const jobTitleText = cleanText(
-        job.job_title ||
-        job.title ||
-        "PRACOVNÍ POZICE"
-    ).toUpperCase();
+function normalizeLanguage(value) {
+    const raw = cleanText(value);
 
-    const cityText = cleanText(
-        job.city ||
-        "MĚSTO NEUVEDENO"
-    ).toUpperCase();
+    if (!raw || /neuved|not specified|unknown|n\/a/i.test(raw)) {
+        return "Jazyk neuveden";
+    }
 
-    const getHousingText = () => {
-        const raw = cleanText(
-            job.housing ||
-            job.accommodation
+    return raw
+        .replace(/\bEnglish\b/gi, "angličtina")
+        .replace(/\bGerman\b/gi, "němčina")
+        .replace(/\bDutch\b/gi, "nizozemština")
+        .replace(/\bSpanish\b/gi, "španělština")
+        .replace(/\bItalian\b/gi, "italština")
+        .replace(/\bFrench\b/gi, "francouzština")
+        .replace(/\bDanish\b/gi, "dánština")
+        .replace(/\bSwedish\b/gi, "švédština")
+        .replace(/\bNorwegian\b/gi, "norština")
+        .replace(/\bFinnish\b/gi, "finština")
+        .replace(/\bGreek\b/gi, "řečtina")
+        .replace(/\bEstonian\b/gi, "estonština")
+        .replace(/\bor\b/gi, "nebo");
+}
+
+function formatMonthlyCzkSalary(...values) {
+    const candidates = values.map(cleanText).filter(Boolean);
+
+    for (const candidate of candidates) {
+        if (/neuved|not specified|unknown|n\/a/i.test(candidate)) {
+            continue;
+        }
+
+        let salary = candidate;
+
+        const czkMatch = salary.match(
+            /(?:cca\s*)?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?\s*(?:Kč|CZK)(?:\s*(?:brutto|netto|hrubého|čistého|hrubá|čistá))?(?:\s*(?:\/|za)?\s*(?:měsíc|měsíčně|month))?/i
         );
 
-        const lower = raw.toLowerCase();
-
-        if (
-            !raw ||
-            /neuved|not specified|unknown|n\/a/.test(lower)
-        ) {
-            return "UBYTOVÁNÍ NEUVEDENO";
-        }
-
-        if (
-            /bez ubyt|nezajiště|not provided|no accommodation/.test(lower)
-        ) {
-            return "UBYTOVÁNÍ NEZAJIŠTĚNO";
-        }
-
-        if (
-            /zdarma|free|included/.test(lower)
-        ) {
-            return "UBYTOVÁNÍ ZDARMA";
-        }
-
-        if (
-            /příspěvek|allowance|contribution/.test(lower)
-        ) {
-            return "PŘÍSPĚVEK NA UBYTOVÁNÍ";
-        }
-
-        if (
-            /zajiště|poskyt|provided|available|arranged|accommodation/.test(lower)
-        ) {
-            return "UBYTOVÁNÍ ZAJIŠTĚNO";
-        }
-
-        return raw
-            .replace(/accommodation/gi, "UBYTOVÁNÍ")
-            .replace(/provided/gi, "ZAJIŠTĚNO")
-            .replace(/available/gi, "K DISPOZICI")
-            .replace(/free/gi, "ZDARMA")
-            .toUpperCase();
-    };
-
-    const getMonthlyCzkSalary = () => {
-        const explicitValues = [
-            job.salary_czk_month,
-            job.monthly_salary_czk,
-            job.salary_month_czk,
-            job.salary_monthly_czk
-        ]
-            .map(cleanText)
-            .filter(Boolean);
-
-        const sources = [
-            ...explicitValues,
-            cleanText(job.salary),
-            cleanText(job.description),
-            cleanText(job.text)
-        ].filter(Boolean);
-
-        let salary = "";
-
-        for (const source of sources) {
-            const match = source.match(
-                /(?:cca\s*)?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?\s*(?:Kč|CZK)(?:\s*(?:brutto|netto|hrubého|čistého|hrubá|čistá))?(?:\s*\/?\s*(?:měsíc|měsíčně|month))?/i
+        if (czkMatch) {
+            salary = czkMatch[0];
+        } else if (/^\d[\d\s.,]*$/.test(salary)) {
+            const numeric = Number(
+                salary.replace(/\s/g, "").replace(",", ".")
             );
 
-            if (match) {
-                salary = match[0];
-                break;
+            if (Number.isFinite(numeric)) {
+                salary =
+                    `${Math.round(numeric).toLocaleString("cs-CZ")} Kč`;
             }
         }
 
-        if (!salary) {
-            const numericExplicit = explicitValues.find(
-                value => /\d/.test(value)
-            );
-
-            if (numericExplicit) {
-                salary = `${numericExplicit} Kč / měsíc`;
-            }
-        }
-
-        if (!salary) {
-            return "MZDA NEUVEDENA";
+        if (!/(?:Kč|CZK)/i.test(salary)) {
+            continue;
         }
 
         salary = salary
             .replace(/\bCZK\b/gi, "Kč")
+            .replace(/\bbrutto\b/gi, "hrubého")
+            .replace(/\bnetto\b/gi, "čistého")
             .replace(/\bmonth\b/gi, "měsíc")
             .replace(/měsíčně/gi, "měsíc")
-            .replace(/\s*\/?\s*měsíc/gi, " / měsíc")
+            .replace(/\s*(?:\/|za)?\s*měsíc/gi, " / měsíc")
             .replace(/\s+/g, " ")
             .trim();
 
@@ -258,82 +214,159 @@ async function createHeroImage(job, templateFile) {
             salary = `cca ${salary}`;
         }
 
-        return salary.toUpperCase();
-    };
+        return salary;
+    }
 
-    const createLines = (
-        text,
-        maxWidth,
-        fontSize
-    ) => {
-        ctx.font = `bold ${fontSize}px ${heroFont}`;
+    return "Mzda v Kč neuvedena";
+}
 
-        const words = cleanText(text).split(" ");
-        const lines = [];
-        let line = "";
+function createWrappedLines(
+    ctx,
+    text,
+    maxWidth,
+    fontSize,
+    fontFamily
+) {
+    ctx.font = `bold ${fontSize}px ${fontFamily}`;
 
-        for (const word of words) {
-            const testLine = line
-                ? `${line} ${word}`
-                : word;
+    const words = cleanText(text)
+        .split(" ")
+        .filter(Boolean);
 
-            if (
-                ctx.measureText(testLine).width <= maxWidth
-            ) {
-                line = testLine;
-            } else {
-                if (line) {
-                    lines.push(line);
-                }
+    const lines = [];
+    let line = "";
 
-                line = word;
-            }
-        }
+    for (const word of words) {
+        const test = line ? `${line} ${word}` : word;
 
-        if (line) {
+        if (
+            ctx.measureText(test).width <= maxWidth ||
+            !line
+        ) {
+            line = test;
+        } else {
             lines.push(line);
+            line = word;
         }
+    }
 
-        return lines;
+    if (line) {
+        lines.push(line);
+    }
+
+    return lines;
+}
+
+function fitText(
+    ctx,
+    text,
+    maxWidth,
+    startSize,
+    minSize,
+    maxLines,
+    fontFamily
+) {
+    for (
+        let size = startSize;
+        size >= minSize;
+        size--
+    ) {
+        const lines = createWrappedLines(
+            ctx,
+            text,
+            maxWidth,
+            size,
+            fontFamily
+        );
+
+        if (lines.length <= maxLines) {
+            return {
+                size,
+                lines
+            };
+        }
+    }
+
+    return {
+        size: minSize,
+        lines: createWrappedLines(
+            ctx,
+            text,
+            maxWidth,
+            minSize,
+            fontFamily
+        )
     };
+}
 
-    const fitText = (
+function drawStrokeBlock(ctx, options) {
+    const {
+        text,
+        x,
+        y,
+        maxWidth,
+        startSize,
+        minSize,
+        maxLines,
+        lineWidth,
+        lineHeight = 1.12
+    } = options;
+
+    const fitted = fitText(
+        ctx,
         text,
         maxWidth,
         startSize,
         minSize,
-        maxLines
-    ) => {
-        for (
-            let size = startSize;
-            size >= minSize;
-            size -= 1
-        ) {
-            const lines = createLines(
-                text,
-                maxWidth,
-                size
-            );
+        maxLines,
+        "Bebas Neue"
+    );
 
-            if (lines.length <= maxLines) {
-                return {
-                    size,
-                    lines
-                };
-            }
-        }
+    const actualLines = fitted.lines;
 
-        return {
-            size: minSize,
-            lines: createLines(
-                text,
-                maxWidth,
-                minSize
-            ).slice(0, maxLines)
-        };
-    };
+    ctx.font =
+        `bold ${fitted.size}px Bebas Neue`;
 
-    const drawTextBlock = ({
+    ctx.textAlign = "left";
+    ctx.textBaseline = "top";
+    ctx.lineJoin = "round";
+    ctx.lineCap = "round";
+    ctx.miterLimit = 2;
+
+    actualLines.forEach((line, index) => {
+        const lineY =
+            y +
+            index *
+            fitted.size *
+            lineHeight;
+
+        ctx.strokeStyle = "#000000";
+        ctx.lineWidth = lineWidth;
+
+        ctx.strokeText(
+            line,
+            x,
+            lineY
+        );
+
+        ctx.fillStyle = "#ffffff";
+
+        ctx.fillText(
+            line,
+            x,
+            lineY
+        );
+    });
+
+    return (
+        actualLines.length *
+        fitted.size *
+        lineHeight
+    );
+}
+
+function drawHeroBlock(ctx, options) {
+    const {
         text,
         centerX,
         topY,
@@ -343,111 +376,59 @@ async function createHeroImage(job, templateFile) {
         maxLines,
         rotation = 0,
         lineHeight = 1.05
-    }) => {
-        const fitted = fitText(
-            text,
-            maxWidth,
-            startSize,
-            minSize,
-            maxLines
-        );
+    } = options;
 
-        ctx.save();
+    const fitted = fitText(
+        ctx,
+        text,
+        maxWidth,
+        startSize,
+        minSize,
+        maxLines,
+        "serif"
+    );
 
-        ctx.translate(
-            centerX,
-            topY
-        );
+    const actualLines = fitted.lines;
 
-        ctx.rotate(rotation);
+    ctx.save();
 
-        ctx.font =
-            `bold ${fitted.size}px ${heroFont}`;
+    ctx.translate(
+        centerX,
+        topY
+    );
 
-        ctx.fillStyle = "#000000";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "top";
+    ctx.rotate(rotation);
 
-        fitted.lines.forEach(
-            (line, index) => {
-                ctx.fillText(
-                    line,
-                    0,
-                    index *
-                    fitted.size *
-                    lineHeight
-                );
-            }
-        );
+    ctx.font =
+        `bold ${fitted.size}px serif`;
 
-        ctx.restore();
+    ctx.fillStyle = "#000000";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
 
-        return (
-            fitted.lines.length *
+    actualLines.forEach((line, index) => {
+        ctx.fillText(
+            line,
+            0,
+            index *
             fitted.size *
             lineHeight
         );
-    };
-
-    const titleTop = 120 * scaleY;
-
-    const titleHeight = drawTextBlock({
-        text: jobTitleText,
-        centerX: 540 * scaleX,
-        topY: titleTop,
-        maxWidth: 760 * scaleX,
-        startSize: 68 * fontScale,
-        minSize: 34 * fontScale,
-        maxLines: 2,
-        lineHeight: 1.02
     });
 
-    drawTextBlock({
-        text: cityText,
-        centerX: 540 * scaleX,
-        topY:
-            titleTop +
-            titleHeight +
-            (12 * scaleY),
-        maxWidth: 620 * scaleX,
-        startSize: 40 * fontScale,
-        minSize: 25 * fontScale,
-        maxLines: 1
-    });
+    ctx.restore();
 
-    const housingTop = 305 * scaleY;
-
-    const housingHeight = drawTextBlock({
-        text: getHousingText(),
-        centerX: 805 * scaleX,
-        topY: housingTop,
-        maxWidth: 430 * scaleX,
-        startSize: 48 * fontScale,
-        minSize: 29 * fontScale,
-        maxLines: 2,
-        rotation: -0.15,
-        lineHeight: 1.02
-    });
-
-    drawTextBlock({
-        text: getMonthlyCzkSalary(),
-        centerX: 800 * scaleX,
-        topY:
-            housingTop +
-            housingHeight +
-            (18 * scaleY),
-        maxWidth: 440 * scaleX,
-        startSize: 38 * fontScale,
-        minSize: 24 * fontScale,
-        maxLines: 2,
-        rotation: -0.04,
-        lineHeight: 1.05
-    });
-
-    return canvas.toBuffer("image/png");
+    return (
+        actualLines.length *
+        fitted.size *
+        lineHeight
+    );
 }
 
-async function createReelImage(job, templateFile) {
+async function createHeroImage(
+    job,
+    templateFile
+) {
     const fullPath = path.join(
         TEMPLATE_FOLDER,
         templateFile
@@ -459,237 +440,343 @@ async function createReelImage(job, templateFile) {
         );
     }
 
-    const template = await loadImage(fullPath);
+    const template =
+        await loadImage(fullPath);
 
     const canvas = createCanvas(
         template.width,
         template.height
     );
 
-    const ctx = canvas.getContext("2d");
+    const ctx =
+        canvas.getContext("2d");
 
-    ctx.drawImage(template, 0, 0);
+    ctx.drawImage(
+        template,
+        0,
+        0
+    );
+
+    const scaleX =
+        template.width / 1080;
+
+    const scaleY =
+        template.height / 1350;
+
+    const fontScale =
+        Math.min(scaleX, scaleY);
+
+    const jobTitle = cleanText(
+        job.job_title ||
+        job.title ||
+        "Pracovní pozice"
+    );
+
+    const city = cleanText(
+        job.city ||
+        "Město neuvedeno"
+    );
+
+    const housing = normalizeHousing(
+        job.housing ||
+        job.accommodation
+    );
+
+    const salary =
+        formatMonthlyCzkSalary(
+            job.salary_czk_month,
+            job.monthly_salary_czk,
+            job.salary_month_czk,
+            job.salary_monthly_czk,
+            job.salary
+        );
+
+    const titleTop =
+        120 * scaleY;
+
+    const titleHeight =
+        drawHeroBlock(ctx, {
+            text: jobTitle,
+
+            centerX:
+                540 * scaleX,
+
+            topY:
+                titleTop,
+
+            maxWidth:
+                720 * scaleX,
+
+            startSize:
+                68 * fontScale,
+
+            minSize:
+                30 * fontScale,
+
+            maxLines: 2,
+
+            lineHeight: 1.02
+        });
+
+    drawHeroBlock(ctx, {
+        text: city,
+
+        centerX:
+            540 * scaleX,
+
+        topY:
+            titleTop +
+            titleHeight +
+            10 * scaleY,
+
+        maxWidth:
+            560 * scaleX,
+
+        startSize:
+            38 * fontScale,
+
+        minSize:
+            23 * fontScale,
+
+        maxLines: 1
+    });
+
+    const housingTop =
+        305 * scaleY;
+
+    const housingHeight =
+        drawHeroBlock(ctx, {
+            text: housing,
+
+            centerX:
+                810 * scaleX,
+
+            topY:
+                housingTop,
+
+            maxWidth:
+                430 * scaleX,
+
+            startSize:
+                48 * fontScale,
+
+            minSize:
+                27 * fontScale,
+
+            maxLines: 2,
+
+            rotation: -0.16,
+
+            lineHeight: 1.02
+        });
+
+    drawHeroBlock(ctx, {
+        text: salary,
+
+        centerX:
+            805 * scaleX,
+
+        topY:
+            housingTop +
+            housingHeight +
+            18 * scaleY,
+
+        maxWidth:
+            440 * scaleX,
+
+        startSize:
+            38 * fontScale,
+
+        minSize:
+            23 * fontScale,
+
+        maxLines: 2,
+
+        rotation: -0.04
+    });
+
+    return canvas.toBuffer(
+        "image/png"
+    );
+}
+
+async function createReelImage(
+    reel,
+    templateFile
+) {
+    const fullPath = path.join(
+        TEMPLATE_FOLDER,
+        templateFile
+    );
+
+    if (!fs.existsSync(fullPath)) {
+        throw new Error(
+            `Template not found: ${fullPath}`
+        );
+    }
+
+    const template =
+        await loadImage(fullPath);
+
+    const canvas = createCanvas(
+        template.width,
+        template.height
+    );
+
+    const ctx =
+        canvas.getContext("2d");
+
+    ctx.drawImage(
+        template,
+        0,
+        0
+    );
 
     const startX = 90;
     const startY = 220;
 
     const maxWidth =
         template.width -
-        (startX * 2);
+        startX * 2;
 
-    const drawLineWithStroke = (
-        text,
-        x,
-        y,
-        size,
-        lineWidth = 5
-    ) => {
-        if (!text) return;
+    const country =
+        getCountryCz(reel)
+            .toUpperCase();
 
-        ctx.font =
-            `bold ${size}px Bebas Neue`;
+    const jobTitle =
+        cleanText(
+            reel.job_title ||
+            reel.title ||
+            "Pracovní pozice"
+        ).toUpperCase();
 
-        ctx.textAlign = "left";
-        ctx.textBaseline = "top";
+    const salary =
+        formatMonthlyCzkSalary(
+            reel.salary_czk_month,
+            reel.monthly_salary_czk,
+            reel.salary_month_czk,
+            reel.salary_monthly_czk,
+            reel.salary
+        ).toUpperCase();
 
-        ctx.save();
+    const housing =
+        normalizeHousing(
+            reel.housing ||
+            reel.accommodation
+        ).toUpperCase();
 
-        ctx.lineJoin = "round";
-        ctx.lineCap = "round";
-        ctx.miterLimit = 2;
-
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = lineWidth;
-
-        ctx.strokeText(
-            text,
-            x,
-            y
-        );
-
-        ctx.fillStyle = "#ffffff";
-
-        ctx.fillText(
-            text,
-            x,
-            y
-        );
-
-        ctx.restore();
-    };
+    const language =
+        normalizeLanguage(
+            reel.language
+        ).toUpperCase();
 
     const countrySize = 135;
 
-    const countryText =
-        (job.country || "").toUpperCase();
+    drawStrokeBlock(ctx, {
+        text: country,
 
-    drawLineWithStroke(
-        countryText,
-        startX,
-        startY,
-        countrySize,
-        9
-    );
+        x: startX,
+        y: startY,
+
+        maxWidth,
+
+        startSize:
+            countrySize,
+
+        minSize: 90,
+        maxLines: 1,
+        lineWidth: 9
+    });
 
     let currentY =
         startY +
-        (countrySize * 0.95) +
+        countrySize * 0.95 +
         55;
 
-    const jobTitleText =
-        (job.job_title || "").toUpperCase();
+    currentY +=
+        drawStrokeBlock(ctx, {
+            text: jobTitle,
 
-    const jobWrapped = wrapText(
-        ctx,
-        jobTitleText,
-        maxWidth,
-        82
-    );
+            x: startX,
+            y: currentY,
 
-    const jobSize = Math.max(
-        42,
-        jobWrapped.size
-    );
+            maxWidth,
 
-    const finalJobWrapped = wrapText(
-        ctx,
-        jobTitleText,
-        maxWidth,
-        jobSize
-    );
-
-    const jobLineHeight =
-        jobSize * 1.12;
-
-    finalJobWrapped.lines.forEach(
-        (line, index) => {
-            drawLineWithStroke(
-                line,
-                startX,
-                currentY +
-                (index * jobLineHeight),
-                jobSize,
-                7
-            );
-        }
-    );
+            startSize: 82,
+            minSize: 38,
+            maxLines: 3,
+            lineWidth: 7
+        }) + 30;
 
     currentY +=
-        finalJobWrapped.lines.length *
-        jobLineHeight +
-        35;
+        drawStrokeBlock(ctx, {
+            text: salary,
 
-    let salaryText = String(
-        job.salary_czk_month ||
-        job.salary ||
-        ""
-    ).trim();
+            x: startX,
+            y: currentY,
 
-    if (
-        salaryText &&
-        salaryText.toUpperCase() !== "NEUVEDENO"
-    ) {
-        salaryText = salaryText
-            .replace(/\bCZK\b/gi, "KČ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .toUpperCase();
-
-        if (
-            /KČ/.test(salaryText) &&
-            !/MĚSÍC/.test(salaryText)
-        ) {
-            salaryText += " / MĚSÍC";
-        }
-
-        const salaryWrapped = wrapText(
-            ctx,
-            salaryText,
             maxWidth,
-            68
-        );
 
-        const salarySize = Math.max(
-            44,
-            salaryWrapped.size
-        );
+            startSize: 68,
+            minSize: 38,
+            maxLines: 2,
+            lineWidth: 6
+        }) + 24;
 
-        const finalSalaryWrapped = wrapText(
-            ctx,
-            salaryText,
+    currentY +=
+        drawStrokeBlock(ctx, {
+            text: housing,
+
+            x: startX,
+            y: currentY,
+
             maxWidth,
-            salarySize
-        );
 
-        const salaryLineHeight =
-            salarySize * 1.12;
+            startSize: 48,
+            minSize: 30,
+            maxLines: 2,
+            lineWidth: 5
+        }) + 12;
 
-        finalSalaryWrapped.lines.forEach(
-            (line, index) => {
-                drawLineWithStroke(
-                    line,
-                    startX,
-                    currentY +
-                    (index * salaryLineHeight),
-                    salarySize,
-                    6
-                );
-            }
-        );
+    drawStrokeBlock(ctx, {
+        text: language,
 
-        currentY +=
-            finalSalaryWrapped.lines.length *
-            salaryLineHeight +
-            30;
-    }
+        x: startX,
+        y: currentY,
 
-    const bottomSize = 48;
+        maxWidth,
 
-    const ubytovaniText =
-        "UBYTOVÁNÍ ZAJIŠTĚNO.";
+        startSize: 48,
+        minSize: 30,
+        maxLines: 2,
+        lineWidth: 5
+    });
 
-    drawLineWithStroke(
-        ubytovaniText,
-        startX,
-        currentY,
-        bottomSize,
-        5
+    return canvas.toBuffer(
+        "image/png"
     );
-
-    currentY += bottomSize * 1.25;
-
-    const anglictinaText =
-        "ANGLIČTINA";
-
-    drawLineWithStroke(
-        anglictinaText,
-        startX,
-        currentY,
-        bottomSize,
-        5
-    );
-
-    return canvas.toBuffer("image/png");
 }
 
 async function uploadBuffer(buffer) {
     return await new Promise(
         (resolve, reject) => {
             const stream =
-                cloudinary.uploader.upload_stream(
-                    {
-                        folder: "PracovniTipyAI"
-                    },
-                    (err, result) => {
-                        if (err) {
-                            return reject(err);
-                        }
+                cloudinary.uploader
+                    .upload_stream(
+                        {
+                            folder:
+                                "PracovniTipyAI"
+                        },
+                        (err, result) => {
+                            if (err) {
+                                return reject(err);
+                            }
 
-                        resolve(
-                            result.secure_url
-                        );
-                    }
-                );
+                            resolve(
+                                result.secure_url
+                            );
+                        }
+                    );
 
             stream.end(buffer);
         }
@@ -728,48 +815,55 @@ async function createReel(imageBuffer) {
                 .outputOptions([
                     "-t",
                     "8",
+
                     "-vf",
                     "scale=720:1280",
+
                     "-pix_fmt",
                     "yuv420p",
+
                     "-preset",
                     "ultrafast",
+
                     "-threads",
                     "1",
+
                     "-movflags",
                     "+faststart"
                 ])
-                .on("error", err => {
-                    reject(err);
-                })
-                .on("end", () => {
-                    resolve();
-                })
+                .on(
+                    "error",
+                    reject
+                )
+                .on(
+                    "end",
+                    resolve
+                )
                 .save(videoPath);
         }
     );
 
-    let result;
+    const result =
+        await cloudinary.uploader.upload(
+            videoPath,
+            {
+                resource_type:
+                    "video",
 
-    try {
-        result =
-            await cloudinary.uploader.upload(
-                videoPath,
-                {
-                    resource_type: "video",
-                    folder:
-                        "PracovniTipyAI/reels"
-                }
-            );
-    } catch (e) {
-        throw e;
-    }
+                folder:
+                    "PracovniTipyAI/reels"
+            }
+        );
 
-    if (fs.existsSync(imagePath)) {
+    if (
+        fs.existsSync(imagePath)
+    ) {
         fs.unlinkSync(imagePath);
     }
 
-    if (fs.existsSync(videoPath)) {
+    if (
+        fs.existsSync(videoPath)
+    ) {
         fs.unlinkSync(videoPath);
     }
 
@@ -777,161 +871,213 @@ async function createReel(imageBuffer) {
 }
 
 app.get("/", (req, res) => {
-    res.send("PracovniTipyAI běží");
+    res.send(
+        "PracovniTipyAI běží"
+    );
 });
 
-app.post("/generate", async (req, res) => {
-    const jobs =
-        Array.isArray(req.body.jobs)
-            ? req.body.jobs
-            : [];
+app.post(
+    "/generate",
+    async (req, res) => {
+        const jobs =
+            Array.isArray(
+                req.body.jobs
+            )
+                ? req.body.jobs
+                : [];
 
-    const reels =
-        Array.isArray(req.body.reels)
-            ? req.body.reels
-            : [];
+        const reels =
+            Array.isArray(
+                req.body.reels
+            )
+                ? req.body.reels
+                : [];
 
-    if (
-        jobs.length === 0 &&
-        reels.length === 0
-    ) {
-        return res.status(400).json({
-            success: false,
-            error:
-                "Musí být předáno jobs nebo reels"
-        });
-    }
+        if (
+            jobs.length === 0 &&
+            reels.length === 0
+        ) {
+            return res
+                .status(400)
+                .json({
+                    success: false,
 
-    try {
-        const herohero = [];
-        const instagram = [];
+                    error:
+                        "Musí být předáno jobs nebo reels"
+                });
+        }
 
-        for (const job of jobs) {
-            const template =
-                heroTemplates[
-                    job.country_code
-                ];
+        try {
+            const herohero = [];
+            const instagram = [];
 
-            if (!template) {
-                continue;
-            }
+            for (const job of jobs) {
+                const template =
+                    heroTemplates[
+                        job.country_code
+                    ];
 
-            const imageBuffer =
-                await createHeroImage(
-                    job,
-                    template
-                );
+                if (!template) {
+                    continue;
+                }
 
-            const imageUrl =
-                await uploadBuffer(
-                    imageBuffer
-                );
+                const imageBuffer =
+                    await createHeroImage(
+                        job,
+                        template
+                    );
 
-            herohero.push({
-                ...job,
+                const imageUrl =
+                    await uploadBuffer(
+                        imageBuffer
+                    );
 
-                postId: job.postId,
-                categoryId: job.categoryId,
+                herohero.push({
+                    ...job,
 
-                title: job.job_title,
-                text: job.description,
+                    postId:
+                        job.postId,
 
-                textHtml:
-                    `<p>${
-                        (job.description || "")
-                            .replace(
+                    categoryId:
+                        job.categoryId,
+
+                    title:
+                        job.job_title,
+
+                    text:
+                        job.description,
+
+                    textHtml:
+                        `<p>${
+                            (
+                                job.description ||
+                                ""
+                            ).replace(
                                 /\n/g,
                                 "</p><p>"
                             )
-                    }</p>`,
+                        }</p>`,
 
-                imageUrl,
+                    imageUrl,
 
-                width: 1080,
-                height: 1350,
+                    width: 1080,
+                    height: 1350,
 
-                fileName:
-                    `${job.country} Herohero.png`,
+                    fileName:
+                        `${job.country} Herohero.png`,
 
-                fileSize: 0,
+                    fileSize: 0,
 
-                previewLevel:
-                    "FIRST_LINES",
+                    previewLevel:
+                        "FIRST_LINES",
 
-                isAgeRestricted: false,
-                isSponsored: false,
-                isExcludedFromRss: false
-            });
-        }
+                    isAgeRestricted:
+                        false,
 
-        for (const reel of reels) {
-            const template =
-                reelTemplates[
-                    reel.country_code
-                ];
+                    isSponsored:
+                        false,
 
-            if (!template) {
-                continue;
+                    isExcludedFromRss:
+                        false
+                });
             }
 
-            const matchingHeroJob =
-                jobs[instagram.length];
+            for (
+                const [
+                    reelIndex,
+                    reel
+                ] of reels.entries()
+            ) {
+                const template =
+                    reelTemplates[
+                        reel.country_code
+                    ];
 
-            const reelForImage = {
-                ...reel,
+                if (!template) {
+                    continue;
+                }
 
-                salary_czk_month:
-                    reel.salary_czk_month ||
-                    matchingHeroJob
-                        ?.salary_czk_month ||
-                    matchingHeroJob
-                        ?.salary ||
-                    ""
-            };
+                const matchingJob =
+                    jobs[reelIndex] ||
+                    {};
 
-            const imageBuffer =
-                await createReelImage(
-                    reelForImage,
-                    template
-                );
+                const reelForImage = {
+                    ...reel,
 
-            const videoUrl =
-                await createReel(
-                    imageBuffer
-                );
+                    salary_czk_month:
+                        reel.salary_czk_month ||
+                        matchingJob
+                            .salary_czk_month ||
+                        matchingJob
+                            .monthly_salary_czk ||
+                        matchingJob
+                            .salary_month_czk ||
+                        matchingJob
+                            .salary_monthly_czk ||
+                        matchingJob
+                            .salary ||
+                        reel.salary,
 
-            instagram.push({
-                ...reelForImage,
-                videoUrl
+                    housing:
+                        reel.housing ||
+                        reel.accommodation ||
+                        matchingJob.housing ||
+                        matchingJob
+                            .accommodation,
+
+                    language:
+                        reel.language ||
+                        matchingJob.language
+                };
+
+                const imageBuffer =
+                    await createReelImage(
+                        reelForImage,
+                        template
+                    );
+
+                const videoUrl =
+                    await createReel(
+                        imageBuffer
+                    );
+
+                instagram.push({
+                    ...reel,
+                    videoUrl
+                });
+            }
+
+            res.json({
+                success: true,
+                herohero,
+                instagram
+            });
+        } catch (err) {
+            res.status(500).json({
+                success: false,
+                error: err.message
             });
         }
-
-        res.json({
-            success: true,
-            herohero,
-            instagram
-        });
-    } catch (err) {
-        res.status(500).json({
-            success: false,
-            error: err.message
-        });
     }
-});
+);
 
 app.post(
     "/publishHeroHero",
     async (req, res) => {
         const publishHeroHero =
-            require("./publishHeroHero");
-
-        try {
-            await publishHeroHero(
-                req.body
+            require(
+                "./publishHeroHero"
             );
 
+        try {
+            const result =
+                await publishHeroHero(
+                    req.body
+                );
+
             res.json({
-                success: true
+                success: true,
+                result
             });
         } catch (e) {
             res.status(500).json({
@@ -952,4 +1098,4 @@ app.post(
     }
 );
 
-app.listen(PORT, () => {});
+app.listen(PORT);
