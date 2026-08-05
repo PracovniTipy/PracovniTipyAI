@@ -207,7 +207,7 @@ function isDirectJobLink(value) {
 function createTextRenderer(ctx) {
     const drawLineWithStroke = (text, x, y, size, options = {}) => {
         if (!text) return;
-        const { lineWidth = 5, align = "left", font = "Bebas Neue" } = options;
+        const { lineWidth = 5, align = "left", font = "Bebas Neue", fillColor = "#ffffff", strokeColor = "#000000" } = options;
         ctx.font = `bold ${size}px ${font}`;
         ctx.textAlign = align;
         ctx.textBaseline = "top";
@@ -215,21 +215,21 @@ function createTextRenderer(ctx) {
         ctx.lineJoin = "round";
         ctx.lineCap = "round";
         ctx.miterLimit = 2;
-        ctx.strokeStyle = "#000000";
+        ctx.strokeStyle = strokeColor;
         ctx.lineWidth = lineWidth;
-        ctx.strokeText(text, x, y);
-        ctx.fillStyle = "#ffffff";
+        if (lineWidth > 0) ctx.strokeText(text, x, y);
+        ctx.fillStyle = fillColor;
         ctx.fillText(text, x, y);
         ctx.restore();
     };
 
     const drawWrapped = (text, x, y, maxLineWidth, startSize, options = {}) => {
         if (!text) return 0;
-        const { lineWidth = 5, maxLines = 2, align = "left" } = options;
+        const { lineWidth = 5, maxLines = 2, align = "left", font = "Bebas Neue", fillColor = "#ffffff", strokeColor = "#000000" } = options;
         const wrapped = wrapText(ctx, text, maxLineWidth, startSize, maxLines);
         const lines = wrapped.lines.slice(0, maxLines);
         lines.forEach((line, index) => {
-            drawLineWithStroke(line, x, y + index * wrapped.size * 1.12, wrapped.size, { lineWidth, align });
+            drawLineWithStroke(line, x, y + index * wrapped.size * 1.12, wrapped.size, { lineWidth, align, font, fillColor, strokeColor });
         });
         return lines.length * wrapped.size * 1.12;
     };
@@ -332,24 +332,28 @@ function createHeroHeroImage(job, template, canvas, ctx) {
     // HeroHero má vlastní kompozici. Nevyužívá souřadnice Reelu: název a město
     // jsou přesně uprostřed nahoře, vlajka vlevo a dva krátké fakty vpravo.
     const { drawWrapped } = createTextRenderer(ctx);
-    const title = shortenHeroTitle(job.herohero_title || job.job_title).toUpperCase();
-    const location = naturalFallback(job.location || job.city, "").toUpperCase();
-    const salary = heroFact(job.salary_czk_month, "").toUpperCase();
-    const accommodation = heroFact(job.accommodation, "").toUpperCase();
+    const title = shortenHeroTitle(job.herohero_title || job.job_title);
+    const location = naturalFallback(job.city || job.location, "");
+    const salary = heroFact(job.salary_czk_month, "");
+    const accommodation = heroFact(job.accommodation, "");
 
     const centerX = Math.round(template.width / 2);
-    let titleY = 110;
-    titleY += drawWrapped(title, centerX, titleY, 780, 66, {
-        lineWidth: 6,
+    let titleY = 120;
+    titleY += drawWrapped(title, centerX, titleY, 800, 64, {
+        lineWidth: 0,
         maxLines: 2,
-        align: "center"
+        align: "center",
+        font: "Georgia",
+        fillColor: "#111111"
     }) + 12;
 
     if (location) {
-        drawWrapped(location, centerX, titleY, 540, 38, {
-            lineWidth: 4,
+        drawWrapped(location, centerX, titleY, 520, 32, {
+            lineWidth: 0,
             maxLines: 1,
-            align: "center"
+            align: "center",
+            font: "Georgia",
+            fillColor: "#111111"
         });
     }
 
@@ -357,19 +361,23 @@ function createHeroHeroImage(job, template, canvas, ctx) {
     // v bezpečné pravé části nad fotkou, nikdy přes vlajku.
     const factX = 755;
     const factWidth = 470;
-    let factY = 300;
+    let factY = 305;
     if (accommodation) {
-        factY += drawWrapped(accommodation, factX, factY, factWidth, 42, {
-            lineWidth: 4,
+        factY += drawWrapped(accommodation, factX, factY, factWidth, 38, {
+            lineWidth: 0,
             maxLines: 1,
-            align: "center"
+            align: "center",
+            font: "Georgia",
+            fillColor: "#111111"
         }) + 16;
     }
     if (salary) {
-        drawWrapped(salary, factX, factY, factWidth, 40, {
-            lineWidth: 4,
+        drawWrapped(salary, factX, factY, factWidth, 34, {
+            lineWidth: 0,
             maxLines: 1,
-            align: "center"
+            align: "center",
+            font: "Georgia",
+            fillColor: "#111111"
         });
     }
 
