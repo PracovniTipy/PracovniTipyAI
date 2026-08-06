@@ -691,7 +691,7 @@ async function createReelImage(
     let currentY =
         startY +
         countrySize * 0.95 +
-        55;
+        115;
 
     currentY +=
         drawStrokeBlock(ctx, {
