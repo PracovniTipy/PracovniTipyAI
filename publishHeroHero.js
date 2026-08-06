@@ -834,6 +834,17 @@ const HEROHERO_COUNTRY_CATEGORIES = {
   Norway: ["Norsko"], Greece: ["Řecko"], Spain: ["Španělsko"], Sweden: ["Švédsko"]
 };
 
+function inferWorkCategory(job) {
+  const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
+  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Práce s ovocem/zeleninou";
+  if (/farm|farma|zeměděl|zemedel|agricultur/.test(value)) return "Práce na farmách";
+  if (/hotel|housekeep|pokoj|recep|resort|úklid|uklid/.test(value)) return "Hotelové práce";
+  if (/kuch|číšník|cisnik|servír|servir|gastronom|dishwasher|nádob/.test(value)) return "Gastronomie";
+  if (/sklad|logistik|picker|vychyst|balen|warehouse|order/.test(value)) return "Sklady a logistika";
+  if (/výrob|vyrob|production|potravin|maso|řez|rez|factory/.test(value)) return "Výroba";
+  return "";
+}
+
 async function selectCountryCategory(page, job) {
   const countryKey = String(job.country_code || job.country || "").trim();
   const labels = HEROHERO_COUNTRY_CATEGORIES[countryKey] || (countryKey ? [countryKey] : []);
@@ -883,6 +894,21 @@ async function selectCountryCategory(page, job) {
   // Kategorie je užitečná, ale její dočasná nedostupnost nesmí zablokovat
   // zveřejnění celé dávky pracovních nabídek.
   logStep(`Kategorie země nebyla dostupná (${labels.join(" / ")}); pokračuji bez kategorie.`);
+  return false;
+}
+
+async function selectWorkCategory(page, job) {
+  const label = job.work_category || job.job_category || inferWorkCategory(job);
+  if (!label) { logStep("Typ práce se nepodařilo určit, kategorii nepřidávám."); return false; }
+  const opener = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true })).first();
+  if (await opener.isVisible().catch(() => false)) await opener.click({ timeout: 10000 }).catch(() => {});
+  await page.waitForTimeout(500);
+  const matches = page.getByText(label, { exact: true });
+  for (let i = 0; i < await matches.count(); i++) {
+    const match = matches.nth(i);
+    if (await match.isVisible().catch(() => false)) { await match.click({ timeout: 10000 }); logStep(`Kategorie práce vybrána: ${label}`); return true; }
+  }
+  logStep(`Kategorie práce nebyla dostupná: ${label}`);
   return false;
 }
 
@@ -1053,6 +1079,7 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(10000);
 
   await selectCountryCategory(page, job);
+  await selectWorkCategory(page, job);
 
   // Na obrazovce Možnosti příspěvku je šipka router-link (<a>), ne <button>.
   // Geometrické hledání mezi buttony ji proto nikdy nemohlo najít.
