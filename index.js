@@ -876,22 +876,40 @@ app.get("/", (req, res) => {
     );
 });
 
+// Make/OpenAI may wrap the generated JSON in body/data/output or a fenced string.
+function extractGenerationPayload(input) {
+    if (!input) return {};
+    if (typeof input === "string") {
+        const cleaned = input.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+        try { return extractGenerationPayload(JSON.parse(cleaned)); } catch (_) { return {}; }
+    }
+    if (Array.isArray(input) || typeof input !== "object") return {};
+    const parsed = { ...input };
+    for (const key of ["jobs", "reels"]) {
+        if (typeof parsed[key] === "string") {
+            try { parsed[key] = JSON.parse(parsed[key]); } catch (_) { parsed[key] = []; }
+        }
+    }
+    if (Array.isArray(parsed.jobs) || Array.isArray(parsed.reels)) return parsed;
+    const messageContent = input.choices?.[0]?.message?.content;
+    if (messageContent) return extractGenerationPayload(messageContent);
+    for (const key of ["body", "data", "output", "result", "response", "content", "text"]) {
+        if (input[key] !== undefined) {
+            const nested = extractGenerationPayload(input[key]);
+            if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
+        }
+    }
+    return {};
+}
+
 app.post(
     "/generate",
     async (req, res) => {
-        const jobs =
-            Array.isArray(
-                req.body.jobs
-            )
-                ? req.body.jobs
-                : [];
-
-        const reels =
-            Array.isArray(
-                req.body.reels
-            )
-                ? req.body.reels
-                : [];
+        const payload = extractGenerationPayload(req.body);
+        const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
+        const reels = Array.isArray(payload.reels)
+            ? payload.reels.slice(0, 2)
+            : jobs.slice(0, 2).map(job => ({ ...job }));
 
         if (
             jobs.length === 0 &&
