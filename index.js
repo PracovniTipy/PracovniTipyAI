@@ -1,17 +1,3 @@
-function descriptionToText(value) {
-  if (value == null) return "";
-  if (typeof value === "string") return value;
-  if (Array.isArray(value)) return value.map(descriptionToText).filter(Boolean).join("\n");
-  if (typeof value === "object") {
-    for (const key of ["text", "content", "description", "value"]) {
-      if (typeof value[key] === "string") return value[key];
-    }
-    try { return JSON.stringify(value); } catch { return ""; }
-  }
-  return String(value);
-}
-
-
 require("dotenv").config();
 
 const express = require("express");
@@ -110,6 +96,31 @@ const countryNamesCz = {
 
 function cleanText(value) {
     return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+// Apify may return descriptions as strings, arrays, or structured objects.
+// Normalize them before formatting so one malformed bundle cannot crash the
+// whole generation request (e.g. calling .replace on an object).
+function descriptionToText(value) {
+    if (value == null) return "";
+    if (typeof value === "string") return value;
+    if (Array.isArray(value)) {
+        return value
+            .map((item) => descriptionToText(item))
+            .filter(Boolean)
+            .join("\n");
+    }
+    if (typeof value === "object") {
+        for (const key of ["text", "content", "description", "value"]) {
+            if (typeof value[key] === "string") return value[key];
+        }
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return "";
+        }
+    }
+    return String(value);
 }
 
 function getCountryCz(item) {
@@ -571,7 +582,7 @@ async function createHeroImage(
             maxWidth:
                 430 * scaleX,
 
-            startSize
+            startSize:
                 48 * fontScale,
 
             minSize:
@@ -977,13 +988,12 @@ app.post(
                         job.job_title,
 
                     text:
-                        job.description,
+                        descriptionToText(job.description),
 
                     textHtml:
                         `<p>${
-                            (
-                                job.description ||
-                                ""
+                            descriptionToText(
+                                job.description
                             ).replace(
                                 /\n/g,
                                 "</p><p>"
