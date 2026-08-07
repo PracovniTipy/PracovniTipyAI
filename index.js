@@ -1,3 +1,17 @@
+function descriptionToText(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(descriptionToText).filter(Boolean).join("\n");
+  if (typeof value === "object") {
+    for (const key of ["text", "content", "description", "value"]) {
+      if (typeof value[key] === "string") return value[key];
+    }
+    try { return JSON.stringify(value); } catch { return ""; }
+  }
+  return String(value);
+}
+
+
 require("dotenv").config();
 
 const express = require("express");
@@ -557,7 +571,7 @@ async function createHeroImage(
             maxWidth:
                 430 * scaleX,
 
-            startSize:
+            startSize
                 48 * fontScale,
 
             minSize:
