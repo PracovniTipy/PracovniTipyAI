@@ -902,29 +902,92 @@ app.get("/", (req, res) => {
     );
 });
 
-// Make/OpenAI may wrap the generated JSON in body/data/output or a fenced string.
-function extractGenerationPayload(input) {
+// Make/OpenAI may wrap the generated JSON in body/data/output, a fenced
+// string, an Iterator array, or a named collection. Normalize all of those
+// shapes before validation so the live endpoint never rejects a valid bundle
+// with the misleading "jobs nebo reels" error.
+function extractGenerationPayload(input, seen = new Set()) {
     if (!input) return {};
+
     if (typeof input === "string") {
-        const cleaned = input.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-        try { return extractGenerationPayload(JSON.parse(cleaned)); } catch (_) { return {}; }
+        const cleaned = input
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```$/i, "")
+            .trim();
+        try {
+            return extractGenerationPayload(JSON.parse(cleaned), seen);
+        } catch (_) {
+            return {};
+        }
     }
-    if (Array.isArray(input) || typeof input !== "object") return {};
+
+    if (typeof input !== "object" || seen.has(input)) return {};
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+        const merged = { jobs: [], reels: [] };
+        for (const item of input) {
+            const nested = extractGenerationPayload(item, seen);
+            if (Array.isArray(nested.jobs)) merged.jobs.push(...nested.jobs);
+            if (Array.isArray(nested.reels)) merged.reels.push(...nested.reels);
+        }
+        // A plain Iterator array is itself the jobs collection.
+        if (!merged.jobs.length && !merged.reels.length && input.length) {
+            const jobLike = input.every((item) => item && typeof item === "object");
+            if (jobLike) merged.jobs = input;
+        }
+        return merged.jobs.length || merged.reels.length ? merged : {};
+    }
+
     const parsed = { ...input };
+    const aliases = {
+        herohero: "jobs",
+        heroHero: "jobs",
+        instagram: "reels",
+        ig: "reels"
+    };
+
+    for (const [source, target] of Object.entries(aliases)) {
+        if (parsed[target] === undefined && parsed[source] !== undefined) {
+            parsed[target] = parsed[source];
+        }
+    }
+
     for (const key of ["jobs", "reels"]) {
         if (typeof parsed[key] === "string") {
             try { parsed[key] = JSON.parse(parsed[key]); } catch (_) { parsed[key] = []; }
         }
     }
+
     if (Array.isArray(parsed.jobs) || Array.isArray(parsed.reels)) return parsed;
+
+    const jobLike = ["job_title", "jobTitle", "title", "position", "role", "country_code", "salary"]
+        .some((key) => parsed[key] !== undefined);
+    if (jobLike) return { jobs: [parsed] };
+
     const messageContent = input.choices?.[0]?.message?.content;
-    if (messageContent) return extractGenerationPayload(messageContent);
-    for (const key of ["body", "data", "output", "result", "response", "content", "text"]) {
+    if (messageContent !== undefined) {
+        const nested = extractGenerationPayload(messageContent, seen);
+        if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
+    }
+
+    for (const key of [
+        "body", "data", "output", "result", "response", "content", "text",
+        "value", "item", "collection", "items", "payload", "json"
+    ]) {
         if (input[key] !== undefined) {
-            const nested = extractGenerationPayload(input[key]);
+            const nested = extractGenerationPayload(input[key], seen);
             if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
         }
     }
+
+    // Make can expose mapped bundles under numeric keys ("1", "2", ...).
+    for (const [key, value] of Object.entries(input)) {
+        if (key === "choices" || key === "jobs" || key === "reels") continue;
+        const nested = extractGenerationPayload(value, seen);
+        if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
+    }
+
     return {};
 }
 
