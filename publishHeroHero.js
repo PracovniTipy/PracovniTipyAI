@@ -1125,14 +1125,24 @@ function extractPublishJob(input) {
   }
 
   if (Array.isArray(input)) {
-    // Make Iterator can pass a one-item array when the HTTP body is mapped
-    // from an entire collection instead of the current bundle.
-    return input.length === 1 ? extractPublishJob(input[0]) : null;
+    // Make Iterator may pass the whole collection instead of the current
+    // bundle. Select the first actual job rather than rejecting the payload.
+    for (const item of input) {
+      const job = extractPublishJob(item);
+      if (job) return job;
+    }
+    return null;
   }
 
   if (typeof input !== "object") return null;
 
-  const title = input.title || input.job_title;
+  const title =
+    input.title ||
+    input.job_title ||
+    input.jobTitle ||
+    input.position ||
+    input.role ||
+    input.name;
   if (typeof title === "string" && title.trim()) {
     return {
       ...input,
@@ -1140,11 +1150,19 @@ function extractPublishJob(input) {
     };
   }
 
-  for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job"]) {
+  for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job", "herohero", "jobs", "collection"]) {
     if (input[key] !== undefined) {
       const nested = extractPublishJob(input[key]);
       if (nested) return nested;
     }
+  }
+
+  // A mapped Make collection can use numeric bundle keys ("1", "2", …).
+  // Walk remaining values as a final safe fallback.
+  for (const [key, value] of Object.entries(input)) {
+    if (key === "title" || key === "job_title" || key === "jobTitle") continue;
+    const nested = extractPublishJob(value);
+    if (nested) return nested;
   }
 
   return null;
