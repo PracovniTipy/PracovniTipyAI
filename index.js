@@ -4,23 +4,18 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
-
 const { createCanvas, loadImage, registerFont } = require("canvas");
-
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
-
 const { v2: cloudinary } = require("cloudinary");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
-
 app.use(express.urlencoded({ extended: true }));
 
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
-
 app.use(express.json());
 
 cloudinary.config({
@@ -101,7 +96,6 @@ function cleanText(value) {
 function isMissingJobValue(value) {
     const normalized = cleanText(value).toLocaleLowerCase("cs-CZ");
     if (!normalized) return true;
-
     return /^(?:[-•]\s*)?(?:(?:ubytování|housing|místo|město|location|mzda|plat|salary|jazyk|language|požadavky|requirements|nástup|start|strava|meals|výhody|advantages)\s*:?\s*)?(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|n\/?a)\s*[.!]?$/iu.test(normalized);
 }
 
@@ -155,6 +149,16 @@ function getJobTitle(item) {
         item?.job_title ||
         item?.title
     );
+}
+
+function getCityValue(item) {
+    const city = usableJobValue(item?.city_cz || item?.city);
+    if (city) return city;
+
+    const location = usableJobValue(item?.location_cz || item?.location);
+    if (!location) return "";
+
+    return cleanText(location.split(",")[0]);
 }
 
 function descriptionToText(value) {
@@ -333,23 +337,32 @@ function drawHeroBlock(ctx, options) {
         maxLines, rotation = 0, lineHeight = 1.05
     } = options;
 
-    const fitted = fitText(ctx, text, maxWidth, startSize, minSize, maxLines, "serif");
+    // Generický sans-serif přes Pango používá font s plnou českou diakritikou.
+    const fontFamily = "sans-serif";
+    const fitted = fitText(ctx, text, maxWidth, startSize, minSize, maxLines, fontFamily);
     const actualLines = fitted.lines;
 
     ctx.save();
     ctx.translate(centerX, topY);
     ctx.rotate(rotation);
-    ctx.font = `bold ${fitted.size}px serif`;
+    ctx.font = `bold ${fitted.size}px ${fontFamily}`;
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.shadowColor = "rgba(255,255,255,0.50)";
-    ctx.shadowBlur = 2;
+    ctx.lineJoin = "round";
+
+    // Lehký bílý stín + tenký bílý lem za každým černým textem.
+    ctx.shadowColor = "rgba(255,255,255,0.70)";
+    ctx.shadowBlur = 3;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 1;
+    ctx.strokeStyle = "rgba(255,255,255,0.82)";
+    ctx.lineWidth = Math.max(1.5, fitted.size * 0.035);
 
     actualLines.forEach((line, index) => {
-        ctx.fillText(line, 0, index * fitted.size * lineHeight);
+        const lineY = index * fitted.size * lineHeight;
+        ctx.strokeText(line, 0, lineY);
+        ctx.fillText(line, 0, lineY);
     });
 
     ctx.restore();
@@ -369,9 +382,12 @@ async function createHeroImage(job, templateFile) {
     const scaleY = template.height / 1350;
     const fontScale = Math.min(scaleX, scaleY);
 
+    // HeroHero obrázek obsahuje pouze: název práce, město, ubytování a mzdu.
     const jobTitle = getJobTitle(job);
-    const city = usableJobValue(job.city);
-    const housing = normalizeHousing(job.housing || job.accommodation || job.housing_cz || job.accommodation_cz);
+    const city = getCityValue(job);
+    const housing = normalizeHousing(
+        job.housing_cz || job.accommodation_cz || job.housing || job.accommodation
+    );
     const salary = formatMonthlyCzkSalary(
         { value: job.salary_czk_month, monthly: true },
         { value: job.monthly_salary_czk, monthly: true },
@@ -629,8 +645,10 @@ function extractGenerationPayload(input, seen = new Set()) {
 
     if (Array.isArray(parsed.jobs) || Array.isArray(parsed.reels)) return parsed;
 
-    const jobLike = ["job_title", "jobTitle", "title", "position", "role", "country_code", "salary"]
-        .some((key) => parsed[key] !== undefined);
+    const jobLike = [
+        "job_title", "job_title_cz", "jobTitle", "title", "title_cz",
+        "position", "role", "country_code", "salary", "salary_czk_month"
+    ].some((key) => parsed[key] !== undefined);
     if (jobLike) return { jobs: [parsed] };
 
     const messageContent = input.choices?.[0]?.message?.content;
@@ -690,6 +708,7 @@ app.post("/generate", async (req, res) => {
                 postId: job.postId,
                 categoryId: job.categoryId,
                 title: jobTitle,
+                city: getCityValue(job) || job.city,
                 text: descriptionToText(job.description),
                 textHtml: `<p>${descriptionToText(job.description).replace(/\n/g, "</p><p>")}</p>`,
                 imageUrl,
@@ -792,12 +811,54 @@ app.post("/generate", async (req, res) => {
 app.post("/publishHeroHero", async (req, res) => {
     const publishHeroHero = require("./publishHeroHero");
 
-    try {
-        const result = await publishHeroHero(req.body);
-        res.json({ success: true, result });
-    } catch (e) {
-        res.status(500).json({ success: false, error: e.message });
+    // /generate vrací až 5 položek v poli herohero. Původní endpoint celé pole
+    // předal publishHeroHero(), které z něj vybralo jen první nabídku.
+    const payload = extractGenerationPayload(req.body);
+    const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
+
+    if (!jobs.length) {
+        return res.status(400).json({
+            success: false,
+            error: "Nebyla nalezena žádná HeroHero nabídka k publikaci."
+        });
     }
+
+    const results = [];
+    let published = 0;
+
+    for (const job of jobs) {
+        try {
+            const result = await publishHeroHero(job);
+            results.push({
+                success: true,
+                title: job.title || job.job_title || "",
+                result
+            });
+            published++;
+        } catch (e) {
+            results.push({
+                success: false,
+                title: job.title || job.job_title || "",
+                error: e.message
+            });
+        }
+    }
+
+    if (published === 0) {
+        return res.status(500).json({
+            success: false,
+            published: 0,
+            failed: results.length,
+            results
+        });
+    }
+
+    res.json({
+        success: true,
+        published,
+        failed: results.length - published,
+        results
+    });
 });
 
 app.post("/herohero/upload", upload.single("image"), async (req, res) => {
