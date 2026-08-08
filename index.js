@@ -131,7 +131,7 @@ function getCountryCz(item) {
         countryNamesCz[countryCode] ||
         countryNamesCz[country] ||
         country ||
-        "Země neuvedena"
+        ""
     );
 }
 
@@ -140,7 +140,7 @@ function normalizeHousing(value) {
     const lower = raw.toLowerCase();
 
     if (!raw || /neuved|not specified|unknown|n\/a/.test(lower)) {
-        return "Ubytování neuvedeno";
+        return "";
     }
 
     if (/not provided|no accommodation|bez ubyt|nezajiště/.test(lower)) {
@@ -164,14 +164,14 @@ function normalizeHousing(value) {
         .replace(/provided/gi, "zajištěno")
         .replace(/available/gi, "k dispozici")
         .replace(/free/gi, "zdarma")
-        .replace(/not specified/gi, "neuvedeno");
+        .replace(/not specified/gi, "").trim();
 }
 
 function normalizeLanguage(value) {
     const raw = cleanText(value);
 
     if (!raw || /neuved|not specified|unknown|n\/a/i.test(raw)) {
-        return "Jazyk neuveden";
+        return "";
     }
 
     return raw
@@ -223,8 +223,7 @@ function formatMonthlyCzkSalary(...values) {
 
         salary = salary
             .replace(/\bCZK\b/gi, "Kč")
-            .replace(/\bbrutto\b/gi, "hrubého")
-            .replace(/\bnetto\b/gi, "čistého")
+            .replace(/\b(brutto|netto|hrubého|čistého|hrubá|čistá)\b/gi, "")
             .replace(/\bmonth\b/gi, "měsíc")
             .replace(/měsíčně/gi, "měsíc")
             .replace(/\s*(?:\/|za)?\s*měsíc/gi, " / měsíc")
@@ -242,7 +241,7 @@ function formatMonthlyCzkSalary(...values) {
         return salary;
     }
 
-    return "Mzda v Kč neuvedena";
+    return "";
 }
 
 function createWrappedLines(
@@ -430,6 +429,11 @@ function drawHeroBlock(ctx, options) {
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
+    // Jemný bílý okraj/stín zlepšuje čitelnost černého textu na tmavých šablonách.
+    ctx.shadowColor = "rgba(255,255,255,0.72)";
+    ctx.shadowBlur = 3;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 1;
 
     actualLines.forEach((line, index) => {
         ctx.fillText(
@@ -497,10 +501,7 @@ async function createHeroImage(
         "Pracovní pozice"
     );
 
-    const city = cleanText(
-        job.city ||
-        "Město neuvedeno"
-    );
+    const city = cleanText(job.city);
 
     const housing = normalizeHousing(
         job.housing ||
@@ -543,7 +544,7 @@ async function createHeroImage(
             lineHeight: 1.02
         });
 
-    drawHeroBlock(ctx, {
+    if (city) drawHeroBlock(ctx, {
         text: city,
 
         centerX:
@@ -569,7 +570,8 @@ async function createHeroImage(
     const housingTop =
         305 * scaleY;
 
-    const housingHeight =
+    let housingHeight = 0;
+    if (housing) housingHeight =
         drawHeroBlock(ctx, {
             text: housing,
 
@@ -595,7 +597,7 @@ async function createHeroImage(
             lineHeight: 1.02
         });
 
-    drawHeroBlock(ctx, {
+    if (salary) drawHeroBlock(ctx, {
         text: salary,
 
         centerX:
@@ -603,7 +605,7 @@ async function createHeroImage(
 
         topY:
             housingTop +
-            housingHeight +
+            (housing ? housingHeight : 0) +
             18 * scaleY,
 
         maxWidth:
@@ -697,7 +699,9 @@ async function createReelImage(
 
     const countrySize = 135;
 
-    drawStrokeBlock(ctx, {
+    let currentY = startY;
+    if (country) {
+      drawStrokeBlock(ctx, {
         text: country,
 
         x: startX,
@@ -711,12 +715,9 @@ async function createReelImage(
         minSize: 90,
         maxLines: 1,
         lineWidth: 9
-    });
-
-    let currentY =
-        startY +
-        countrySize * 0.95 +
-        115;
+      });
+      currentY += countrySize * 0.95 + 115;
+    }
 
     currentY +=
         drawStrokeBlock(ctx, {
@@ -733,7 +734,7 @@ async function createReelImage(
             lineWidth: 7
         }) + 30;
 
-    currentY +=
+    if (salary) currentY +=
         drawStrokeBlock(ctx, {
             text: salary,
 
@@ -748,7 +749,7 @@ async function createReelImage(
             lineWidth: 6
         }) + 24;
 
-    currentY +=
+    if (housing) currentY +=
         drawStrokeBlock(ctx, {
             text: housing,
 
@@ -763,7 +764,7 @@ async function createReelImage(
             lineWidth: 5
         }) + 12;
 
-    drawStrokeBlock(ctx, {
+    if (language) drawStrokeBlock(ctx, {
         text: language,
 
         x: startX,
