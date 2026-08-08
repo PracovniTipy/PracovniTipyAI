@@ -676,15 +676,18 @@ function isDirectJobLink(value) {
   try {
     const parsed = new URL(candidate);
     if (!/^https?:$/.test(parsed.protocol)) return false;
-    // Indeed často vrací login nebo obecný přehled, ne ověřitelnou konkrétní
-    // nabídku. Takový odkaz na HeroHero nikdy nepublikujeme.
-    if (/(^|\.)indeed\./i.test(parsed.hostname)) return false;
+
     const path = parsed.pathname.replace(/\/+$/, "");
-    // Query string z obecného seznamu z něj nedělá konkrétní nabídku.
-    // Přijímáme např. /jobs/123 nebo konkrétní slug, nikdy však /jobs,
-    // /careers, /search ani podobnou rozcestníkovou stránku.
+    if (!path || path === "/") return false;
+
+    // Obecný seznam nabídek pořád nebereme jako detail. Pokud ale URL obsahuje
+    // ID konkrétní nabídky (typicky Indeed a některé job boardy), je platná.
+    const hasJobIdentifier = [
+      "jk", "vjk", "jobid", "job_id", "id",
+      "vacancyid", "vacancy_id", "offerid", "offer_id"
+    ].some(key => parsed.searchParams.has(key));
     const genericPage = /\/(?:jobs?|vacanc(?:y|ies)|careers?|search|offers?)$/i.test(path);
-    return Boolean(path && path !== "/" && !genericPage);
+    return !genericPage || hasJobIdentifier;
   } catch {
     return false;
   }
