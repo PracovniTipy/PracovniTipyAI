@@ -1140,7 +1140,7 @@ function extractPublishJob(input) {
   // „Job Title“ nebo je poslat jako kolekci. Normalizujeme klíče dřív, než
   // payload odmítneme, aby se nabídka neztratila jen kvůli názvu pole.
   const normalizedEntries = Object.entries(input).map(([key, value]) => [
-    key.toLowerCase().replace(/[\\s_-]+/g, ""),
+    key.toLowerCase().replace(/[\s_-]+/g, ""),
     value,
   ]);
   const titleEntry = normalizedEntries.find(([key, value]) =>
