@@ -56,7 +56,6 @@ function normalizeSupplied(value) {
   if (/hotel|resort|hostel|recep/.test(lower)) return "Hotelové práce";
   if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst/.test(lower)) return "Sklady a logistika";
   if (/výrob|vyrob|production|factory|potravin/.test(lower)) return "Výroba";
-
   return "";
 }
 
@@ -67,11 +66,18 @@ function inferCategory(job) {
   const text = jobText(job);
   if (/ovoce|zelenin|sběr|sber|skliz|fruit|vegetable|berry|berries|jahod|jablk|hrozn|harvest|picker/.test(text)) return "Práce s ovocem/zeleninou";
   if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik/.test(text)) return "Práce na farmách";
-  if (/úklid|uklid|cleaner|cleaning|housekeep|pokojsk|room attendant/.test(text)) return "Úklid";
-  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|catering/.test(text)) return "Gastronomie";
-  if (/hotel|resort|hostel|recep/.test(text)) return "Hotelové práce";
+  if (/úklid|uklid|cleaner|cleaning|housekeep|pokojsk|room attendant|janitor|maid/.test(text)) return "Úklid";
+  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|catering|waiter|waitress/.test(text)) return "Gastronomie";
+  if (/hotel|resort|hostel|recep|guest service/.test(text)) return "Hotelové práce";
   if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst/.test(text)) return "Sklady a logistika";
-  if (/výrob|vyrob|production|factory|potravin/.test(text)) return "Výroba";
+  if (/výrob|vyrob|production|factory|potravin|operator výroby|operátor výroby/.test(text)) return "Výroba";
+
+  // Generic low-skill manual roles still need a HeroHero category, but this
+  // fallback must never include the explicitly banned assembly role.
+  if (/worker|pracovník|pracovnik|dělník|delnik|helper|pomocn|operative|laborer|labourer/.test(text)) {
+    return "Výroba";
+  }
+
   return "";
 }
 
@@ -83,7 +89,10 @@ function prepareJob(job) {
 
   const category = inferCategory(job);
   if (!category) {
-    throw new Error(`Nepodařilo se určit HeroHero kategorii pro pozici: ${clean(job.title || job.job_title || job.job_title_cz || "bez názvu")}`);
+    // Missing classification must not kill the whole 5-post batch. The
+    // original publisher still gets the job and can infer/select a category.
+    console.warn(`[CATEGORY PATCH] Kategorie nebyla určena pro: ${clean(job.title || job.job_title || job.job_title_cz || "bez názvu")}`);
+    return job;
   }
 
   return {
@@ -109,4 +118,4 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return exported;
 };
 
-console.log("[CATEGORY PATCH] HeroHero work category enforcement active.");
+console.log("[CATEGORY PATCH] HeroHero category enrichment active without batch blocking.");
