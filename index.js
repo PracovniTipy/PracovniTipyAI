@@ -465,9 +465,9 @@ function drawHeroBlock(ctx, options) {
     ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    // Jemný bílý okraj/stín zlepšuje čitelnost černého textu na tmavých šablonách.
-    ctx.shadowColor = "rgba(255,255,255,0.72)";
-    ctx.shadowBlur = 3;
+    // Jen lehký bílý stín za veškerým černým textem HeroHero obrázku.
+    ctx.shadowColor = "rgba(255,255,255,0.50)";
+    ctx.shadowBlur = 2;
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 1;
 
@@ -531,8 +531,7 @@ async function createHeroImage(
     const fontScale =
         Math.min(scaleX, scaleY);
 
-    // Název nesmí být náhradní text. Volající pouští dál jen nabídky,
-    // které mají skutečně získaný název pozice.
+    // HeroHero obrázek obsahuje výhradně: job title, city, ubytování a salary.
     const jobTitle = getJobTitle(job);
 
     const city = usableJobValue(job.city);
