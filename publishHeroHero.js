@@ -626,7 +626,13 @@ async function executeModalLogin(page, email, password) {
 function hasUsefulJobValue(value) {
   if (value === null || value === undefined) return false;
   const normalized = String(value).trim().toLowerCase();
-  return Boolean(normalized) && !["neuvedeno", "neuvedena", "neuveden", "není uvedeno", "n/a", "unknown"].includes(normalized);
+  if (!normalized) return false;
+  // Never publish placeholders, including labels returned by upstream AI.
+  return !/(?:^|\s)(?:neuve\w*|není uvedeno|not specified|not provided|unknown|n\/a)(?:$|\s)/i.test(normalized);
+}
+
+function usefulTextLines(value) {
+  return normalizeTextLines(value).filter(line => hasUsefulJobValue(line));
 }
 
 function formatSalaryLine(job) {
@@ -634,8 +640,11 @@ function formatSalaryLine(job) {
   // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
   // původní eura ani náhradní text, pokud mzda v nabídce chybí.
   if (!czk || !/(kč|czk)/i.test(czk)) return null;
-  const monthly = /měs/i.test(czk) ? czk : `${czk} / měsíc`;
-  return `💰 ${monthly}`;
+  const monthly = (/(?:brutto|netto|hrub|čist)/i.test(czk)
+    ? czk.replace(/\b(?:brutto|netto|hrubého|čistého|hrubá|čistá)\b/gi, "").replace(/\s+/g, " ").trim()
+    : czk);
+  const normalizedMonthly = /měs/i.test(monthly) ? monthly : `${monthly} / měsíc`;
+  return `💰 ${normalizedMonthly}`;
 }
 
 function relevantJobEmoji(title) {
@@ -672,9 +681,9 @@ function formatJobPost(job) {
   if (rawLanguage && !/^jazyk\s+neuveden$/i.test(rawLanguage)) {
     lines.push(`🌍 Jazyk ${rawLanguage.replace(/^jazyk\s*:?\s*/i, "")}`);
   }
-  if (directLink) lines.push(`🔗 Odkaz: ${directLink}`);
-
+  // Odkaz začíná samostatný blok až po jazyku.
   let output = lines.join("\n");
+  if (directLink) output += `\n\n🔗 Odkaz: ${directLink}`;
 
   const descriptionLines = extractJobBodyLines(job);
   if (descriptionLines.length > 0) {
@@ -682,27 +691,31 @@ function formatJobPost(job) {
     for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  if (hasUsefulJobValue(job.accommodation)) {
-    output += `\n🏠 Ubytování\n• ${job.accommodation}\n`;
+  const accommodation = job.accommodation ?? job.housing;
+  if (hasUsefulJobValue(accommodation)) {
+    output += `\n🏠 Ubytování\n• ${accommodation}\n`;
   }
 
   if (hasUsefulJobValue(job.meals)) {
     output += `\n🍽️ Strava\n• ${job.meals}\n`;
   }
 
-  const requirementLines = normalizeTextLines(job.requirements);
-  if (requirementLines.length > 0) {
-    output += `\n📋 Požadavky\n`;
-    for (const point of requirementLines) output += `• ${point}\n`;
-  }
+  const requirementLines = usefulTextLines(job.requirements);
+  // The section is always present, but we never invent requirements when the
+  // source offer did not provide any.
+  output += `\n📋 Požadavky\n`;
+  for (const point of requirementLines) output += `• ${point}\n`;
 
-  const advantageLines = normalizeTextLines(job.advantages);
+  const advantageLines = usefulTextLines(job.advantages);
   if (advantageLines.length > 0) {
     output += `\n⭐ Výhody\n`;
     for (const point of advantageLines) output += `• ${point}\n`;
   }
 
-  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.`;
+  const contactEmail = cleanText(
+    process.env.CONTACT_EMAIL || process.env.HEROHERO_CONTACT_EMAIL
+  );
+  if (contactEmail) output += `\n\n📧 Kontakt: ${contactEmail}`;
 
   return output.trim();
 }
@@ -838,7 +851,8 @@ function inferWorkCategory(job) {
   const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
   if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Práce s ovocem/zeleninou";
   if (/farm|farma|zeměděl|zemedel|agricultur/.test(value)) return "Práce na farmách";
-  if (/hotel|housekeep|pokoj|recep|resort|úklid|uklid/.test(value)) return "Hotelové práce";
+  if (/úklid|uklid|clean|housekeep/.test(value)) return "Úklid";
+  if (/hotel|pokoj|recep|resort/.test(value)) return "Hotelové práce";
   if (/kuch|číšník|cisnik|servír|servir|gastronom|dishwasher|nádob/.test(value)) return "Gastronomie";
   if (/sklad|logistik|picker|vychyst|balen|warehouse|order/.test(value)) return "Sklady a logistika";
   if (/výrob|vyrob|production|potravin|maso|řez|rez|factory/.test(value)) return "Výroba";
@@ -1101,8 +1115,11 @@ async function createHeroHeroPost(page, job) {
 
 async function publishHeroHero(inputJob) {
   const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title)
-    ? DEFAULT_TEST_JOB
+    ? (process.env.ALLOW_TEST_JOB === "true" ? DEFAULT_TEST_JOB : null)
     : inputJob;
+  if (!job) {
+    throw new Error("Chybí platná nabídka práce v payloadu; testovací nabídka je v produkci zakázaná.");
+  }
 
   logStep(`Používám data pro pozici: ${job.title}`);
   logStep(`Debug dir: ${CONFIG.DEBUG_DIR}`);
