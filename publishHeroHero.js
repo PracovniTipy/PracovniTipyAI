@@ -1136,18 +1136,20 @@ function extractPublishJob(input) {
 
   if (typeof input !== "object") return null;
 
-  const title =
-    input.title ||
-    input.job_title ||
-    input.jobTitle ||
-    input.position ||
-    input.role ||
-    input.name;
+  // Make může názvy polí převést na varianty typu „Job title“, „job title“,
+  // „Job Title“ nebo je poslat jako kolekci. Normalizujeme klíče dřív, než
+  // payload odmítneme, aby se nabídka neztratila jen kvůli názvu pole.
+  const normalizedEntries = Object.entries(input).map(([key, value]) => [
+    key.toLowerCase().replace(/[\\s_-]+/g, ""),
+    value,
+  ]);
+  const titleEntry = normalizedEntries.find(([key, value]) =>
+    ["title", "jobtitle", "position", "role", "name"].includes(key) &&
+    typeof value === "string" && value.trim()
+  );
+  const title = titleEntry ? titleEntry[1] : null;
   if (typeof title === "string" && title.trim()) {
-    return {
-      ...input,
-      title: title.trim(),
-    };
+    return { ...input, title: title.trim() };
   }
 
   for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job", "herohero", "jobs", "collection"]) {
@@ -1156,6 +1158,14 @@ function extractPublishJob(input) {
       if (nested) return nested;
     }
   }
+
+  // Některé Make kolekce mají pouze obecná pole (např. „position_name“).
+  // Pokud objekt obsahuje název pozice, použijeme jej jako titul.
+  const fallbackEntry = normalizedEntries.find(([key, value]) =>
+    /(?:job|position|role).*(?:title|name)|(?:title|position|role)$/.test(key) &&
+    typeof value === "string" && value.trim()
+  );
+  if (fallbackEntry) return { ...input, title: fallbackEntry[1].trim() };
 
   // A mapped Make collection can use numeric bundle keys ("1", "2", …).
   // Walk remaining values as a final safe fallback.
