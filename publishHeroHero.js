@@ -598,17 +598,25 @@ function hasUsefulJobValue(value) {
   const normalized = String(value).trim().toLowerCase();
   if (!normalized) return false;
   // Never publish placeholders, including labels returned by upstream AI.
-  return !/(?:^|\s)(?:neuve\w*|není uvedeno|not specified|not provided|unknown|n\/a)(?:$|\s)/i.test(normalized);
+  return !/(?:^|[\s:;,.(\[-])(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)(?=$|[\s:;,.!?()\]\-])/i.test(normalized);
 }
 
 function sanitizePublishedLine(value) {
   const line = String(value ?? "").replace(/\s+/g, " ").trim();
   if (!line || /práci nezprostředkovávám|sdílím ověřené nabídky/i.test(line)) return "";
-  if (/^(?:[-•]\s*)?(?:ubytování|místo|město|mzda|plat|jazyk|požadavky|nástup|strava|výhody)\s*:?\s*(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)\s*$/i.test(line)) return "";
+  if (/^(?:[-•]\s*)?(?:ubytování|místo|město|mzda|plat|jazyk|požadavky|nástup|strava|výhody)\s*:?\s*(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)\s*[.!]?$/i.test(line)) return "";
   return line
     .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|čistého|čistá|čisté)\b/gi, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+function firstUsefulJobValue(...values) {
+  for (const value of values) {
+    const sanitized = sanitizePublishedLine(value);
+    if (hasUsefulJobValue(sanitized)) return sanitized;
+  }
+  return "";
 }
 
 function usefulTextLines(value) {
@@ -656,11 +664,11 @@ function formatJobPost(job) {
   const title = sanitizePublishedLine(stripLeadingEmoji(job.title || job.job_title));
   const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
-  const locationValue = sanitizePublishedLine(job.location || job.country);
-  const rawStartDate = sanitizePublishedLine(job.startDate || job.start_date);
-  const rawContractType = sanitizePublishedLine(job.contractType || job.contract_type);
-  const rawLanguage = sanitizePublishedLine(job.language);
-  const directLink = hasUsefulJobValue(job.link) ? String(job.link).trim() : "";
+  const locationValue = firstUsefulJobValue(job.location, job.city, job.country);
+  const rawStartDate = firstUsefulJobValue(job.startDate, job.start_date, job.start);
+  const rawContractType = firstUsefulJobValue(job.contractType, job.contract_type, job.employment_type);
+  const rawLanguage = firstUsefulJobValue(job.language, job.languages);
+  const directLink = firstUsefulJobValue(job.link, job.apply_url, job.url);
   const lines = [`${titleEmoji} ${title}`];
 
   if (salary) lines.push(salary);
@@ -682,12 +690,12 @@ function formatJobPost(job) {
     for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  const accommodation = sanitizePublishedLine(job.accommodation ?? job.housing);
+  const accommodation = firstUsefulJobValue(job.accommodation, job.housing);
   if (hasUsefulJobValue(accommodation)) {
     output += `\n🏠 Ubytování\n• ${accommodation}\n`;
   }
 
-  const meals = sanitizePublishedLine(job.meals);
+  const meals = firstUsefulJobValue(job.meals, job.food);
   if (hasUsefulJobValue(meals)) {
     output += `\n🍽️ Strava\n• ${meals}\n`;
   }
@@ -1237,4 +1245,3 @@ module.exports = function queuedPublishHeroHero(inputJob) {
   publishQueue = run.catch(() => {});
   return run;
 };
-
