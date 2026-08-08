@@ -314,15 +314,18 @@ function prepare(job) {
 }
 
 function preprocessGenerateBody(body) {
-  const current = prioritize(dedupe(collectJobs(body).filter(publishable)));
+  const allJobs = dedupe(collectJobs(body, { skipReels: false }).filter(job => !isForbiddenJob(job)));
+  const current = prioritize(allJobs.filter(publishable));
   const old = candidateCache.filter(job => !isRecent(job));
   candidateCache = prioritize(dedupe([...current, ...old], 100));
 
   const jobs = candidateCache.slice(0, HERO_BATCH);
-  const suppliedReels = collectReels(body).filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
-  const reels = dedupe([...suppliedReels, ...jobs], IG_BATCH).slice(0, IG_BATCH);
 
-  console.log(`[JOB PATCH] current=${current.length} cache=${candidateCache.length} hero=${jobs.length} reels=${reels.length}`);
+  const igFallback = prioritize(allJobs.filter(job => looksLikeJob(job) && countryOf(job)));
+  const suppliedReels = collectReels(body).filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
+  const reels = dedupe([...suppliedReels, ...igFallback, ...jobs], IG_BATCH).slice(0, IG_BATCH);
+
+  console.log(`[JOB PATCH] all=${allJobs.length} currentHero=${current.length} cache=${candidateCache.length} hero=${jobs.length} reels=${reels.length}`);
   return { jobs, reels };
 }
 
