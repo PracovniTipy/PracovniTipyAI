@@ -32,6 +32,11 @@ cloudinary.config({
 const PORT = process.env.PORT || 3000;
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
+let lastGeneratedHeroHero = [];
+let lastGeneratedHeroHeroAt = 0;
+const HEROHERO_BATCH_SIZE = 5;
+const HEROHERO_CACHE_TTL_MS = 20 * 60 * 1000;
+
 registerFont(
     path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
     { family: "Bebas Neue" }
@@ -676,6 +681,76 @@ function extractGenerationPayload(input, seen = new Set()) {
     return {};
 }
 
+function extractHeroHeroJobs(input, seen = new Set()) {
+    if (!input) return [];
+
+    if (typeof input === "string") {
+        const cleaned = input
+            .replace(/^```(?:json)?\s*/i, "")
+            .replace(/\s*```$/i, "")
+            .trim();
+        try {
+            return extractHeroHeroJobs(JSON.parse(cleaned), seen);
+        } catch (_) {
+            return [];
+        }
+    }
+
+    if (typeof input !== "object" || seen.has(input)) return [];
+    seen.add(input);
+
+    if (Array.isArray(input)) {
+        const jobs = [];
+        for (const item of input) {
+            if (jobs.length >= HEROHERO_BATCH_SIZE) break;
+            jobs.push(...extractHeroHeroJobs(item, seen));
+        }
+        return jobs.slice(0, HEROHERO_BATCH_SIZE);
+    }
+
+    for (const key of ["herohero", "heroHero", "jobs"]) {
+        if (input[key] !== undefined) {
+            const explicitJobs = extractHeroHeroJobs(input[key], seen);
+            if (explicitJobs.length) return explicitJobs.slice(0, HEROHERO_BATCH_SIZE);
+        }
+    }
+
+    const title = getJobTitle(input);
+    const link = usableJobValue(input.link || input.apply_url || input.url);
+    const image = usableJobValue(input.imageUrl || input.image || input.imagePath);
+    if (title && (link || image || input.country || input.country_code)) {
+        return [input];
+    }
+
+    const jobs = [];
+    for (const [key, value] of Object.entries(input)) {
+        if (["instagram", "ig", "reels"].includes(key)) continue;
+        const nested = extractHeroHeroJobs(value, seen);
+        if (nested.length) jobs.push(...nested);
+        if (jobs.length >= HEROHERO_BATCH_SIZE) break;
+    }
+    return jobs.slice(0, HEROHERO_BATCH_SIZE);
+}
+
+function mergeHeroHeroJobs(primary, fallback) {
+    const merged = [];
+    const seen = new Set();
+
+    for (const job of [...primary, ...fallback]) {
+        if (!job || typeof job !== "object") continue;
+        const key = cleanText(
+            job.postId || job.id || job.link || job.apply_url || job.url ||
+            `${getJobTitle(job)}|${getCityValue(job)}|${job.country || job.country_code || ""}`
+        ).toLocaleLowerCase("cs-CZ");
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        merged.push(job);
+        if (merged.length >= HEROHERO_BATCH_SIZE) break;
+    }
+
+    return merged;
+}
+
 function ensureAlwaysPresent(value, fallback = "dle nabídky") {
     return usableJobValue(value) || fallback;
 }
@@ -708,8 +783,6 @@ function buildInstagramCaption(item) {
 
 app.post("/generate", async (req, res) => {
     const payload = extractGenerationPayload(req.body);
-    // Jeden běh má vytvořit maximálně 5 HeroHero příspěvků a přesně 2 IG Reels,
-    // pokud jsou k dispozici alespoň 2 pracovní nabídky.
     const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
     const suppliedReels = Array.isArray(payload.reels) ? payload.reels.slice(0, 2) : [];
     const reels = [...suppliedReels];
@@ -776,6 +849,9 @@ app.post("/generate", async (req, res) => {
                 isExcludedFromRss: false
             });
         }
+
+        lastGeneratedHeroHero = herohero.slice(0, HEROHERO_BATCH_SIZE);
+        lastGeneratedHeroHeroAt = Date.now();
 
         for (const [reelIndex, reel] of reels.entries()) {
             const matchingJob = jobs[reelIndex] || {};
@@ -869,13 +945,26 @@ app.post("/generate", async (req, res) => {
 app.post("/publishHeroHero", async (req, res) => {
     const publishHeroHero = require("./publishHeroHero");
 
-    const payload = extractGenerationPayload(req.body);
-    const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
+    const incomingJobs = extractHeroHeroJobs(req.body);
+    const cacheIsFresh =
+        lastGeneratedHeroHero.length > 0 &&
+        Date.now() - lastGeneratedHeroHeroAt <= HEROHERO_CACHE_TTL_MS;
+    const jobs = mergeHeroHeroJobs(
+        incomingJobs,
+        cacheIsFresh ? lastGeneratedHeroHero : []
+    ).slice(0, HEROHERO_BATCH_SIZE);
 
-    if (!jobs.length) {
-        return res.status(400).json({
+    console.log(
+        `[HEROHERO BATCH] incoming=${incomingJobs.length} cache=${cacheIsFresh ? lastGeneratedHeroHero.length : 0} final=${jobs.length}`
+    );
+
+    if (jobs.length < HEROHERO_BATCH_SIZE) {
+        return res.status(409).json({
             success: false,
-            error: "Nebyla nalezena žádná HeroHero nabídka k publikaci."
+            error: `HeroHero batch musí obsahovat ${HEROHERO_BATCH_SIZE} nabídek, ale našel jsem jen ${jobs.length}. Nic nebylo publikováno.`,
+            received: incomingJobs.length,
+            cached: cacheIsFresh ? lastGeneratedHeroHero.length : 0,
+            final: jobs.length
         });
     }
 
@@ -900,19 +989,20 @@ app.post("/publishHeroHero", async (req, res) => {
         }
     }
 
-    if (published === 0) {
-        return res.status(500).json({
+    if (published !== HEROHERO_BATCH_SIZE) {
+        return res.status(502).json({
             success: false,
-            published: 0,
-            failed: results.length,
+            error: `HeroHero batch nebyl kompletní: publikováno ${published}/${HEROHERO_BATCH_SIZE}.`,
+            published,
+            failed: results.length - published,
             results
         });
     }
 
     res.json({
         success: true,
-        published,
-        failed: results.length - published,
+        published: HEROHERO_BATCH_SIZE,
+        failed: 0,
         results
     });
 });
