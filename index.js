@@ -98,6 +98,60 @@ function cleanText(value) {
     return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
+// Chybějící údaje se nesmí zveřejnit jako „neuvedeno“. Hledáme vždy celou
+// hodnotu (ne jen znaky `na`), aby platná hodnota jako „Angličtina“ nezmizela.
+function isMissingJobValue(value) {
+    const normalized = cleanText(value).toLocaleLowerCase("cs-CZ");
+    if (!normalized) return true;
+
+    return /^(?:[-•]\s*)?(?:(?:ubytování|housing|místo|město|location|mzda|plat|salary|jazyk|language|požadavky|requirements|nástup|start|strava|meals|výhody|advantages)\s*:?\s*)?(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|n\/?a)\s*[.!]?$/iu.test(normalized);
+}
+
+function hasMissingMarker(value) {
+    const normalized = cleanText(value);
+    return /(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|(?:^|[\s:;,(])n\/?a(?=$|[\s:;,.!?)]))/iu.test(normalized);
+}
+
+function usableJobValue(value) {
+    const normalized = cleanText(value);
+    return normalized && !isMissingJobValue(normalized) && !hasMissingMarker(normalized)
+        ? normalized
+        : "";
+}
+
+const countryAliases = {
+    at: "Austria", austria: "Austria", rakousko: "Austria",
+    be: "Belgium", belgium: "Belgium", belgie: "Belgium",
+    dk: "Denmark", denmark: "Denmark", "dánsko": "Denmark", dansko: "Denmark",
+    ee: "Estonia", estonia: "Estonia", estonsko: "Estonia",
+    fi: "Finland", finland: "Finland", finsko: "Finland",
+    fr: "France", france: "France", francie: "France",
+    nl: "Netherlands", netherlands: "Netherlands", holland: "Netherlands", holandsko: "Netherlands", nizozemsko: "Netherlands", "nizozemí": "Netherlands",
+    ie: "Ireland", ireland: "Ireland", irsko: "Ireland",
+    it: "Italy", italy: "Italy", "itálie": "Italy", italie: "Italy",
+    cy: "Cyprus", cyprus: "Cyprus", kypr: "Cyprus",
+    mt: "Malta", malta: "Malta",
+    de: "Germany", germany: "Germany", "německo": "Germany", nemecko: "Germany",
+    no: "Norway", norway: "Norway", norsko: "Norway",
+    gr: "Greece", greece: "Greece", "řecko": "Greece", recko: "Greece",
+    es: "Spain", spain: "Spain", "španělsko": "Spain", spanelsko: "Spain",
+    se: "Sweden", sweden: "Sweden", "švédsko": "Sweden", svedsko: "Sweden"
+};
+
+function resolveCountryKey(item) {
+    for (const value of [item?.country_code, item?.country]) {
+        const raw = cleanText(value);
+        if (countryNamesCz[raw]) return raw;
+        const normalized = raw.toLocaleLowerCase("cs-CZ");
+        if (countryAliases[normalized]) return countryAliases[normalized];
+    }
+    return "";
+}
+
+function getJobTitle(item) {
+    return usableJobValue(item?.job_title || item?.title);
+}
+
 // Apify may return descriptions as strings, arrays, or structured objects.
 // Normalize them before formatting so one malformed bundle cannot crash the
 // whole generation request (e.g. calling .replace on an object).
@@ -124,27 +178,22 @@ function descriptionToText(value) {
 }
 
 function getCountryCz(item) {
-    const countryCode = cleanText(item.country_code);
-    const country = cleanText(item.country);
-
-    return (
-        countryNamesCz[countryCode] ||
-        countryNamesCz[country] ||
-        country ||
-        ""
-    );
+    const templateCountry = resolveCountryKey(item);
+    return countryNamesCz[templateCountry] || usableJobValue(item?.country);
 }
 
 function normalizeHousing(value) {
-    const raw = cleanText(value);
+    const raw = usableJobValue(value);
     const lower = raw.toLowerCase();
 
-    if (!raw || /neuved|not specified|unknown|n\/a/.test(lower)) {
+    if (!raw) {
         return "";
     }
 
     if (/not provided|no accommodation|bez ubyt|nezajiště/.test(lower)) {
-        return "Ubytování nezajištěno";
+        // Neuvádíme ani negativní domněnku o ubytování. Zobrazujeme jen
+        // reálně nabízené zajištění nebo příspěvek.
+        return "";
     }
 
     if (/free|included|zdarma/.test(lower)) {
@@ -159,18 +208,20 @@ function normalizeHousing(value) {
         return "Ubytování zajištěno";
     }
 
-    return raw
+    const result = raw
         .replace(/accommodation/gi, "ubytování")
         .replace(/provided/gi, "zajištěno")
         .replace(/available/gi, "k dispozici")
         .replace(/free/gi, "zdarma")
         .replace(/not specified/gi, "").trim();
+
+    return usableJobValue(result);
 }
 
 function normalizeLanguage(value) {
-    const raw = cleanText(value);
+    const raw = usableJobValue(value);
 
-    if (!raw || /neuved|not specified|unknown|n\/a/i.test(raw)) {
+    if (!raw) {
         return "";
     }
 
@@ -191,53 +242,38 @@ function normalizeLanguage(value) {
 }
 
 function formatMonthlyCzkSalary(...values) {
-    const candidates = values.map(cleanText).filter(Boolean);
+    const candidates = values.map((candidate) =>
+        typeof candidate === "object" && candidate !== null
+            ? candidate
+            : { value: candidate, monthly: false }
+    );
+    const amount = "\\d+(?:[ .]\\d{3})*(?:,\\d+)?";
+    const moneyPattern = new RegExp(
+        `(?:cca\\s*)?${amount}(?:\\s*(?:-|–|až|to)\\s*${amount})?\\s*(?:Kč|CZK)(?:\\s*(?:brutto|netto|hrubého|hrubá|hrubé|hrubý|čistého|čistá|čisté|čistý|gross|net))?(?:\\s*(?:/|za)?\\s*(?:měsíc|měsíčně|month|monthly))?`,
+        "i"
+    );
 
     for (const candidate of candidates) {
-        if (/neuved|not specified|unknown|n\/a/i.test(candidate)) {
-            continue;
-        }
+        const raw = usableJobValue(candidate.value);
+        if (!raw || !/(?:Kč|CZK)/i.test(raw)) continue;
 
-        let salary = candidate;
+        const monthly = candidate.monthly === true ||
+            /(?:měs(?:íc|íčně)?|month(?:ly)?)/i.test(raw);
+        if (!monthly) continue;
 
-        const czkMatch = salary.match(
-            /(?:cca\s*)?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?\s*(?:Kč|CZK)(?:\s*(?:brutto|netto|hrubého|čistého|hrubá|čistá))?(?:\s*(?:\/|za)?\s*(?:měsíc|měsíčně|month))?/i
-        );
+        const match = raw.match(moneyPattern);
+        if (!match) continue;
 
-        if (czkMatch) {
-            salary = czkMatch[0];
-        } else if (/^\d[\d\s.,]*$/.test(salary)) {
-            const numeric = Number(
-                salary.replace(/\s/g, "").replace(",", ".")
-            );
-
-            if (Number.isFinite(numeric)) {
-                salary =
-                    `${Math.round(numeric).toLocaleString("cs-CZ")} Kč`;
-            }
-        }
-
-        if (!/(?:Kč|CZK)/i.test(salary)) {
-            continue;
-        }
-
-        salary = salary
+        let salary = match[0]
             .replace(/\bCZK\b/gi, "Kč")
-            .replace(/\b(brutto|netto|hrubého|čistého|hrubá|čistá)\b/gi, "")
-            .replace(/\bmonth\b/gi, "měsíc")
+            .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|hrubý|hrubou|čistého|čistá|čisté|čistý|čistou|gross|net)\b/giu, "")
+            .replace(/\b(?:month|monthly)\b/gi, "měsíc")
             .replace(/měsíčně/gi, "měsíc")
             .replace(/\s*(?:\/|za)?\s*měsíc/gi, " / měsíc")
             .replace(/\s+/g, " ")
             .trim();
 
-        if (!/měsíc/i.test(salary)) {
-            salary += " / měsíc";
-        }
-
-        if (!/^cca\b/i.test(salary)) {
-            salary = `cca ${salary}`;
-        }
-
+        if (!/\/\s*měsíc/i.test(salary)) salary = `${salary} / měsíc`;
         return salary;
     }
 
@@ -495,13 +531,11 @@ async function createHeroImage(
     const fontScale =
         Math.min(scaleX, scaleY);
 
-    const jobTitle = cleanText(
-        job.job_title ||
-        job.title ||
-        "Pracovní pozice"
-    );
+    // Název nesmí být náhradní text. Volající pouští dál jen nabídky,
+    // které mají skutečně získaný název pozice.
+    const jobTitle = getJobTitle(job);
 
-    const city = cleanText(job.city);
+    const city = usableJobValue(job.city);
 
     const housing = normalizeHousing(
         job.housing ||
@@ -510,11 +544,11 @@ async function createHeroImage(
 
     const salary =
         formatMonthlyCzkSalary(
-            job.salary_czk_month,
-            job.monthly_salary_czk,
-            job.salary_month_czk,
-            job.salary_monthly_czk,
-            job.salary
+            { value: job.salary_czk_month, monthly: true },
+            { value: job.monthly_salary_czk, monthly: true },
+            { value: job.salary_month_czk, monthly: true },
+            { value: job.salary_monthly_czk, monthly: true },
+            { value: job.salary, monthly: false }
         );
 
     const titleTop =
@@ -670,20 +704,16 @@ async function createReelImage(
         getCountryCz(reel)
             .toUpperCase();
 
-    const jobTitle =
-        cleanText(
-            reel.job_title ||
-            reel.title ||
-            "Pracovní pozice"
-        ).toUpperCase();
+    // Žádný vymyšlený fallback typu „Pracovní pozice“.
+    const jobTitle = getJobTitle(reel).toUpperCase();
 
     const salary =
         formatMonthlyCzkSalary(
-            reel.salary_czk_month,
-            reel.monthly_salary_czk,
-            reel.salary_month_czk,
-            reel.salary_monthly_czk,
-            reel.salary
+            { value: reel.salary_czk_month, monthly: true },
+            { value: reel.monthly_salary_czk, monthly: true },
+            { value: reel.salary_month_czk, monthly: true },
+            { value: reel.salary_monthly_czk, monthly: true },
+            { value: reel.salary, monthly: false }
         ).toUpperCase();
 
     const housing =
@@ -1019,12 +1049,15 @@ app.post(
             const instagram = [];
 
             for (const job of jobs) {
+                const templateCountry =
+                    resolveCountryKey(job);
                 const template =
-                    heroTemplates[
-                        job.country_code
-                    ];
+                    heroTemplates[templateCountry];
+                const jobTitle = getJobTitle(job);
 
-                if (!template) {
+                // Publikujeme pouze nabídky s rozpoznanou zemí a skutečným
+                // názvem pozice. Nic nedoplňujeme vymyšleným fallbackem.
+                if (!template || !jobTitle) {
                     continue;
                 }
 
@@ -1048,8 +1081,7 @@ app.post(
                     categoryId:
                         job.categoryId,
 
-                    title:
-                        job.job_title,
+                    title: jobTitle,
 
                     text:
                         descriptionToText(job.description),
@@ -1070,7 +1102,7 @@ app.post(
                     height: 1350,
 
                     fileName:
-                        `${job.country} Herohero.png`,
+                        `${getCountryCz(job) || "Nabidka"} Herohero.png`,
 
                     fileSize: 0,
 
@@ -1094,15 +1126,6 @@ app.post(
                     reel
                 ] of reels.entries()
             ) {
-                const template =
-                    reelTemplates[
-                        reel.country_code
-                    ];
-
-                if (!template) {
-                    continue;
-                }
-
                 const matchingJob =
                     jobs[reelIndex] ||
                     {};
@@ -1133,8 +1156,30 @@ app.post(
 
                     language:
                         reel.language ||
-                        matchingJob.language
+                        matchingJob.language,
+
+                    country_code:
+                        reel.country_code ||
+                        matchingJob.country_code,
+
+                    country:
+                        reel.country ||
+                        matchingJob.country
                 };
+
+                const templateCountry =
+                    resolveCountryKey(reelForImage);
+                const template =
+                    reelTemplates[templateCountry];
+                const reelTitle =
+                    getJobTitle(reelForImage) ||
+                    getJobTitle(matchingJob);
+
+                if (!template || !reelTitle) {
+                    continue;
+                }
+
+                reelForImage.job_title = reelTitle;
 
                 const imageBuffer =
                     await createReelImage(
