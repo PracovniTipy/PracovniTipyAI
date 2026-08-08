@@ -25,36 +25,6 @@ const CONFIG = {
   LOCALE: "cs-CZ",
 };
 
-const DEFAULT_TEST_JOB = {
-  title: "Skladový operátor (Testovací pozice)",
-  salary: "35 000 - 42 000",
-  location: "Praha - Hostivař",
-  startDate: "Ihned / Dle domluvy",
-  contractType: "HPP na dobu neurčitou",
-  language: "Čeština na komunikativní úrovni",
-  link: "https://pracovnitipy.cz",
-  description: [
-    "Příjem a výdej zboží ve skladovém hospodářství",
-    "Práce se čtečkou čárových kódů (skenerem)",
-    "Kontrola dodacích listů a stavu zásob"
-  ],
-  accommodation: [
-    "Možnost zajištění ubytování v blízkosti depa",
-    "Příspěvek na ubytování ze strany zaměstnavatele"
-  ],
-  requirements: [
-    "Fyzická zdatnost a spolehlivost",
-    "Trestní bezúhonnost",
-    "Ochota pracovat na dvousměnný provoz"
-  ],
-  advantages: [
-    "Týden dovolené navíc (celkem 5 týdnů)",
-    "Dotované závodní stravování",
-    "Možnost záloh na mzdu"
-  ],
-  imageUrl: ""
-};
-
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -1114,11 +1084,11 @@ async function createHeroHeroPost(page, job) {
 }
 
 async function publishHeroHero(inputJob) {
-  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title)
-    ? (process.env.ALLOW_TEST_JOB === "true" ? DEFAULT_TEST_JOB : null)
-    : inputJob;
+  const job = inputJob && typeof inputJob === "object" && inputJob.title
+    ? inputJob
+    : null;
   if (!job) {
-    throw new Error("Chybí platná nabídka práce v payloadu; testovací nabídka je v produkci zakázaná.");
+    throw new Error("Chybí platná nabídka práce v payloadu; bez ověřených dat se nic nepublikuje.");
   }
 
   logStep(`Používám data pro pozici: ${job.title}`);
