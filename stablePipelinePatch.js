@@ -12,7 +12,7 @@ let publishedKeys = new Set();
 
 const COUNTRY_ALIASES = new Map([
   ["austria", "Austria"], ["at", "Austria"], ["rakousko", "Austria"], ["österreich", "Austria"], ["osterreich", "Austria"],
-  ["belgium", "Belgium"], ["be", "Belgium"], ["belgie", "Belgium"], ["belgië", "Belgium"], ["belgie", "Belgium"], ["belgique", "Belgium"],
+  ["belgium", "Belgium"], ["be", "Belgium"], ["belgie", "Belgium"], ["belgië", "Belgium"], ["belgique", "Belgium"],
   ["denmark", "Denmark"], ["dk", "Denmark"], ["dánsko", "Denmark"], ["dansko", "Denmark"], ["danmark", "Denmark"],
   ["estonia", "Estonia"], ["ee", "Estonia"], ["estonsko", "Estonia"], ["eesti", "Estonia"],
   ["finland", "Finland"], ["fi", "Finland"], ["finsko", "Finland"], ["suomi", "Finland"],
@@ -204,7 +204,7 @@ function normalizeJob(job) {
 
 function safeJob(job, requireLink = false) {
   if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  if (!titleOf(job) || !countryOf(job(job)) || forbiddenJob(job)) return false;
+  if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
   if (!languageDecision(job).allowed) return false;
   if (requireLink && !linkOf(job)) return false;
   return true;
@@ -366,7 +366,7 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
             heroCache = body.herohero.map(normalizeJob);
             heroCacheAt = Date.now();
             publishedKeys = new Set();
-            console.log(`[STABLE PIPELINE] generated exact hero=5/5 ig=2/2`);
+            console.log("[STABLE PIPELINE] generated exact hero=5/5 ig=2/2");
           }
           return originalJson(body);
         };
