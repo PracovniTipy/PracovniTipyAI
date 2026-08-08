@@ -29,8 +29,21 @@ const COUNTRY_ALIASES = new Map([
   ["sweden", "Sweden"], ["se", "Sweden"], ["švédsko", "Sweden"], ["svedsko", "Sweden"], ["sverige", "Sweden"]
 ]);
 
+const ENGLISH = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b)/iu;
+const CZECH = /(?:\bczech\b|češtin|cestin|česk(?:y|ý|á|a)|\bcz\b)/iu;
+const FORBIDDEN = /(?:\bdutch\b|nizozemštin|nizozemstin|holandštin|holandstin|\bgerman\b|němčin|nemcin|\bfrench\b|francouzštin|francouzstin|\bspanish\b|španělštin|spanelstin|\bitalian\b|italštin|italstin|\bdanish\b|dánštin|danstin|\bswedish\b|švédštin|svedstin|\bnorwegian\b|norštin|norstin|\bfinnish\b|finštin|finstin|\bgreek\b|řečtin|rectin|\bestonian\b|estonštin|estonstin|\bpolish\b|polštin|polstin|\bslovak\b|slovenštin|slovenstin|\bportuguese\b|portugalštin|portugalstin|local language|místní jazyk|mistni jazyk)/iu;
+const LEVEL_ONLY = /^(?:(?:cefr\s*)?[abc][12](?:\s*[-–/]\s*[abc][12])?|basic|intermediate|advanced|fluent|good|very good|communicative|communication level)$/iu;
+
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+function flatten(value) {
+  if (value == null) return "";
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return value.map(flatten).filter(Boolean).join(" ");
+  if (typeof value === "object") return Object.values(value).map(flatten).filter(Boolean).join(" ");
+  return String(value);
 }
 
 function titleOf(job) {
@@ -72,14 +85,62 @@ function countryOf(job) {
   return "";
 }
 
-function normalizeCountry(job) {
-  const country = countryOf(job);
-  if (!country) return job;
+function stripNegatedLanguages(text) {
+  return clean(text)
+    .replace(/(?:no|not|without)\s+(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish|greek|estonian|polish|slovak|portuguese)(?:\s+(?:required|needed|necessary))?/giu, " ")
+    .replace(/(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish|greek|estonian|polish|slovak|portuguese)\s+(?:is\s+)?not\s+(?:required|needed|necessary)/giu, " ")
+    .replace(/(?:bez|není\s+nutná|neni\s+nutna|není\s+vyžadována|neni\s+vyzadovana)\s+(?:nizozemštiny|holandštiny|němčiny|nemciny|francouzštiny|francouzstiny|španělštiny|spanelstiny|italštiny|italstiny|dánštiny|danstiny|švédštiny|svedstiny|norštiny|norstiny|finštiny|finstiny|řečtiny|rectiny|estonštiny|estonstiny|polštiny|polstiny|slovenštiny|slovenstiny)/giu, " ");
+}
+
+function normalizeLanguageEvidence(job) {
+  if (!job || typeof job !== "object" || Array.isArray(job)) return job;
+
+  const direct = clean(flatten([
+    job?.language_cz, job?.languages_cz, job?.language, job?.languages,
+    job?.required_language, job?.required_languages, job?.language_requirement,
+    job?.language_requirements, job?.requiredLanguage, job?.requiredLanguages,
+    job?.jazyk, job?.jazyky
+  ]));
+
+  // Only use requirements/description to complete incomplete language fields
+  // such as "B1" or "B2". We never invent a language when the source contains
+  // no explicit English/Czech evidence.
+  const context = clean(flatten([
+    job?.requirements, job?.description, job?.text, job?.textHtml,
+    job?.qualifications, job?.skills
+  ]));
+  const checkedContext = stripNegatedLanguages(context);
+
+  const directAlreadyClear = ENGLISH.test(direct) || CZECH.test(direct) || FORBIDDEN.test(stripNegatedLanguages(direct));
+  if (directAlreadyClear) return job;
+
+  const incompleteDirect = !direct || LEVEL_ONLY.test(direct) || /^[abc][12]\b/i.test(direct);
+  if (!incompleteDirect) return job;
+
+  // If the wider requirements explicitly require another language, do not
+  // rescue the offer even when English/Czech also appears somewhere in text.
+  if (FORBIDDEN.test(checkedContext)) return job;
+
+  const en = ENGLISH.test(checkedContext);
+  const cz = CZECH.test(checkedContext);
+  if (!en && !cz) return job;
+
+  const normalized = en && cz ? "angličtina / čeština" : en ? "angličtina" : "čeština";
   return {
     ...job,
-    country,
-    country_code: country
+    language_cz: normalized,
+    languages_cz: normalized,
+    language: normalized,
+    languages: normalized
   };
+}
+
+function normalizeCountry(job) {
+  const country = countryOf(job);
+  const withCountry = country
+    ? { ...job, country, country_code: country }
+    : job;
+  return normalizeLanguageEvidence(withCountry);
 }
 
 function parseJson(text) {
@@ -172,4 +233,4 @@ express.application.post = function collectAllCandidatesPost(path, ...handlers) 
   return previousPost.call(this, path, collectBeforeStable, ...handlers);
 };
 
-console.log("[ALL CANDIDATES] Full nested payload collector for all 16 countries active.");
+console.log("[ALL CANDIDATES] Full nested payload collector + robust AJ/CZ evidence normalization active.");
