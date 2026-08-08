@@ -593,20 +593,35 @@ async function executeModalLogin(page, email, password) {
   logStep("HeroHero login úspěšně dokončen.");
 }
 
+function cleanText(value) {
+  return String(value ?? "").replace(/\s+/g, " ").trim();
+}
+
+// Chybějící hodnoty se nikdy nevypisují jako „neuvedeno“. Kontrola je
+// záměrně ukotvená na celou hodnotu, aby nevyřazovala platný popis práce.
+function isMissingJobValue(value) {
+  const normalized = cleanText(value).toLocaleLowerCase("cs-CZ");
+  if (!normalized) return true;
+
+  return /^(?:[-•]\s*)?(?:(?:ubytování|housing|místo|město|location|mzda|plat|salary|jazyk|language|požadavky|requirements|nástup|start|strava|meals|výhody|advantages)\s*:?\s*)?(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|n\/?a)\s*[.!]?$/iu.test(normalized);
+}
+
 function hasUsefulJobValue(value) {
-  if (value === null || value === undefined) return false;
-  const normalized = String(value).trim().toLowerCase();
-  if (!normalized) return false;
-  // Never publish placeholders, including labels returned by upstream AI.
-  return !/(?:^|[\s:;,.(\[-])(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)(?=$|[\s:;,.!?()\]\-])/i.test(normalized);
+  return !isMissingJobValue(value);
 }
 
 function sanitizePublishedLine(value) {
-  const line = String(value ?? "").replace(/\s+/g, " ").trim();
-  if (!line || /práci nezprostředkovávám|sdílím ověřené nabídky/i.test(line)) return "";
-  if (/^(?:[-•]\s*)?(?:ubytování|místo|město|mzda|plat|jazyk|požadavky|nástup|strava|výhody)\s*:?\s*(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)\s*[.!]?$/i.test(line)) return "";
+  const line = cleanText(value);
+  if (!line) return "";
+  if (/práci nezprostředkovávám|sdílím ověřené nabídky/i.test(line)) return "";
+  // Pokud AI vrátí placeholder jako součást samostatné položky, celou položku
+  // raději vynecháme než aby se zobrazilo „neuvedeno“.
+  // `n/a` musí mít hranice. Bez nich se "na" na konci slova
+  // "Angličtina" chybně vyhodnotilo jako chybějící hodnota.
+  const hasMissingMarker = /(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|(?:^|[\s:;,(])n\/?a(?=$|[\s:;,.!?)]))/iu.test(line);
+  if (isMissingJobValue(line) || hasMissingMarker) return "";
   return line
-    .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|čistého|čistá|čisté)\b/gi, "")
+    .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|hrubý|hrubou|čistého|čistá|čisté|čistý|čistou)\b/giu, "")
     .replace(/\s{2,}/g, " ")
     .trim();
 }
@@ -626,22 +641,61 @@ function usefulTextLines(value) {
 }
 
 function formatSalaryLine(job) {
-  const czk = [
-    job.salary_czk_month,
-    job.monthly_salary_czk,
-    job.salary_month_czk,
-    job.salary_monthly_czk,
-    job.salary
-  ].map(value => String(value ?? "").trim())
-    .find(value => hasUsefulJobValue(value) && /(?:kč|czk)/i.test(value)) || "";
-  // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
-  // původní eura ani náhradní text, pokud mzda v nabídce chybí.
-  if (!czk || !/(kč|czk)/i.test(czk)) return null;
-  const monthly = (/(?:brutto|netto|hrub|čist)/i.test(czk)
-    ? czk.replace(/\b(?:brutto|netto|hrubého|čistého|hrubá|čistá)\b/gi, "").replace(/\s+/g, " ").trim()
-    : czk);
-  const normalizedMonthly = /měs/i.test(monthly) ? monthly : `${monthly} / měsíc`;
-  return `💰 ${normalizedMonthly}`.replace(/\s{2,}/g, " ").trim();
+  const candidates = [
+    { value: job.salary_czk_month, monthly: true },
+    { value: job.monthly_salary_czk, monthly: true },
+    { value: job.salary_month_czk, monthly: true },
+    { value: job.salary_monthly_czk, monthly: true },
+    { value: job.salary, monthly: false }
+  ];
+
+  const match = candidates
+    .map(candidate => ({ ...candidate, value: sanitizePublishedLine(candidate.value) }))
+    .find(candidate =>
+      hasUsefulJobValue(candidate.value) &&
+      /(?:kč|czk)/i.test(candidate.value) &&
+      (candidate.monthly || /(?:měs(?:íc|íčně)?|month)/i.test(candidate.value))
+    );
+
+  // Neodvozujeme měsíční mzdu z hodinové sazby ani z eur. Zobrazujeme jen
+  // hodnotu v Kč, kterou upstream označil jako měsíční nebo ji tak pojmenoval.
+  if (!match) return null;
+  const cleanSalary = cleanText(match.value)
+    .replace(/\bCZK\b/gi, "Kč")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+  const monthlySalary = /(?:měs(?:íc|íčně)?|month)/i.test(cleanSalary)
+    ? cleanSalary
+    : `${cleanSalary} / měsíc`;
+  return `💰 ${monthlySalary}`;
+}
+
+function isDirectJobLink(value) {
+  const candidate = cleanText(value);
+  if (!candidate) return false;
+  try {
+    const parsed = new URL(candidate);
+    if (!/^https?:$/.test(parsed.protocol)) return false;
+    // Indeed často vrací login nebo obecný přehled, ne ověřitelnou konkrétní
+    // nabídku. Takový odkaz na HeroHero nikdy nepublikujeme.
+    if (/(^|\.)indeed\./i.test(parsed.hostname)) return false;
+    const path = parsed.pathname.replace(/\/+$/, "");
+    // Query string z obecného seznamu z něj nedělá konkrétní nabídku.
+    // Přijímáme např. /jobs/123 nebo konkrétní slug, nikdy však /jobs,
+    // /careers, /search ani podobnou rozcestníkovou stránku.
+    const genericPage = /\/(?:jobs?|vacanc(?:y|ies)|careers?|search|offers?)$/i.test(path);
+    return Boolean(path && path !== "/" && !genericPage);
+  } catch {
+    return false;
+  }
+}
+
+function firstDirectJobLink(...values) {
+  for (const value of values) {
+    const candidate = cleanText(value);
+    if (isDirectJobLink(candidate)) return candidate;
+  }
+  return "";
 }
 
 function relevantJobEmoji(title) {
@@ -662,13 +716,16 @@ function stripLeadingEmoji(value) {
 
 function formatJobPost(job) {
   const title = sanitizePublishedLine(stripLeadingEmoji(job.title || job.job_title));
+  const directLink = firstDirectJobLink(job.link, job.apply_url, job.url);
+  // HeroHero nesmí dostat příspěvek bez názvu nebo bez přímého odkazu na
+  // konkrétní nabídku. Takový bundle se přeskočí už před otevřením editoru.
+  if (!title || !directLink) return "";
   const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
   const locationValue = firstUsefulJobValue(job.location, job.city, job.country);
   const rawStartDate = firstUsefulJobValue(job.startDate, job.start_date, job.start);
   const rawContractType = firstUsefulJobValue(job.contractType, job.contract_type, job.employment_type);
   const rawLanguage = firstUsefulJobValue(job.language, job.languages);
-  const directLink = firstUsefulJobValue(job.link, job.apply_url, job.url);
   const lines = [`${titleEmoji} ${title}`];
 
   if (salary) lines.push(salary);
@@ -682,9 +739,10 @@ function formatJobPost(job) {
   let output = lines.join("\n");
   if (directLink) output += `\n\n🔗 Odkaz: ${directLink}`;
 
+  const titleForComparison = cleanText(title).toLocaleLowerCase("cs-CZ");
   const descriptionLines = extractJobBodyLines(job)
     .map(sanitizePublishedLine)
-    .filter(Boolean);
+    .filter(line => line && cleanText(line).toLocaleLowerCase("cs-CZ") !== titleForComparison);
   if (descriptionLines.length > 0) {
     output += `\n\n🔧 Náplň práce\n`;
     for (const point of descriptionLines) output += `• ${point}\n`;
@@ -701,10 +759,10 @@ function formatJobPost(job) {
   }
 
   const requirementLines = usefulTextLines(job.requirements);
-  // The section is always present, but we never invent requirements when the
-  // source offer did not provide any.
-  output += `\n📋 Požadavky\n`;
-  for (const point of requirementLines) output += `• ${point}\n`;
+  if (requirementLines.length > 0) {
+    output += `\n📋 Požadavky\n`;
+    for (const point of requirementLines) output += `• ${point}\n`;
+  }
 
   const advantageLines = usefulTextLines(job.advantages);
   if (advantageLines.length > 0) {
@@ -840,16 +898,33 @@ async function downloadImageToTempFile(imageUrl) {
   return resolvedFilePath;
 }
 
+// Vstup z Apify/AI někdy obsahuje ISO kód a jindy český či anglický název.
+// Všechny varianty převádíme na přesně existující kategorii na HeroHero.
 const HEROHERO_COUNTRY_CATEGORIES = {
-  Austria: ["Rakousko"], Belgium: ["Belgie"], Denmark: ["Dánsko"], Estonia: ["Estonsko"],
-  Finland: ["Finsko"], France: ["Francie"], Netherlands: ["Nizozemsko"], Ireland: ["Irsko"],
-  Italy: ["Itálie"], Cyprus: ["Kypr"], Malta: ["Malta"], Germany: ["Německo"],
-  Norway: ["Norsko"], Greece: ["Řecko"], Spain: ["Španělsko"], Sweden: ["Švédsko"]
+  "austria": ["Rakousko"], "at": ["Rakousko"], "rakousko": ["Rakousko"],
+  "belgium": ["Belgie"], "be": ["Belgie"], "belgie": ["Belgie"],
+  "denmark": ["Dánsko"], "dk": ["Dánsko"], "dánsko": ["Dánsko"], "dansko": ["Dánsko"],
+  "estonia": ["Estonsko"], "ee": ["Estonsko"], "estonsko": ["Estonsko"],
+  "finland": ["Finsko"], "fi": ["Finsko"], "finsko": ["Finsko"],
+  "france": ["Francie"], "fr": ["Francie"], "francie": ["Francie"],
+  "netherlands": ["Nizozemsko"], "nl": ["Nizozemsko"], "holland": ["Nizozemsko"],
+  "holandsko": ["Nizozemsko"], "nizozemsko": ["Nizozemsko"], "nizozemí": ["Nizozemsko"],
+  "ireland": ["Irsko"], "ie": ["Irsko"], "irsko": ["Irsko"],
+  "italy": ["Itálie"], "it": ["Itálie"], "italie": ["Itálie"], "itálie": ["Itálie"],
+  "cyprus": ["Kypr"], "cy": ["Kypr"], "kypr": ["Kypr"],
+  "malta": ["Malta"], "mt": ["Malta"],
+  "germany": ["Německo"], "de": ["Německo"], "německo": ["Německo"], "nemecko": ["Německo"],
+  "norway": ["Norsko"], "no": ["Norsko"], "norsko": ["Norsko"],
+  "poland": ["Polsko"], "pl": ["Polsko"], "polsko": ["Polsko"],
+  "greece": ["Řecko"], "gr": ["Řecko"], "řecko": ["Řecko"], "recko": ["Řecko"],
+  "slovakia": ["Slovensko"], "sk": ["Slovensko"], "slovensko": ["Slovensko"],
+  "spain": ["Španělsko"], "es": ["Španělsko"], "španělsko": ["Španělsko"], "spanelsko": ["Španělsko"],
+  "sweden": ["Švédsko"], "se": ["Švédsko"], "švédsko": ["Švédsko"], "svedsko": ["Švédsko"]
 };
 
 function inferWorkCategory(job) {
   const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
-  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Práce s ovocem/zeleninou";
+  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable/.test(value)) return "Práce s ovocem/zeleninou";
   if (/farm|farma|zeměděl|zemedel|agricultur/.test(value)) return "Práce na farmách";
   if (/úklid|uklid|clean|housekeep/.test(value)) return "Úklid";
   if (/hotel|pokoj|recep|resort/.test(value)) return "Hotelové práce";
@@ -861,7 +936,8 @@ function inferWorkCategory(job) {
 
 async function selectCountryCategory(page, job) {
   const countryKey = String(job.country_code || job.country || "").trim();
-  const labels = HEROHERO_COUNTRY_CATEGORIES[countryKey] || (countryKey ? [countryKey] : []);
+  const normalizedCountryKey = countryKey.toLocaleLowerCase("cs-CZ");
+  const labels = HEROHERO_COUNTRY_CATEGORIES[normalizedCountryKey] || (countryKey ? [countryKey] : []);
   if (labels.length === 0) {
     logStep("Země chybí, výběr kategorie přeskakuji.");
     return false;
@@ -912,7 +988,17 @@ async function selectCountryCategory(page, job) {
 }
 
 async function selectWorkCategory(page, job) {
-  const label = job.work_category || job.job_category || inferWorkCategory(job);
+  const allowedCategories = new Set([
+    "Gastronomie",
+    "Práce na farmách",
+    "Práce s ovocem/zeleninou",
+    "Hotelové práce",
+    "Sklady a logistika",
+    "Výroba",
+    "Úklid"
+  ]);
+  const supplied = cleanText(job.work_category || job.job_category);
+  const label = allowedCategories.has(supplied) ? supplied : inferWorkCategory(job);
   if (!label) { logStep("Typ práce se nepodařilo určit, kategorii nepřidávám."); return false; }
   const opener = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true })).first();
   if (await opener.isVisible().catch(() => false)) await opener.click({ timeout: 10000 }).catch(() => {});
@@ -927,6 +1013,10 @@ async function selectWorkCategory(page, job) {
 }
 
 async function createHeroHeroPost(page, job) {
+  const formattedText = formatJobPost(job);
+  if (!formattedText) {
+    throw new Error("Nabídka nemá ověřený název nebo přímý odkaz na konkrétní pracovní pozici; příspěvek se nezveřejní.");
+  }
   logStep(`Vytvářím příspěvek pro pozici: ${job.title}`);
   const createUrl = "https://herohero.co/create";
 
@@ -1055,7 +1145,6 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(10000);
 
   logStep("Vkládám formátovaný popisek nabídky.");
-  const formattedText = formatJobPost(job);
   // Globální keyboard.type se v dynamickém editoru po jeho překreslení může
   // zaseknout nebo psát do titulku. Tělo příspěvku má vlastní contenteditable
   // pole; Playwright ho vyplní přímo a atomicky.
