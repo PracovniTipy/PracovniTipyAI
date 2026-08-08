@@ -11,28 +11,29 @@ let heroCacheAt = 0;
 let publishedKeys = new Set();
 
 const COUNTRY_ALIASES = new Map([
-  ["austria", "Austria"], ["at", "Austria"], ["rakousko", "Austria"],
-  ["belgium", "Belgium"], ["be", "Belgium"], ["belgie", "Belgium"],
-  ["denmark", "Denmark"], ["dk", "Denmark"], ["dánsko", "Denmark"], ["dansko", "Denmark"],
-  ["estonia", "Estonia"], ["ee", "Estonia"], ["estonsko", "Estonia"],
-  ["finland", "Finland"], ["fi", "Finland"], ["finsko", "Finland"],
+  ["austria", "Austria"], ["at", "Austria"], ["rakousko", "Austria"], ["österreich", "Austria"], ["osterreich", "Austria"],
+  ["belgium", "Belgium"], ["be", "Belgium"], ["belgie", "Belgium"], ["belgië", "Belgium"], ["belgie", "Belgium"], ["belgique", "Belgium"],
+  ["denmark", "Denmark"], ["dk", "Denmark"], ["dánsko", "Denmark"], ["dansko", "Denmark"], ["danmark", "Denmark"],
+  ["estonia", "Estonia"], ["ee", "Estonia"], ["estonsko", "Estonia"], ["eesti", "Estonia"],
+  ["finland", "Finland"], ["fi", "Finland"], ["finsko", "Finland"], ["suomi", "Finland"],
   ["france", "France"], ["fr", "France"], ["francie", "France"],
-  ["netherlands", "Netherlands"], ["nl", "Netherlands"], ["holland", "Netherlands"], ["holandsko", "Netherlands"], ["nizozemsko", "Netherlands"], ["nizozemí", "Netherlands"],
-  ["ireland", "Ireland"], ["ie", "Ireland"], ["irsko", "Ireland"],
-  ["italy", "Italy"], ["it", "Italy"], ["itálie", "Italy"], ["italie", "Italy"],
+  ["netherlands", "Netherlands"], ["nl", "Netherlands"], ["holland", "Netherlands"], ["holandsko", "Netherlands"], ["nizozemsko", "Netherlands"], ["nizozemí", "Netherlands"], ["nederland", "Netherlands"],
+  ["ireland", "Ireland"], ["ie", "Ireland"], ["irsko", "Ireland"], ["éire", "Ireland"],
+  ["italy", "Italy"], ["it", "Italy"], ["itálie", "Italy"], ["italie", "Italy"], ["italia", "Italy"],
   ["cyprus", "Cyprus"], ["cy", "Cyprus"], ["kypr", "Cyprus"],
   ["malta", "Malta"], ["mt", "Malta"],
-  ["germany", "Germany"], ["de", "Germany"], ["německo", "Germany"], ["nemecko", "Germany"],
-  ["norway", "Norway"], ["no", "Norway"], ["norsko", "Norway"],
-  ["greece", "Greece"], ["gr", "Greece"], ["řecko", "Greece"], ["recko", "Greece"],
-  ["spain", "Spain"], ["es", "Spain"], ["španělsko", "Spain"], ["spanelsko", "Spain"],
-  ["sweden", "Sweden"], ["se", "Sweden"], ["švédsko", "Sweden"], ["svedsko", "Sweden"]
+  ["germany", "Germany"], ["de", "Germany"], ["německo", "Germany"], ["nemecko", "Germany"], ["deutschland", "Germany"],
+  ["norway", "Norway"], ["no", "Norway"], ["norsko", "Norway"], ["norge", "Norway"],
+  ["greece", "Greece"], ["gr", "Greece"], ["řecko", "Greece"], ["recko", "Greece"], ["hellas", "Greece"],
+  ["spain", "Spain"], ["es", "Spain"], ["španělsko", "Spain"], ["spanelsko", "Spain"], ["españa", "Spain"], ["espana", "Spain"],
+  ["sweden", "Sweden"], ["se", "Sweden"], ["švédsko", "Sweden"], ["svedsko", "Sweden"], ["sverige", "Sweden"]
 ]);
 
 const ALLOWED_LANGUAGE = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b|\bczech\b|češtin|cestin|česk(?:y|ý|á|a)|\bcz\b)/iu;
 const ENGLISH_LANGUAGE = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b)/iu;
 const CZECH_LANGUAGE = /(?:\bczech\b|češtin|cestin|česk(?:y|ý|á|a)|\bcz\b)/iu;
 const FORBIDDEN_LANGUAGE = /(?:\bdutch\b|nizozemštin|nizozemstin|holandštin|holandstin|\bgerman\b|němčin|nemcin|\bfrench\b|francouzštin|francouzstin|\bspanish\b|španělštin|spanelstin|\bitalian\b|italštin|italstin|\bdanish\b|dánštin|danstin|\bswedish\b|švédštin|svedstin|\bnorwegian\b|norštin|norstin|\bfinnish\b|finštin|finstin|\bgreek\b|řečtin|rectin|\bestonian\b|estonštin|estonstin|\bpolish\b|polštin|polstin|\bslovak\b|slovenštin|slovenstin|\bportuguese\b|portugalštin|portugalstin|\bhungarian\b|maďarštin|madarstin|\bromanian\b|rumunštin|rumunstin|\bbulgarian\b|bulharštin|bulharstin|\bcroatian\b|chorvatštin|chorvatstin|\bslovenian\b|slovinštin|slovinstin|\blithuanian\b|litevštin|litevstin|\blatvian\b|lotyštin|lotystin|\bmaltese\b|maltštin|maltstin|local language|místní jazyk|mistni jazyk)/iu;
+const PLACEHOLDER_LANGUAGE = /^(?:dle nabídky|dle nabidky|neuveden(?:o|ý|á)?|není uveden(?:o|ý|á)?|neni uveden(?:o|y|a)?|not specified|not provided|unknown|n\/?a)$/iu;
 
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -50,7 +51,7 @@ function titleOf(job) {
   return clean(
     job?.job_title_cz || job?.title_cz || job?.jobTitleCz || job?.position_cz ||
     job?.job_title || job?.jobTitle || job?.title || job?.position || job?.role ||
-    job?.name || job?.position_name || job?.jobName
+    job?.name || job?.position_name || job?.positionName || job?.jobName
   );
 }
 
@@ -60,7 +61,8 @@ function linkOf(job) {
     job?.job_link || job?.jobLink || job?.application_url || job?.applicationUrl ||
     job?.offer_url || job?.offerUrl || job?.details_url || job?.detailsUrl ||
     job?.external_url || job?.externalUrl || job?.direct_link || job?.directLink ||
-    job?.apply_link || job?.applyLink
+    job?.apply_link || job?.applyLink || job?.source_url || job?.sourceUrl ||
+    job?.job_posting_url || job?.jobPostingUrl || job?.job_details_url || job?.jobDetailsUrl
   );
   if (direct) return direct;
   const text = flatten([job?.text, job?.textHtml, job?.description, job?.caption, job?.content]);
@@ -95,32 +97,54 @@ function countryOf(job) {
   return "";
 }
 
-function languageText(job) {
-  const direct = clean(flatten([
+function directLanguageText(job) {
+  const values = [
     job?.language_cz, job?.languages_cz, job?.language, job?.languages,
     job?.required_language, job?.required_languages, job?.language_requirement,
     job?.language_requirements, job?.requiredLanguage, job?.requiredLanguages,
-    job?.jazyk, job?.jazyky, job?.pozadovany_jazyk, job?.požadovaný_jazyk
-  ]));
-  if (direct) return direct;
-  return clean(flatten([job?.requirements, job?.description, job?.text, job?.textHtml]));
+    job?.jazyk, job?.jazyky, job?.pozadovany_jazyk, job?.požadovaný_jazyk,
+    job?.languageName, job?.language_name, job?.requiredLanguageName,
+    job?.english_required, job?.englishRequired, job?.english, job?.czech_required, job?.czechRequired
+  ];
+
+  for (const [key, value] of Object.entries(job || {})) {
+    const normalizedKey = key.toLocaleLowerCase("cs-CZ").replace(/[\s_-]+/g, "");
+    if (/(?:language|jazyk|english|anglict|czech|cestin)/u.test(normalizedKey)) values.push(value);
+  }
+
+  return clean(values.map(flatten).filter(Boolean).join(" "));
 }
 
 function stripNegatedLanguages(text) {
   return clean(text)
     .replace(/(?:no|not|without)\s+(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish|greek|estonian|polish|slovak|portuguese|hungarian|romanian|bulgarian|croatian|slovenian|lithuanian|latvian|maltese)(?:\s+(?:required|needed|necessary))?/giu, " ")
+    .replace(/(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish|greek|estonian|polish|slovak|portuguese)\s+(?:is\s+)?not\s+(?:required|needed|necessary)/giu, " ")
+    .replace(/(?:knowledge|command)\s+of\s+(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish)\s+(?:is\s+)?not\s+(?:required|needed|necessary)/giu, " ")
     .replace(/(?:bez|není\s+nutná|neni\s+nutna|není\s+vyžadována|neni\s+vyzadovana)\s+(?:nizozemštiny|holandštiny|němčiny|nemciny|francouzštiny|francouzstiny|španělštiny|spanelstiny|italštiny|italstiny|dánštiny|danstiny|švédštiny|svedstiny|norštiny|norstiny|finštiny|finstiny|řečtiny|rectiny|estonštiny|estonstiny|polštiny|polstiny|slovenštiny|slovenstiny)/giu, " ");
 }
 
 function languageDecision(job) {
-  const source = languageText(job);
+  let direct = directLanguageText(job);
+  if (PLACEHOLDER_LANGUAGE.test(direct)) direct = "";
+
+  const context = clean(flatten([
+    job?.requirements, job?.description, job?.text, job?.textHtml,
+    job?.qualifications, job?.skills
+  ]));
+  const source = direct || context;
   if (!source) return { allowed: false, normalized: "", reason: "missing" };
+
   const checked = stripNegatedLanguages(source);
   if (FORBIDDEN_LANGUAGE.test(checked)) return { allowed: false, normalized: "", reason: "forbidden-language" };
   if (!ALLOWED_LANGUAGE.test(checked)) return { allowed: false, normalized: "", reason: "not-english-czech" };
+
   const en = ENGLISH_LANGUAGE.test(checked);
   const cz = CZECH_LANGUAGE.test(checked);
-  return { allowed: true, normalized: en && cz ? "angličtina / čeština" : en ? "angličtina" : "čeština", reason: "ok" };
+  return {
+    allowed: true,
+    normalized: en && cz ? "angličtina / čeština" : en ? "angličtina" : "čeština",
+    reason: "ok"
+  };
 }
 
 function jobText(job) {
@@ -178,9 +202,9 @@ function normalizeJob(job) {
   };
 }
 
-function eligible(job, requireLink = false) {
+function safeJob(job, requireLink = false) {
   if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
+  if (!titleOf(job) || !countryOf(job(job)) || forbiddenJob(job)) return false;
   if (!languageDecision(job).allowed) return false;
   if (requireLink && !linkOf(job)) return false;
   return true;
@@ -265,50 +289,9 @@ function extractPayload(input, seen = new Set()) {
   return {};
 }
 
-function collectObjects(value, out = [], seen = new Set()) {
-  if (value == null || out.length > 100) return out;
-  if (typeof value === "string") {
-    const parsed = parseJsonString(value);
-    if (parsed) collectObjects(parsed, out, seen);
-    return out;
-  }
-  if (typeof value !== "object" || seen.has(value)) return out;
-  seen.add(value);
-  if (Array.isArray(value)) {
-    for (const item of value) collectObjects(item, out, seen);
-    return out;
-  }
-  if (titleOf(value) || imageOf(value) || linkOf(value)) out.push(value);
-  for (const child of Object.values(value)) collectObjects(child, out, seen);
-  return out;
-}
-
-function sameTitle(a, b) {
-  return titleOf(a).toLocaleLowerCase("cs-CZ") === titleOf(b).toLocaleLowerCase("cs-CZ");
-}
-
-function findCached(candidate) {
-  if (!heroCache.length || Date.now() - heroCacheAt > CACHE_TTL_MS) return null;
-  const image = imageOf(candidate);
-  if (image) {
-    const hit = heroCache.find(job => imageOf(job) === image);
-    if (hit) return hit;
-  }
-  const link = linkOf(candidate);
-  if (link) {
-    const hit = heroCache.find(job => linkOf(job) === link);
-    if (hit) return hit;
-  }
-  if (titleOf(candidate)) {
-    const hit = heroCache.find(job => sameTitle(job, candidate));
-    if (hit) return hit;
-  }
-  return null;
-}
-
 function nextUnusedCached() {
   if (!heroCache.length || Date.now() - heroCacheAt > CACHE_TTL_MS) return null;
-  return heroCache.find(job => !publishedKeys.has(keyOf(job)) && eligible(job, true)) || null;
+  return heroCache.find(job => !publishedKeys.has(keyOf(job))) || null;
 }
 
 const originalPost = express.application.post;
@@ -319,48 +302,77 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
       try {
         const payload = extractPayload(req.body);
         const allJobs = Array.isArray(payload.jobs) ? payload.jobs : [];
-        const suppliedReels = Array.isArray(payload.reels) ? payload.reels : [];
+        const allReels = Array.isArray(payload.reels) ? payload.reels : [];
 
-        const eligibleJobs = dedupeAndSort(allJobs.filter(job => eligible(job, false))).map(normalizeJob);
-        const heroJobs = eligibleJobs.filter(job => linkOf(job)).slice(0, HERO_TARGET);
-        const reelPool = dedupeAndSort([
-          ...suppliedReels.filter(job => eligible(job, false)),
-          ...eligibleJobs
-        ]).map(normalizeJob);
-        const reelJobs = reelPool.slice(0, IG_TARGET);
+        const normalizedJobs = dedupeAndSort(allJobs.map(normalizeJob).filter(job => safeJob(job, false)));
+        const heroJobs = normalizedJobs.filter(job => linkOf(job)).slice(0, HERO_TARGET);
+        const reelJobs = dedupeAndSort([...allReels.map(normalizeJob).filter(job => safeJob(job, false)), ...normalizedJobs]).slice(0, IG_TARGET);
 
-        if (heroJobs.length || reelJobs.length) {
-          req.body = { jobs: heroJobs, reels: reelJobs };
+        const languageStats = allJobs.reduce((acc, job) => {
+          const reason = languageDecision(job).reason;
+          acc[reason] = (acc[reason] || 0) + 1;
+          return acc;
+        }, {});
+
+        console.log(`[STABLE PIPELINE] source=${allJobs.length} safe=${normalizedJobs.length} hero=${heroJobs.length}/${HERO_TARGET} ig=${reelJobs.length}/${IG_TARGET}`);
+
+        if (heroJobs.length < HERO_TARGET || reelJobs.length < IG_TARGET) {
+          return res.status(422).json({
+            success: false,
+            error: `Není dost vhodných nabídek pro tento běh: HeroHero ${heroJobs.length}/${HERO_TARGET}, Instagram ${reelJobs.length}/${IG_TARGET}.`,
+            debug: {
+              sourceJobs: allJobs.length,
+              safeJobs: normalizedJobs.length,
+              heroWithDirectLink: heroJobs.length,
+              instagramSafe: reelJobs.length,
+              languageStats,
+              forbiddenTitles: allJobs.filter(forbiddenJob).map(titleOf).filter(Boolean).slice(0, 10),
+              missingLinks: normalizedJobs.filter(job => !linkOf(job)).map(titleOf).slice(0, 10)
+            }
+          });
         }
 
-        console.log(`[STABLE PIPELINE] input jobs=${allJobs.length} eligible=${eligibleJobs.length} hero=${heroJobs.length}/${HERO_TARGET} ig=${reelJobs.length}/${IG_TARGET}`);
+        req.body = { jobs: heroJobs, reels: reelJobs };
 
         const originalJson = res.json.bind(res);
         res.json = body => {
           if (body && typeof body === "object") {
-            if (Array.isArray(body.herohero)) {
-              body.herohero = dedupeAndSort(body.herohero.filter(job => eligible(job, true))).slice(0, HERO_TARGET);
-              heroCache = body.herohero.map(normalizeJob);
-              heroCacheAt = Date.now();
-              publishedKeys = new Set();
-            }
-            if (Array.isArray(body.instagram)) {
-              body.instagram = dedupeAndSort(body.instagram.filter(job => eligible(job, false))).slice(0, IG_TARGET);
-            }
+            const rawHero = Array.isArray(body.herohero) ? body.herohero : [];
+            const rawIg = Array.isArray(body.instagram) ? body.instagram : [];
+
+            body.herohero = dedupeAndSort(rawHero.filter(job => !forbiddenJob(job) && languageDecision(job).allowed)).slice(0, HERO_TARGET);
+            body.instagram = dedupeAndSort(rawIg.filter(job => !forbiddenJob(job) && languageDecision(job).allowed)).slice(0, IG_TARGET);
+
             body.debugCounts = {
-              inputJobs: allJobs.length,
-              eligibleJobs: eligibleJobs.length,
-              herohero: Array.isArray(body.herohero) ? body.herohero.length : 0,
-              instagram: Array.isArray(body.instagram) ? body.instagram.length : 0,
+              sourceJobs: allJobs.length,
+              selectedHeroInput: heroJobs.length,
+              selectedInstagramInput: reelJobs.length,
+              rawHerohero: rawHero.length,
+              rawInstagram: rawIg.length,
+              herohero: body.herohero.length,
+              instagram: body.instagram.length,
               targetHerohero: HERO_TARGET,
               targetInstagram: IG_TARGET
             };
-            console.log(`[STABLE PIPELINE] output hero=${body.debugCounts.herohero}/${HERO_TARGET} ig=${body.debugCounts.instagram}/${IG_TARGET}`);
+
+            if (body.herohero.length !== HERO_TARGET || body.instagram.length !== IG_TARGET) {
+              return res.status(502).json({
+                success: false,
+                error: `Render nevygeneroval kompletní výstup: HeroHero ${body.herohero.length}/${HERO_TARGET}, Instagram ${body.instagram.length}/${IG_TARGET}.`,
+                debugCounts: body.debugCounts
+              });
+            }
+
+            heroCache = body.herohero.map(normalizeJob);
+            heroCacheAt = Date.now();
+            publishedKeys = new Set();
+            console.log(`[STABLE PIPELINE] generated exact hero=5/5 ig=2/2`);
           }
           return originalJson(body);
         };
       } catch (error) {
-        console.error(`[STABLE PIPELINE] /generate normalization failed: ${error.message}`);
+        console.error(`[STABLE PIPELINE] /generate failed: ${error.message}`);
+        return res.status(500).json({ success: false, error: error.message });
       }
       next();
     };
@@ -370,53 +382,25 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
   if (path === "/publishHeroHero") {
     const publishOne = async (req, res) => {
       try {
-        const raw = collectObjects(req.body);
-        let job = null;
-
-        for (const candidate of raw) {
-          const cached = findCached(candidate);
-          if (cached && eligible(cached, true) && !publishedKeys.has(keyOf(cached))) {
-            job = cached;
-            break;
-          }
-        }
-
-        // Make can map the wrong Iterator object. In that case publish the next
-        // safe generated HeroHero item from this exact /generate run instead.
-        if (!job) job = nextUnusedCached();
-
-        // Last fallback: accept the iterator item itself only when it is safe.
-        if (!job) {
-          const direct = raw.map(normalizeJob).find(item => eligible(item, true) && !publishedKeys.has(keyOf(item)));
-          if (direct) job = direct;
-        }
-
+        const job = nextUnusedCached();
         if (!job) {
           return res.status(422).json({
             success: false,
-            error: "Není dostupná další bezpečná HeroHero nabídka z aktuálního běhu.",
-            debug: {
-              cache: heroCache.length,
-              publishedFromCache: publishedKeys.size,
-              raw: raw.length,
-              rawTitles: raw.map(titleOf).filter(Boolean).slice(0, 5),
-              rawForbidden: raw.map(forbiddenJob).slice(0, 5),
-              rawLanguageAllowed: raw.map(item => languageDecision(item).allowed).slice(0, 5)
-            }
+            error: "V cache není další HeroHero nabídka z aktuálního běhu.",
+            debug: { cache: heroCache.length, published: publishedKeys.size }
           });
         }
 
-        job = normalizeJob(job);
         const publishHeroHero = require("./publishHeroHero");
         const result = await publishHeroHero(job);
         publishedKeys.add(keyOf(job));
 
-        console.log(`[STABLE PIPELINE] HeroHero published ${publishedKeys.size}/${heroCache.length}: ${titleOf(job)}`);
+        console.log(`[STABLE PIPELINE] HeroHero published ${publishedKeys.size}/${HERO_TARGET}: ${titleOf(job)}`);
         return res.status(200).json({
           success: true,
           published: 1,
           title: titleOf(job),
-          batchProgress: `${publishedKeys.size}/${heroCache.length}`,
+          batchProgress: `${publishedKeys.size}/${HERO_TARGET}`,
           result
         });
       } catch (error) {
@@ -429,4 +413,4 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
   return originalPost.call(this, path, ...handlers);
 };
 
-console.log("[STABLE PIPELINE] Single 5 HeroHero / 2 IG pipeline active.");
+console.log("[STABLE PIPELINE] Deterministic exact 5 HeroHero / 2 IG pipeline active.");
