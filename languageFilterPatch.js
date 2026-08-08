@@ -1,8 +1,9 @@
 "use strict";
 
-// Global language gate for both HeroHero and Instagram.
-// Only job offers requiring English and/or Czech are allowed through.
-// Any offer mentioning another required/local language is rejected.
+// Final language gate for both HeroHero and Instagram.
+// IMPORTANT: /generate input is not mutated anymore. The previous version
+// removed Make/OpenAI payloads before index.js could parse them and caused:
+// "Musí být předáno jobs nebo reels".
 
 const express = require("express");
 const Module = require("module");
@@ -20,18 +21,37 @@ function flatten(value) {
 }
 
 function languageText(job) {
-  return clean(flatten(
-    job?.language_cz ??
-    job?.languages_cz ??
-    job?.language ??
-    job?.languages ??
-    job?.required_language ??
-    job?.required_languages ??
-    job?.language_requirement ??
-    job?.language_requirements ??
-    job?.requiredLanguage ??
-    job?.requiredLanguages
-  ));
+  if (!job || typeof job !== "object" || Array.isArray(job)) return "";
+
+  const direct = [
+    job.language_cz,
+    job.languages_cz,
+    job.language,
+    job.languages,
+    job.required_language,
+    job.required_languages,
+    job.language_requirement,
+    job.language_requirements,
+    job.requiredLanguage,
+    job.requiredLanguages,
+    job.jazyk,
+    job.jazyky,
+    job.pozadovany_jazyk,
+    job.požadovaný_jazyk
+  ].map(flatten).filter(Boolean);
+
+  // Make/OpenAI can rename mapped fields. Accept any key that clearly means
+  // language instead of deleting the entire job because one exact alias changed.
+  for (const [key, value] of Object.entries(job)) {
+    const normalizedKey = key
+      .toLocaleLowerCase("cs-CZ")
+      .replace(/[\s_-]+/g, "");
+    if (/(?:language|languages|requiredlanguage|languagerequirement|jazyk|jazyky|pozadovanyjazyk|požadovanýjazyk)/u.test(normalizedKey)) {
+      direct.push(flatten(value));
+    }
+  }
+
+  return clean(direct.filter(Boolean).join(" "));
 }
 
 const ALLOWED_LANGUAGE = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b|\bczech\b|češtin|cestin|česk(?:y|ý|á|a)|\bcz\b)/iu;
@@ -39,78 +59,47 @@ const ALLOWED_LANGUAGE = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b|\bc
 const FORBIDDEN_LANGUAGE = /(?:\bdutch\b|nizozemštin|nizozemstin|holandštin|holandstin|\bgerman\b|němčin|nemcin|\bfrench\b|francouzštin|francouzstin|\bspanish\b|španělštin|spanelstin|\bitalian\b|italštin|italstin|\bdanish\b|dánštin|danstin|\bswedish\b|švédštin|svedstin|\bnorwegian\b|norštin|norstin|\bfinnish\b|finštin|finstin|\bgreek\b|řečtin|rectin|\bestonian\b|estonštin|estonstin|\bpolish\b|polštin|polstin|\bslovak\b|slovenštin|slovenstin|\bportuguese\b|portugalštin|portugalstin|\bhungarian\b|maďarštin|madarstin|\bromanian\b|rumunštin|rumunstin|\bbulgarian\b|bulharštin|bulharstin|\bcroatian\b|chorvatštin|chorvatstin|\bslovenian\b|slovinštin|slovinstin|\blithuanian\b|litevštin|litevstin|\blatvian\b|lotyštin|lotystin|\bmaltese\b|maltštin|maltstin|local language|místní jazyk|mistni jazyk)/iu;
 
 function isAllowedLanguageJob(job) {
-  if (!job || typeof job !== "object" || Array.isArray(job)) return true;
-
+  if (!job || typeof job !== "object" || Array.isArray(job)) return false;
   const text = languageText(job);
   if (!text) return false;
   if (FORBIDDEN_LANGUAGE.test(text)) return false;
   return ALLOWED_LANGUAGE.test(text);
 }
 
-function looksLikeJob(obj) {
-  if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
-  const title = clean(
-    obj.job_title_cz || obj.title_cz || obj.jobTitleCz || obj.position_cz ||
-    obj.job_title || obj.jobTitle || obj.title || obj.position || obj.role || obj.name
-  );
-  return Boolean(title);
-}
-
-function filterValue(value, seen = new WeakSet()) {
-  if (value == null) return value;
-
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if ((trimmed.startsWith("{") && trimmed.endsWith("}")) ||
-        (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
-      try {
-        const parsed = JSON.parse(trimmed);
-        const filtered = filterValue(parsed, seen);
-        return JSON.stringify(filtered);
-      } catch (_) {
-        return value;
-      }
+function filterGeneratedArray(items) {
+  if (!Array.isArray(items)) return items;
+  return items.filter(job => {
+    const allowed = isAllowedLanguageJob(job);
+    if (!allowed) {
+      console.log(`[LANG FILTER] rejected output: ${clean(job?.title || job?.job_title || job?.job_title_cz || job?.title_cz || "bez názvu")} | language="${languageText(job) || "missing"}"`);
     }
-    return value;
-  }
-
-  if (typeof value !== "object") return value;
-  if (seen.has(value)) return value;
-  seen.add(value);
-
-  if (Array.isArray(value)) {
-    return value
-      .map(item => filterValue(item, seen))
-      .filter(item => item !== null && item !== undefined);
-  }
-
-  if (looksLikeJob(value) && !isAllowedLanguageJob(value)) {
-    console.log(`[LANG FILTER] rejected: ${clean(value.title || value.job_title || value.job_title_cz || value.title_cz)} | language="${languageText(value) || "missing"}"`);
-    return null;
-  }
-
-  const result = {};
-  for (const [key, item] of Object.entries(value)) {
-    const filtered = filterValue(item, seen);
-    if (filtered !== null && filtered !== undefined) result[key] = filtered;
-  }
-  return result;
+    return allowed;
+  });
 }
 
+// Do NOT touch req.body on /generate. Only filter the already generated output.
+// This keeps Make payload parsing intact and prevents the 400 Bad Request loop.
 const previousPost = express.application.post;
 express.application.post = function languageFilteredPost(path, ...handlers) {
-  if (path === "/generate" || path === "/publishHeroHero") {
-    const filterMiddleware = (req, res, next) => {
-      try {
-        const filtered = filterValue(req.body);
-        req.body = filtered && typeof filtered === "object" ? filtered : {};
-      } catch (error) {
-        console.error(`[LANG FILTER] request filtering failed: ${error.message}`);
-      }
+  if (path === "/generate") {
+    const outputFilterMiddleware = (req, res, next) => {
+      const originalJson = res.json.bind(res);
+      res.json = body => {
+        if (body && typeof body === "object") {
+          if (Array.isArray(body.herohero)) body.herohero = filterGeneratedArray(body.herohero);
+          if (Array.isArray(body.instagram)) body.instagram = filterGeneratedArray(body.instagram);
+          if (Array.isArray(body.jobs)) body.jobs = filterGeneratedArray(body.jobs);
+          if (Array.isArray(body.reels)) body.reels = filterGeneratedArray(body.reels);
+        }
+        return originalJson(body);
+      };
       next();
     };
-    return previousPost.call(this, path, filterMiddleware, ...handlers);
+    return previousPost.call(this, path, outputFilterMiddleware, ...handlers);
   }
+
+  // /publishHeroHero is not rewritten here either. The publisher wrapper below
+  // is the final authority and rejects any job that is not English/Czech.
   return previousPost.call(this, path, ...handlers);
 };
 
@@ -135,4 +124,4 @@ Module._load = function languageFilteredLoad(request, parent, isMain) {
   return exported;
 };
 
-console.log("[LANG FILTER] Only English/Czech job offers are allowed.");
+console.log("[LANG FILTER] Safe output-only English/Czech filter active.");
