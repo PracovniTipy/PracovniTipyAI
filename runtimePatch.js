@@ -1,40 +1,43 @@
 "use strict";
 
-// Preload patch for the Make -> Render workflow.
-// It fixes HeroHero batch collection without rewriting index.js and ranks
-// simple manual jobs before specialized positions.
+// Runtime guard/normalizer for Make -> Render.
+// - collects up to 5 HeroHero jobs from one or several bundles
+// - guarantees 2 IG candidates when at least 2 usable jobs exist
+// - permanently blocks assembly / "montážní dělník" offers
+// - prioritizes farm, harvest, cleaning and gastro low-skill roles
 
 const express = require("express");
 
-const BATCH_SIZE = 5;
-const CACHE_TTL_MS = 30 * 60 * 1000;
-const RECENT_TTL_MS = 60 * 60 * 1000;
+const HERO_BATCH = 5;
+const IG_BATCH = 2;
+const CACHE_TTL_MS = 45 * 60 * 1000;
+const RECENT_TTL_MS = 6 * 60 * 60 * 1000;
 
+let candidateCache = [];
 let generatedCache = [];
-let generatedHistory = [];
 let generatedAt = 0;
-let pending = [];
+let pendingHero = [];
 let pendingAt = 0;
 let publishChain = Promise.resolve();
 const recent = new Map();
 
-const supportedCountries = new Set([
-  "austria", "at", "rakousko",
-  "belgium", "be", "belgie",
-  "denmark", "dk", "dánsko", "dansko",
-  "estonia", "ee", "estonsko",
-  "finland", "fi", "finsko",
-  "france", "fr", "francie",
-  "netherlands", "nl", "holland", "holandsko", "nizozemsko", "nizozemí",
-  "ireland", "ie", "irsko",
-  "italy", "it", "itálie", "italie",
-  "cyprus", "cy", "kypr",
-  "malta", "mt",
-  "germany", "de", "německo", "nemecko",
-  "norway", "no", "norsko",
-  "greece", "gr", "řecko", "recko",
-  "spain", "es", "španělsko", "spanelsko",
-  "sweden", "se", "švédsko", "svedsko"
+const COUNTRY_ALIASES = new Map([
+  ["austria", "austria"], ["at", "austria"], ["rakousko", "austria"],
+  ["belgium", "belgium"], ["be", "belgium"], ["belgie", "belgium"],
+  ["denmark", "denmark"], ["dk", "denmark"], ["dánsko", "denmark"], ["dansko", "denmark"],
+  ["estonia", "estonia"], ["ee", "estonia"], ["estonsko", "estonia"],
+  ["finland", "finland"], ["fi", "finland"], ["finsko", "finland"],
+  ["france", "france"], ["fr", "france"], ["francie", "france"],
+  ["netherlands", "netherlands"], ["nl", "netherlands"], ["holland", "netherlands"], ["holandsko", "netherlands"], ["nizozemsko", "netherlands"], ["nizozemí", "netherlands"],
+  ["ireland", "ireland"], ["ie", "ireland"], ["irsko", "ireland"],
+  ["italy", "italy"], ["it", "italy"], ["itálie", "italy"], ["italie", "italy"],
+  ["cyprus", "cyprus"], ["cy", "cyprus"], ["kypr", "cyprus"],
+  ["malta", "malta"], ["mt", "malta"],
+  ["germany", "germany"], ["de", "germany"], ["německo", "germany"], ["nemecko", "germany"],
+  ["norway", "norway"], ["no", "norway"], ["norsko", "norway"],
+  ["greece", "greece"], ["gr", "greece"], ["řecko", "greece"], ["recko", "greece"],
+  ["spain", "spain"], ["es", "spain"], ["španělsko", "spain"], ["spanelsko", "spain"],
+  ["sweden", "sweden"], ["se", "sweden"], ["švédsko", "sweden"], ["svedsko", "sweden"]
 ]);
 
 function clean(value) {
@@ -43,71 +46,99 @@ function clean(value) {
 
 function parseJsonString(value) {
   if (typeof value !== "string") return null;
-  const text = value
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/i, "")
-    .trim();
+  const text = value.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   if (!text || (!text.startsWith("{") && !text.startsWith("["))) return null;
   try { return JSON.parse(text); } catch { return null; }
-}
-
-function titleOf(job) {
-  return clean(
-    job?.job_title_cz || job?.title_cz || job?.jobTitleCz || job?.position_cz ||
-    job?.job_title || job?.jobTitle || job?.title || job?.position || job?.role || job?.name
-  );
-}
-
-function countryOf(job) {
-  return clean(job?.country_code || job?.country).toLocaleLowerCase("cs-CZ");
-}
-
-function linkOf(job) {
-  return clean(job?.link || job?.apply_url || job?.applyUrl || job?.url);
-}
-
-function cityOf(job) {
-  const direct = clean(job?.city_cz || job?.city);
-  if (direct) return direct;
-  const location = clean(job?.location_cz || job?.location);
-  return location ? location.split(",")[0].trim() : "";
 }
 
 function flattenText(value) {
   if (value == null) return "";
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return value.map(flattenText).filter(Boolean).join(" ");
-  if (typeof value === "object") {
-    return Object.values(value).map(flattenText).filter(Boolean).join(" ");
-  }
+  if (typeof value === "object") return Object.values(value).map(flattenText).filter(Boolean).join(" ");
   return String(value);
+}
+
+function titleOf(job) {
+  return clean(
+    job?.job_title_cz || job?.title_cz || job?.jobTitleCz || job?.position_cz ||
+    job?.job_title || job?.jobTitle || job?.title || job?.position || job?.role ||
+    job?.name || job?.position_name || job?.jobName
+  );
+}
+
+function linkOf(job) {
+  return clean(
+    job?.link || job?.apply_url || job?.applyUrl || job?.url || job?.job_url ||
+    job?.jobUrl || job?.job_link || job?.jobLink || job?.application_url ||
+    job?.applicationUrl || job?.offer_url || job?.offerUrl || job?.details_url ||
+    job?.detailsUrl || job?.external_url || job?.externalUrl || job?.direct_link ||
+    job?.directLink
+  );
+}
+
+function countryValue(job) {
+  return clean(
+    job?.country_code || job?.countryCode || job?.country || job?.country_name ||
+    job?.countryName || job?.location_country || job?.locationCountry
+  ).toLocaleLowerCase("cs-CZ");
+}
+
+function countryOf(job) {
+  const direct = countryValue(job);
+  if (COUNTRY_ALIASES.has(direct)) return COUNTRY_ALIASES.get(direct);
+
+  const haystack = clean([job?.location, job?.location_cz, job?.address].filter(Boolean).join(" "))
+    .toLocaleLowerCase("cs-CZ");
+  for (const [alias, canonical] of COUNTRY_ALIASES.entries()) {
+    if (alias.length > 2 && haystack.includes(alias)) return canonical;
+  }
+  return "";
+}
+
+function cityOf(job) {
+  const direct = clean(job?.city_cz || job?.city || job?.location_city || job?.locationCity);
+  if (direct) return direct;
+  const location = clean(job?.location_cz || job?.location);
+  return location ? location.split(",")[0].trim() : "";
 }
 
 function looksLikeJob(job) {
   if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  const title = titleOf(job);
-  if (!title) return false;
+  if (!titleOf(job)) return false;
   return Boolean(
-    linkOf(job) || job.country || job.country_code || job.location || job.city ||
-    job.description || job.requirements || job.salary || job.salary_czk_month
+    linkOf(job) || countryOf(job) || job.location || job.city || job.description ||
+    job.requirements || job.salary || job.salary_czk_month || job.housing || job.accommodation
   );
+}
+
+function isForbiddenJob(job) {
+  const text = clean([
+    titleOf(job),
+    flattenText(job?.description),
+    flattenText(job?.requirements),
+    flattenText(job?.category),
+    flattenText(job?.job_category)
+  ].join(" ")).toLocaleLowerCase("cs-CZ");
+
+  return /montážní\s+(?:dělník|pracovník|operátor)|montazni\s+(?:delnik|pracovnik|operator)|assembly\s+(?:worker|operator|operative|line\s+worker)|\bassembler\b/.test(text);
 }
 
 function publishable(job) {
   return Boolean(
     looksLikeJob(job) &&
+    !isForbiddenJob(job) &&
     linkOf(job) &&
-    supportedCountries.has(countryOf(job))
+    countryOf(job)
   );
 }
 
-function collectJobs(input, options = {}, seen = new Set(), out = []) {
-  const { skipReels = true } = options;
-  if (input == null || out.length >= 200) return out;
+function collectJobs(input, { skipReels = true } = {}, seen = new Set(), out = []) {
+  if (input == null || out.length >= 300) return out;
 
   if (typeof input === "string") {
     const parsed = parseJsonString(input);
-    if (parsed) collectJobs(parsed, options, seen, out);
+    if (parsed) collectJobs(parsed, { skipReels }, seen, out);
     return out;
   }
 
@@ -115,7 +146,7 @@ function collectJobs(input, options = {}, seen = new Set(), out = []) {
   seen.add(input);
 
   if (Array.isArray(input)) {
-    for (const item of input) collectJobs(item, options, seen, out);
+    for (const item of input) collectJobs(item, { skipReels }, seen, out);
     return out;
   }
 
@@ -124,7 +155,7 @@ function collectJobs(input, options = {}, seen = new Set(), out = []) {
   for (const [key, value] of Object.entries(input)) {
     const normalizedKey = key.toLocaleLowerCase("en-US");
     if (skipReels && ["instagram", "ig", "reels"].includes(normalizedKey)) continue;
-    collectJobs(value, options, seen, out);
+    collectJobs(value, { skipReels }, seen, out);
   }
   return out;
 }
@@ -141,36 +172,36 @@ function collectReels(input, seen = new Set()) {
   if (Array.isArray(input)) {
     const result = [];
     for (const item of input) result.push(...collectReels(item, seen));
-    return result;
+    return result.filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
   }
 
   for (const key of ["reels", "instagram", "ig"]) {
-    if (Array.isArray(input[key])) return input[key].slice(0, 2);
-    if (typeof input[key] === "string") {
-      const parsed = parseJsonString(input[key]);
-      if (Array.isArray(parsed)) return parsed.slice(0, 2);
+    const value = input[key];
+    if (Array.isArray(value)) return value.filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
+    if (typeof value === "string") {
+      const parsed = parseJsonString(value);
+      if (Array.isArray(parsed)) return parsed.filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
     }
   }
 
   for (const value of Object.values(input)) {
     const nested = collectReels(value, seen);
-    if (nested.length) return nested.slice(0, 2);
+    if (nested.length) return nested.slice(0, IG_BATCH);
   }
   return [];
 }
 
 function keyOf(job) {
   return clean(
-    job?.postId || job?.id || linkOf(job) ||
-    `${titleOf(job)}|${cityOf(job)}|${countryOf(job)}`
+    job?.postId || job?.id || linkOf(job) || `${titleOf(job)}|${cityOf(job)}|${countryOf(job)}`
   ).toLocaleLowerCase("cs-CZ");
 }
 
-function dedupe(jobs, limit = 200) {
+function dedupe(jobs, limit = 300) {
   const result = [];
   const seen = new Set();
   for (const job of jobs) {
-    if (!job || typeof job !== "object") continue;
+    if (!job || typeof job !== "object" || isForbiddenJob(job)) continue;
     const key = keyOf(job);
     if (!key || seen.has(key)) continue;
     seen.add(key);
@@ -182,29 +213,23 @@ function dedupe(jobs, limit = 200) {
 
 function score(job) {
   const text = clean([
-    titleOf(job),
-    flattenText(job?.description),
-    flattenText(job?.requirements),
-    flattenText(job?.category),
-    flattenText(job?.job_category)
+    titleOf(job), flattenText(job?.description), flattenText(job?.requirements),
+    flattenText(job?.category), flattenText(job?.job_category)
   ].join(" ")).toLocaleLowerCase("cs-CZ");
 
   let value = 0;
+  if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik/.test(text)) value += 220;
+  if (/sběr|sber|skliz|ovoce|zelenin|fruit|vegetable|berry|berries|jahod|jablk|hrozn|harvest|picker/.test(text)) value += 210;
+  if (/úklid|uklid|cleaner|cleaning|housekeep|pokojsk|room attendant|myč|myc|dishwasher/.test(text)) value += 180;
+  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|kitchen|catering/.test(text)) value += 150;
+  if (/hotel|resort|hostel/.test(text)) value += 90;
+  if (/sklad|warehouse|logisti|balen|packing|packer/.test(text)) value += 50;
+  if (/výrob|vyrob|production|factory/.test(text)) value += 30;
 
-  if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik/.test(text)) value += 170;
-  if (/sběr|sber|skliz|ovoce|zelenin|fruit|vegetable|berry|berries|jahod|jablk|hrozn|harvest|picker/.test(text)) value += 165;
-  if (/úklid|uklid|cleaner|cleaning|housekeep|pokojsk|room attendant|myč|myc|dishwasher/.test(text)) value += 145;
-  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|kitchen|catering/.test(text)) value += 120;
-  if (/hotel|resort|hostel/.test(text)) value += 80;
-  if (/sklad|warehouse|logisti|balen|packing|packer/.test(text)) value += 45;
-  if (/výrob|vyrob|production|factory/.test(text)) value += 35;
-
-  if (/bez zkušen|bez zkusen|no experience|experience not required|entry.level|unskilled|bez vzděl|bez vzdel|no degree|no qualification|training provided|zaškol|zaskol/.test(text)) value += 100;
-
-  if (/university|bachelor|master|degree|required education|vysoká škola|vysoka skola|maturit|vyučen|vyucen/.test(text)) value -= 150;
-  if (/certificate|required certification|licen[cs]e|průkaz|prukaz|svářeč|svarec|forklift licence/.test(text)) value -= 130;
-  if (/(?:[2-9]|[1-9][0-9])\+?\s*(?:years?|let)\s+(?:of\s+)?experience|minimum\s+(?:[2-9]|[1-9][0-9])\s*(?:years?|let)/.test(text)) value -= 110;
-
+  if (/bez zkušen|bez zkusen|no experience|experience not required|entry.level|unskilled|bez vzděl|bez vzdel|no degree|no qualification|training provided|zaškol|zaskol/.test(text)) value += 140;
+  if (/university|bachelor|master|degree|required education|vysoká škola|vysoka skola|maturit|vyučen|vyucen/.test(text)) value -= 220;
+  if (/certificate|required certification|licen[cs]e|průkaz|prukaz|svářeč|svarec|forklift licence/.test(text)) value -= 180;
+  if (/(?:[2-9]|[1-9][0-9])\+?\s*(?:years?|let)\s+(?:of\s+)?experience|minimum\s+(?:[2-9]|[1-9][0-9])\s*(?:years?|let)/.test(text)) value -= 160;
   return value;
 }
 
@@ -228,13 +253,9 @@ function isRecent(job) {
   return Boolean(key && recent.has(key));
 }
 
-function markRecent(jobs) {
-  cleanupRecent();
-  const now = Date.now();
-  for (const job of jobs) {
-    const key = keyOf(job);
-    if (key) recent.set(key, now);
-  }
+function markRecent(job) {
+  const key = keyOf(job);
+  if (key) recent.set(key, Date.now());
 }
 
 function normalizeLanguage(value) {
@@ -270,13 +291,15 @@ function normalizeHousing(value) {
     .replace(/free/gi, "zdarma");
 }
 
-function prepareForPublish(job) {
+function prepare(job) {
   const language = normalizeLanguage(job?.language_cz || job?.languages_cz || job?.language || job?.languages);
   const housing = normalizeHousing(job?.housing_cz || job?.accommodation_cz || job?.housing || job?.accommodation);
   const city = cityOf(job);
   return {
     ...job,
     title: titleOf(job),
+    link: linkOf(job),
+    country: job?.country || job?.country_name || countryOf(job),
     city: city || job?.city,
     location: job?.location || city,
     language_cz: language,
@@ -290,23 +313,36 @@ function prepareForPublish(job) {
   };
 }
 
+function preprocessGenerateBody(body) {
+  const current = prioritize(dedupe(collectJobs(body).filter(publishable)));
+  const old = candidateCache.filter(job => !isRecent(job));
+  candidateCache = prioritize(dedupe([...current, ...old], 100));
+
+  const jobs = candidateCache.slice(0, HERO_BATCH);
+  const suppliedReels = collectReels(body).filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
+  const reels = dedupe([...suppliedReels, ...jobs], IG_BATCH).slice(0, IG_BATCH);
+
+  console.log(`[JOB PATCH] current=${current.length} cache=${candidateCache.length} hero=${jobs.length} reels=${reels.length}`);
+  return { jobs, reels };
+}
+
 function scheduleBatch(batch) {
-  const jobs = batch.map(prepareForPublish);
-  markRecent(jobs);
+  const jobs = batch.map(prepare);
   const publishHeroHero = require("./publishHeroHero");
 
   publishChain = publishChain
     .then(async () => {
-      console.log(`[HERO PATCH] publishing batch ${jobs.length}/${BATCH_SIZE}`);
+      console.log(`[HERO PATCH] publishing ${jobs.length}/${HERO_BATCH}`);
       let done = 0;
       for (const job of jobs) {
         let success = false;
         for (let attempt = 1; attempt <= 3; attempt++) {
           try {
             await publishHeroHero(job);
+            markRecent(job);
             done++;
             success = true;
-            console.log(`[HERO PATCH] published ${done}/${BATCH_SIZE}: ${titleOf(job)}`);
+            console.log(`[HERO PATCH] published ${done}/${HERO_BATCH}: ${titleOf(job)}`);
             break;
           } catch (error) {
             console.error(`[HERO PATCH] ${titleOf(job)} attempt ${attempt}/3 failed: ${error.message}`);
@@ -315,97 +351,92 @@ function scheduleBatch(batch) {
         }
         if (!success) console.error(`[HERO PATCH] permanently failed: ${titleOf(job)}`);
       }
-      console.log(`[HERO PATCH] batch finished ${done}/${BATCH_SIZE}`);
+      console.log(`[HERO PATCH] batch finished ${done}/${HERO_BATCH}`);
     })
     .catch(error => console.error(`[HERO PATCH] worker error: ${error.message}`));
-}
-
-function preprocessGenerateBody(body) {
-  const candidates = prioritize(
-    dedupe(collectJobs(body).filter(publishable))
-  );
-
-  if (!candidates.length) return body;
-
-  const reels = collectReels(body).slice(0, 2);
-  const jobs = candidates.slice(0, BATCH_SIZE);
-
-  console.log(`[JOB PATCH] candidates=${candidates.length} selectedHeroHero=${jobs.length} suppliedReels=${reels.length}`);
-  return { jobs, reels };
 }
 
 const originalPost = express.application.post;
 
 express.application.post = function patchedPost(path, ...handlers) {
   if (path === "/generate") {
-    const captureAndPrioritize = (req, res, next) => {
+    const beforeGenerate = (req, res, next) => {
       try {
         req.body = preprocessGenerateBody(req.body);
       } catch (error) {
-        console.error(`[JOB PATCH] preprocessing failed: ${error.message}`);
+        console.error(`[JOB PATCH] preprocess failed: ${error.message}`);
       }
 
       const originalJson = res.json.bind(res);
       res.json = body => {
         if (Array.isArray(body?.herohero)) {
-          const current = prioritize(dedupe(body.herohero.filter(publishable))).slice(0, BATCH_SIZE);
-          generatedCache = current;
+          const generated = prioritize(
+            dedupe(body.herohero.filter(job => publishable(job) && !isForbiddenJob(job)))
+          );
+          generatedCache = generated.slice(0, HERO_BATCH);
           generatedAt = Date.now();
-          generatedHistory = dedupe([...current, ...generatedHistory], 40).filter(job => !isRecent(job));
-          console.log(`[JOB PATCH] generated HeroHero cache=${generatedCache.length} history=${generatedHistory.length}`);
+
+          const generatedKeys = new Set(generatedCache.map(keyOf));
+          candidateCache = candidateCache.filter(job => !generatedKeys.has(keyOf(job)));
+
+          body.herohero = body.herohero.filter(job => !isForbiddenJob(job)).slice(0, HERO_BATCH);
+          if (Array.isArray(body.instagram)) {
+            body.instagram = body.instagram.filter(job => !isForbiddenJob(job)).slice(0, IG_BATCH);
+          }
+
+          console.log(`[JOB PATCH] output hero=${body.herohero.length} ig=${Array.isArray(body.instagram) ? body.instagram.length : 0} generatedCache=${generatedCache.length}`);
         }
         return originalJson(body);
       };
       next();
     };
 
-    return originalPost.call(this, path, captureAndPrioritize, ...handlers);
+    return originalPost.call(this, path, beforeGenerate, ...handlers);
   }
 
   if (path === "/publishHeroHero") {
     const patchedPublish = async (req, res) => {
       const now = Date.now();
-      if (pending.length && now - pendingAt > CACHE_TTL_MS) {
-        pending = [];
+      if (pendingHero.length && now - pendingAt > CACHE_TTL_MS) {
+        pendingHero = [];
         pendingAt = 0;
       }
 
-      const incoming = prioritize(
-        dedupe(collectJobs(req.body).filter(publishable)).filter(job => !isRecent(job))
-      );
+      const incoming = prioritize(dedupe(collectJobs(req.body).filter(publishable)));
       const cacheFresh = generatedCache.length && now - generatedAt <= CACHE_TTL_MS;
-      const cache = cacheFresh ? generatedCache.filter(job => !isRecent(job)) : [];
-      const history = generatedHistory.filter(job => !isRecent(job));
+      const generated = cacheFresh ? generatedCache : [];
 
-      const pool = prioritize(dedupe([...pending, ...incoming, ...cache, ...history], 100));
-      console.log(`[HERO PATCH] incoming=${incoming.length} pending=${pending.length} cache=${cache.length} history=${history.length} pool=${pool.length}`);
+      const pool = prioritize(
+        dedupe([...pendingHero, ...incoming, ...generated], 100)
+      ).filter(job => !isRecent(job));
 
-      if (pool.length < BATCH_SIZE) {
-        pending = pool;
+      console.log(`[HERO PATCH] incoming=${incoming.length} pending=${pendingHero.length} generated=${generated.length} pool=${pool.length}`);
+
+      if (pool.length < HERO_BATCH) {
+        pendingHero = pool;
         pendingAt = now;
         return res.status(200).json({
           success: true,
           queued: true,
-          pending: pending.length,
-          needed: BATCH_SIZE - pending.length,
-          message: `Čekám na ${BATCH_SIZE - pending.length} další HeroHero nabídky.`
+          pending: pool.length,
+          needed: HERO_BATCH - pool.length,
+          message: `HeroHero čeká na ${HERO_BATCH - pool.length} další nabídky; nic se neztratilo.`
         });
       }
 
-      const batch = pool.slice(0, BATCH_SIZE);
+      const batch = pool.slice(0, HERO_BATCH);
       const batchKeys = new Set(batch.map(keyOf));
-      pending = pool.filter(job => !batchKeys.has(keyOf(job)));
-      pendingAt = pending.length ? now : 0;
+      pendingHero = pool.filter(job => !batchKeys.has(keyOf(job)));
+      pendingAt = pendingHero.length ? now : 0;
       generatedCache = generatedCache.filter(job => !batchKeys.has(keyOf(job)));
-      generatedHistory = generatedHistory.filter(job => !batchKeys.has(keyOf(job)));
 
       scheduleBatch(batch);
 
       return res.status(200).json({
         success: true,
-        accepted: BATCH_SIZE,
+        accepted: HERO_BATCH,
         publishing: true,
-        pending: pending.length,
+        pending: pendingHero.length,
         message: "Přijato 5/5 HeroHero nabídek. Publikují se postupně."
       });
     };
@@ -416,4 +447,4 @@ express.application.post = function patchedPost(path, ...handlers) {
   return originalPost.call(this, path, ...handlers);
 };
 
-console.log("[RUNTIME PATCH] HeroHero 5-post queue + low-skill job priority active.");
+console.log("[RUNTIME PATCH] v2: 5 HeroHero + 2 IG + assembly-worker ban active.");
