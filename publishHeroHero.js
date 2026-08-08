@@ -1136,9 +1136,9 @@ function extractPublishJob(input) {
 
   if (typeof input !== "object") return null;
 
-  // Make může názvy polí převést na varianty typu „Job title“, „job title“,
-  // „Job Title“ nebo je poslat jako kolekci. Normalizujeme klíče dřív, než
-  // payload odmítneme, aby se nabídka neztratila jen kvůli názvu pole.
+  // Make can normalize mapped field names to variants such as "Job title",
+  // "job title" or "Job Title". Compare canonical keys before rejecting the
+  // bundle so the real offer is still selected.
   const normalizedEntries = Object.entries(input).map(([key, value]) => [
     key.toLowerCase().replace(/[\s_-]+/g, ""),
     value,
@@ -1149,7 +1149,10 @@ function extractPublishJob(input) {
   );
   const title = titleEntry ? titleEntry[1] : null;
   if (typeof title === "string" && title.trim()) {
-    return { ...input, title: title.trim() };
+    return {
+      ...input,
+      title: title.trim(),
+    };
   }
 
   for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job", "herohero", "jobs", "collection"]) {
@@ -1159,14 +1162,6 @@ function extractPublishJob(input) {
     }
   }
 
-  // Některé Make kolekce mají pouze obecná pole (např. „position_name“).
-  // Pokud objekt obsahuje název pozice, použijeme jej jako titul.
-  const fallbackEntry = normalizedEntries.find(([key, value]) =>
-    /(?:job|position|role).*(?:title|name)|(?:title|position|role)$/.test(key) &&
-    typeof value === "string" && value.trim()
-  );
-  if (fallbackEntry) return { ...input, title: fallbackEntry[1].trim() };
-
   // A mapped Make collection can use numeric bundle keys ("1", "2", …).
   // Walk remaining values as a final safe fallback.
   for (const [key, value] of Object.entries(input)) {
@@ -1174,6 +1169,13 @@ function extractPublishJob(input) {
     const nested = extractPublishJob(value);
     if (nested) return nested;
   }
+
+  // Some Make bundles expose only a descriptive position key.
+  const fallbackEntry = normalizedEntries.find(([key, value]) =>
+    /(?:job|position|role).*(?:title|name)|(?:title|position|role)$/.test(key) &&
+    typeof value === "string" && value.trim()
+  );
+  if (fallbackEntry) return { ...input, title: fallbackEntry[1].trim() };
 
   return null;
 }
