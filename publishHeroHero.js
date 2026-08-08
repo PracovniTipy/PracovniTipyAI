@@ -1113,10 +1113,45 @@ async function createHeroHeroPost(page, job) {
   logStep(`Příspěvek "${job.title}" úspěšně odeslán.`);
 }
 
+function extractPublishJob(input) {
+  if (!input) return null;
+
+  if (typeof input === "string") {
+    try {
+      return extractPublishJob(JSON.parse(input));
+    } catch (_) {
+      return null;
+    }
+  }
+
+  if (Array.isArray(input)) {
+    // Make Iterator can pass a one-item array when the HTTP body is mapped
+    // from an entire collection instead of the current bundle.
+    return input.length === 1 ? extractPublishJob(input[0]) : null;
+  }
+
+  if (typeof input !== "object") return null;
+
+  const title = input.title || input.job_title;
+  if (typeof title === "string" && title.trim()) {
+    return {
+      ...input,
+      title: title.trim(),
+    };
+  }
+
+  for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job"]) {
+    if (input[key] !== undefined) {
+      const nested = extractPublishJob(input[key]);
+      if (nested) return nested;
+    }
+  }
+
+  return null;
+}
+
 async function publishHeroHero(inputJob) {
-  const job = inputJob && typeof inputJob === "object" && inputJob.title
-    ? inputJob
-    : null;
+  const job = extractPublishJob(inputJob);
   if (!job) {
     throw new Error("Chybí platná nabídka práce v payloadu; bez ověřených dat se nic nepublikuje.");
   }
