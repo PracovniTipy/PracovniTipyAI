@@ -4,18 +4,23 @@ const express = require("express");
 const fs = require("fs");
 const path = require("path");
 const os = require("os");
+
 const { createCanvas, loadImage, registerFont } = require("canvas");
+
 const ffmpeg = require("fluent-ffmpeg");
 const ffmpegPath = require("ffmpeg-static");
+
 const { v2: cloudinary } = require("cloudinary");
 
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
+
 app.use(express.urlencoded({ extended: true }));
 
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
+
 app.use(express.json());
 
 cloudinary.config({
@@ -96,6 +101,7 @@ function cleanText(value) {
 function isMissingJobValue(value) {
     const normalized = cleanText(value).toLocaleLowerCase("cs-CZ");
     if (!normalized) return true;
+
     return /^(?:[-•]\s*)?(?:(?:ubytování|housing|místo|město|location|mzda|plat|salary|jazyk|language|požadavky|requirements|nástup|start|strava|meals|výhody|advantages)\s*:?\s*)?(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|n\/?a)\s*[.!]?$/iu.test(normalized);
 }
 
@@ -248,8 +254,7 @@ function formatMonthlyCzkSalary(...values) {
         const raw = usableJobValue(candidate.value);
         if (!raw || !/(?:Kč|CZK)/i.test(raw)) continue;
 
-        const monthly = candidate.monthly === true ||
-            /(?:měs(?:íc|íčně)?|month(?:ly)?)/i.test(raw);
+        const monthly = candidate.monthly === true || /(?:měs(?:íc|íčně)?|month(?:ly)?)/i.test(raw);
         if (!monthly) continue;
 
         const match = raw.match(moneyPattern);
@@ -337,7 +342,6 @@ function drawHeroBlock(ctx, options) {
         maxLines, rotation = 0, lineHeight = 1.05
     } = options;
 
-    // Generický sans-serif přes Pango používá font s plnou českou diakritikou.
     const fontFamily = "sans-serif";
     const fitted = fitText(ctx, text, maxWidth, startSize, minSize, maxLines, fontFamily);
     const actualLines = fitted.lines;
@@ -351,7 +355,6 @@ function drawHeroBlock(ctx, options) {
     ctx.textBaseline = "top";
     ctx.lineJoin = "round";
 
-    // Lehký bílý stín + tenký bílý lem za každým černým textem.
     ctx.shadowColor = "rgba(255,255,255,0.70)";
     ctx.shadowBlur = 3;
     ctx.shadowOffsetX = 0;
@@ -382,7 +385,6 @@ async function createHeroImage(job, templateFile) {
     const scaleY = template.height / 1350;
     const fontScale = Math.min(scaleX, scaleY);
 
-    // HeroHero obrázek obsahuje pouze: název práce, město, ubytování a mzdu.
     const jobTitle = getJobTitle(job);
     const city = getCityValue(job);
     const housing = normalizeHousing(
@@ -645,10 +647,8 @@ function extractGenerationPayload(input, seen = new Set()) {
 
     if (Array.isArray(parsed.jobs) || Array.isArray(parsed.reels)) return parsed;
 
-    const jobLike = [
-        "job_title", "job_title_cz", "jobTitle", "title", "title_cz",
-        "position", "role", "country_code", "salary", "salary_czk_month"
-    ].some((key) => parsed[key] !== undefined);
+    const jobLike = ["job_title", "jobTitle", "title", "position", "role", "country_code", "salary"]
+        .some((key) => parsed[key] !== undefined);
     if (jobLike) return { jobs: [parsed] };
 
     const messageContent = input.choices?.[0]?.message?.content;
@@ -676,12 +676,46 @@ function extractGenerationPayload(input, seen = new Set()) {
     return {};
 }
 
+function ensureAlwaysPresent(value, fallback = "dle nabídky") {
+    return usableJobValue(value) || fallback;
+}
+
+function buildInstagramCaption(item) {
+    const lines = [];
+    const jobTitle = getJobTitle(item);
+    const country = getCountryCz(item);
+    const salary = formatMonthlyCzkSalary(
+        { value: item.salary_czk_month, monthly: true },
+        { value: item.monthly_salary_czk, monthly: true },
+        { value: item.salary_month_czk, monthly: true },
+        { value: item.salary_monthly_czk, monthly: true },
+        { value: item.salary, monthly: false }
+    );
+    const housing = normalizeHousing(item.housing_cz || item.accommodation_cz || item.housing || item.accommodation);
+    const language = normalizeLanguage(item.language_cz || item.languages_cz || item.language || item.languages);
+
+    if (jobTitle) lines.push(jobTitle);
+    if (country) lines.push(country);
+    if (salary) lines.push(salary);
+    if (housing) lines.push(housing);
+    if (language) lines.push(`Jazyk: ${language}`);
+
+    lines.push("");
+    lines.push(`Pro více prací ze zahraničí napiš "${country || "práce"}".`);
+
+    return lines.join("\n").trim();
+}
+
 app.post("/generate", async (req, res) => {
     const payload = extractGenerationPayload(req.body);
+    // Jeden běh má vytvořit maximálně 5 HeroHero příspěvků a přesně 2 IG Reels,
+    // pokud jsou k dispozici alespoň 2 pracovní nabídky.
     const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
-    const reels = Array.isArray(payload.reels)
-        ? payload.reels.slice(0, 2)
-        : jobs.slice(0, 2).map(job => ({ ...job }));
+    const suppliedReels = Array.isArray(payload.reels) ? payload.reels.slice(0, 2) : [];
+    const reels = [...suppliedReels];
+    for (let i = reels.length; i < 2 && i < jobs.length; i++) {
+        reels.push({ ...jobs[i] });
+    }
 
     if (jobs.length === 0 && reels.length === 0) {
         return res.status(400).json({
@@ -700,7 +734,18 @@ app.post("/generate", async (req, res) => {
             const jobTitle = getJobTitle(job);
             if (!template || !jobTitle) continue;
 
-            const imageBuffer = await createHeroImage(job, template);
+            const heroLanguage = ensureAlwaysPresent(
+                normalizeLanguage(job.language_cz || job.languages_cz || job.language || job.languages)
+            );
+            const heroAccommodation = ensureAlwaysPresent(
+                normalizeHousing(job.housing_cz || job.accommodation_cz || job.housing || job.accommodation)
+            );
+            const normalizedCity = getCityValue(job);
+
+            const imageBuffer = await createHeroImage({
+                ...job,
+                city: normalizedCity
+            }, template);
             const imageUrl = await uploadBuffer(imageBuffer);
 
             herohero.push({
@@ -708,7 +753,16 @@ app.post("/generate", async (req, res) => {
                 postId: job.postId,
                 categoryId: job.categoryId,
                 title: jobTitle,
-                city: getCityValue(job) || job.city,
+                city: normalizedCity || job.city,
+                location: job.location || normalizedCity,
+                language_cz: heroLanguage,
+                languages_cz: heroLanguage,
+                language: heroLanguage,
+                languages: heroLanguage,
+                housing_cz: heroAccommodation,
+                accommodation_cz: heroAccommodation,
+                housing: heroAccommodation,
+                accommodation: heroAccommodation,
                 text: descriptionToText(job.description),
                 textHtml: `<p>${descriptionToText(job.description).replace(/\n/g, "</p><p>")}</p>`,
                 imageUrl,
@@ -777,6 +831,7 @@ app.post("/generate", async (req, res) => {
 
             const imageBuffer = await createReelImage(reelForImage, template);
             const videoUrl = await createReel(imageBuffer);
+            const caption = buildInstagramCaption(reelForImage);
 
             instagram.push({
                 ...reel,
@@ -791,6 +846,9 @@ app.post("/generate", async (req, res) => {
                 language: normalizeLanguage(
                     reelForImage.language_cz || reelForImage.language
                 ),
+                caption,
+                text: caption,
+                description: caption,
                 videoUrl
             });
         }
@@ -811,8 +869,6 @@ app.post("/generate", async (req, res) => {
 app.post("/publishHeroHero", async (req, res) => {
     const publishHeroHero = require("./publishHeroHero");
 
-    // /generate vrací až 5 položek v poli herohero. Původní endpoint celé pole
-    // předal publishHeroHero(), které z něj vybralo jen první nabídku.
     const payload = extractGenerationPayload(req.body);
     const jobs = Array.isArray(payload.jobs) ? payload.jobs.slice(0, 5) : [];
 
