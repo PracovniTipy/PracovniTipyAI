@@ -601,12 +601,31 @@ function hasUsefulJobValue(value) {
   return !/(?:^|\s)(?:neuve\w*|není uvedeno|not specified|not provided|unknown|n\/a)(?:$|\s)/i.test(normalized);
 }
 
+function sanitizePublishedLine(value) {
+  const line = String(value ?? "").replace(/\s+/g, " ").trim();
+  if (!line || /práci nezprostředkovávám|sdílím ověřené nabídky/i.test(line)) return "";
+  if (/^(?:[-•]\s*)?(?:ubytování|místo|město|mzda|plat|jazyk|požadavky|nástup|strava|výhody)\s*:?\s*(?:neuved\w*|není uvedeno|not specified|not provided|unknown|n\/a)\s*$/i.test(line)) return "";
+  return line
+    .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|čistého|čistá|čisté)\b/gi, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 function usefulTextLines(value) {
-  return normalizeTextLines(value).filter(line => hasUsefulJobValue(line));
+  return normalizeTextLines(value)
+    .map(sanitizePublishedLine)
+    .filter(line => hasUsefulJobValue(line));
 }
 
 function formatSalaryLine(job) {
-  const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
+  const czk = [
+    job.salary_czk_month,
+    job.monthly_salary_czk,
+    job.salary_month_czk,
+    job.salary_monthly_czk,
+    job.salary
+  ].map(value => String(value ?? "").trim())
+    .find(value => hasUsefulJobValue(value) && /(?:kč|czk)/i.test(value)) || "";
   // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
   // původní eura ani náhradní text, pokud mzda v nabídce chybí.
   if (!czk || !/(kč|czk)/i.test(czk)) return null;
@@ -614,7 +633,7 @@ function formatSalaryLine(job) {
     ? czk.replace(/\b(?:brutto|netto|hrubého|čistého|hrubá|čistá)\b/gi, "").replace(/\s+/g, " ").trim()
     : czk);
   const normalizedMonthly = /měs/i.test(monthly) ? monthly : `${monthly} / měsíc`;
-  return `💰 ${normalizedMonthly}`;
+  return `💰 ${normalizedMonthly}`.replace(/\s{2,}/g, " ").trim();
 }
 
 function relevantJobEmoji(title) {
@@ -634,13 +653,13 @@ function stripLeadingEmoji(value) {
 }
 
 function formatJobPost(job) {
-  const title = stripLeadingEmoji(job.title || job.job_title);
+  const title = sanitizePublishedLine(stripLeadingEmoji(job.title || job.job_title));
   const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
-  const locationValue = job.location || job.country;
-  const rawStartDate = job.startDate || job.start_date;
-  const rawContractType = job.contractType || job.contract_type;
-  const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
+  const locationValue = sanitizePublishedLine(job.location || job.country);
+  const rawStartDate = sanitizePublishedLine(job.startDate || job.start_date);
+  const rawContractType = sanitizePublishedLine(job.contractType || job.contract_type);
+  const rawLanguage = sanitizePublishedLine(job.language);
   const directLink = hasUsefulJobValue(job.link) ? String(job.link).trim() : "";
   const lines = [`${titleEmoji} ${title}`];
 
@@ -655,19 +674,22 @@ function formatJobPost(job) {
   let output = lines.join("\n");
   if (directLink) output += `\n\n🔗 Odkaz: ${directLink}`;
 
-  const descriptionLines = extractJobBodyLines(job);
+  const descriptionLines = extractJobBodyLines(job)
+    .map(sanitizePublishedLine)
+    .filter(Boolean);
   if (descriptionLines.length > 0) {
     output += `\n\n🔧 Náplň práce\n`;
     for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  const accommodation = job.accommodation ?? job.housing;
+  const accommodation = sanitizePublishedLine(job.accommodation ?? job.housing);
   if (hasUsefulJobValue(accommodation)) {
     output += `\n🏠 Ubytování\n• ${accommodation}\n`;
   }
 
-  if (hasUsefulJobValue(job.meals)) {
-    output += `\n🍽️ Strava\n• ${job.meals}\n`;
+  const meals = sanitizePublishedLine(job.meals);
+  if (hasUsefulJobValue(meals)) {
+    output += `\n🍽️ Strava\n• ${meals}\n`;
   }
 
   const requirementLines = usefulTextLines(job.requirements);
@@ -1215,3 +1237,4 @@ module.exports = function queuedPublishHeroHero(inputJob) {
   publishQueue = run.catch(() => {});
   return run;
 };
+
