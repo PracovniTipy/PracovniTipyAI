@@ -1,30 +1,38 @@
 "use strict";
 
-// Runs before stablePipelinePatch.js. Its only job is to expose every real job
-// already present anywhere in the Make/OpenAI payload instead of letting the
-// downstream parser stop at the first small array.
+// Runs before stablePipelinePatch.js. It exposes real jobs found anywhere in
+// the Make/OpenAI payload, keeps a short rolling pool and deliberately feeds
+// the downstream selector candidates from as many supported countries as
+// possible. It never invents jobs or countries.
 
 const express = require("express");
 
 const CACHE_TTL_MS = 2 * 60 * 60 * 1000;
+const MAX_POOL = 15;
 let rolling = [];
 let rollingAt = 0;
+
+const SUPPORTED_COUNTRIES = [
+  "Austria", "Belgium", "Cyprus", "Denmark", "Estonia", "Finland", "France",
+  "Germany", "Greece", "Ireland", "Italy", "Malta", "Netherlands", "Norway",
+  "Spain", "Sweden"
+];
 
 const COUNTRY_ALIASES = new Map([
   ["austria", "Austria"], ["at", "Austria"], ["rakousko", "Austria"], ["österreich", "Austria"], ["osterreich", "Austria"],
   ["belgium", "Belgium"], ["be", "Belgium"], ["belgie", "Belgium"], ["belgië", "Belgium"], ["belgique", "Belgium"],
+  ["cyprus", "Cyprus"], ["cy", "Cyprus"], ["kypr", "Cyprus"],
   ["denmark", "Denmark"], ["dk", "Denmark"], ["dánsko", "Denmark"], ["dansko", "Denmark"], ["danmark", "Denmark"],
   ["estonia", "Estonia"], ["ee", "Estonia"], ["estonsko", "Estonia"], ["eesti", "Estonia"],
   ["finland", "Finland"], ["fi", "Finland"], ["finsko", "Finland"], ["suomi", "Finland"],
   ["france", "France"], ["fr", "France"], ["francie", "France"],
-  ["netherlands", "Netherlands"], ["nl", "Netherlands"], ["holland", "Netherlands"], ["holandsko", "Netherlands"], ["nizozemsko", "Netherlands"], ["nizozemí", "Netherlands"], ["nederland", "Netherlands"],
+  ["germany", "Germany"], ["de", "Germany"], ["německo", "Germany"], ["nemecko", "Germany"], ["deutschland", "Germany"],
+  ["greece", "Greece"], ["gr", "Greece"], ["řecko", "Greece"], ["recko", "Greece"], ["hellas", "Greece"],
   ["ireland", "Ireland"], ["ie", "Ireland"], ["irsko", "Ireland"], ["éire", "Ireland"],
   ["italy", "Italy"], ["it", "Italy"], ["itálie", "Italy"], ["italie", "Italy"], ["italia", "Italy"],
-  ["cyprus", "Cyprus"], ["cy", "Cyprus"], ["kypr", "Cyprus"],
   ["malta", "Malta"], ["mt", "Malta"],
-  ["germany", "Germany"], ["de", "Germany"], ["německo", "Germany"], ["nemecko", "Germany"], ["deutschland", "Germany"],
+  ["netherlands", "Netherlands"], ["nl", "Netherlands"], ["holland", "Netherlands"], ["holandsko", "Netherlands"], ["nizozemsko", "Netherlands"], ["nizozemí", "Netherlands"], ["nederland", "Netherlands"],
   ["norway", "Norway"], ["no", "Norway"], ["norsko", "Norway"], ["norge", "Norway"],
-  ["greece", "Greece"], ["gr", "Greece"], ["řecko", "Greece"], ["recko", "Greece"], ["hellas", "Greece"],
   ["spain", "Spain"], ["es", "Spain"], ["španělsko", "Spain"], ["spanelsko", "Spain"], ["españa", "Spain"], ["espana", "Spain"],
   ["sweden", "Sweden"], ["se", "Sweden"], ["švédsko", "Sweden"], ["svedsko", "Sweden"], ["sverige", "Sweden"]
 ]);
@@ -33,6 +41,7 @@ const ENGLISH = /(?:\benglish\b|angličtin|anglictin|anglick|\baj\b)/iu;
 const CZECH = /(?:\bczech\b|češtin|cestin|česk(?:y|ý|á|a)|\bcz\b)/iu;
 const FORBIDDEN = /(?:\bdutch\b|nizozemštin|nizozemstin|holandštin|holandstin|\bgerman\b|němčin|nemcin|\bfrench\b|francouzštin|francouzstin|\bspanish\b|španělštin|spanelstin|\bitalian\b|italštin|italstin|\bdanish\b|dánštin|danstin|\bswedish\b|švédštin|svedstin|\bnorwegian\b|norštin|norstin|\bfinnish\b|finštin|finstin|\bgreek\b|řečtin|rectin|\bestonian\b|estonštin|estonstin|\bpolish\b|polštin|polstin|\bslovak\b|slovenštin|slovenstin|\bportuguese\b|portugalštin|portugalstin|local language|místní jazyk|mistni jazyk)/iu;
 const LEVEL_ONLY = /^(?:(?:cefr\s*)?[abc][12](?:\s*[-–/]\s*[abc][12])?|basic|intermediate|advanced|fluent|good|very good|communicative|communication level)$/iu;
+const FORBIDDEN_JOB = /montážní\s+(?:dělník|pracovník|operátor)|montazni\s+(?:delnik|pracovnik|operator)|montáž\w*\s+(?:výrob|stroj|součást|soucast|auto)|assembly\s+(?:worker|operator|operative|line\s+worker)|\bassembler\b/iu;
 
 function clean(value) {
   return String(value ?? "").replace(/\s+/g, " ").trim();
@@ -92,34 +101,28 @@ function stripNegatedLanguages(text) {
     .replace(/(?:bez|není\s+nutná|neni\s+nutna|není\s+vyžadována|neni\s+vyzadovana)\s+(?:nizozemštiny|holandštiny|němčiny|nemciny|francouzštiny|francouzstiny|španělštiny|spanelstiny|italštiny|italstiny|dánštiny|danstiny|švédštiny|svedstiny|norštiny|norstiny|finštiny|finstiny|řečtiny|rectiny|estonštiny|estonstiny|polštiny|polstiny|slovenštiny|slovenstiny)/giu, " ");
 }
 
-function normalizeLanguageEvidence(job) {
-  if (!job || typeof job !== "object" || Array.isArray(job)) return job;
-
+function languageEvidence(job) {
   const direct = clean(flatten([
     job?.language_cz, job?.languages_cz, job?.language, job?.languages,
     job?.required_language, job?.required_languages, job?.language_requirement,
     job?.language_requirements, job?.requiredLanguage, job?.requiredLanguages,
     job?.jazyk, job?.jazyky
   ]));
-
-  // Only use requirements/description to complete incomplete language fields
-  // such as "B1" or "B2". We never invent a language when the source contains
-  // no explicit English/Czech evidence.
   const context = clean(flatten([
     job?.requirements, job?.description, job?.text, job?.textHtml,
     job?.qualifications, job?.skills
   ]));
-  const checkedContext = stripNegatedLanguages(context);
+  return { direct, context, checkedDirect: stripNegatedLanguages(direct), checkedContext: stripNegatedLanguages(context) };
+}
 
-  const directAlreadyClear = ENGLISH.test(direct) || CZECH.test(direct) || FORBIDDEN.test(stripNegatedLanguages(direct));
+function normalizeLanguageEvidence(job) {
+  if (!job || typeof job !== "object" || Array.isArray(job)) return job;
+  const { direct, checkedDirect, checkedContext } = languageEvidence(job);
+  const directAlreadyClear = ENGLISH.test(checkedDirect) || CZECH.test(checkedDirect) || FORBIDDEN.test(checkedDirect);
   if (directAlreadyClear) return job;
 
   const incompleteDirect = !direct || LEVEL_ONLY.test(direct) || /^[abc][12]\b/i.test(direct);
-  if (!incompleteDirect) return job;
-
-  // If the wider requirements explicitly require another language, do not
-  // rescue the offer even when English/Czech also appears somewhere in text.
-  if (FORBIDDEN.test(checkedContext)) return job;
+  if (!incompleteDirect || FORBIDDEN.test(checkedContext)) return job;
 
   const en = ENGLISH.test(checkedContext);
   const cz = CZECH.test(checkedContext);
@@ -135,11 +138,25 @@ function normalizeLanguageEvidence(job) {
   };
 }
 
+function languageAllowed(job) {
+  const normalized = normalizeLanguageEvidence(job);
+  const { checkedDirect, checkedContext } = languageEvidence(normalized);
+  const combined = clean(`${checkedDirect} ${checkedContext}`);
+  if (!combined) return false;
+  if (FORBIDDEN.test(combined)) return false;
+  return ENGLISH.test(combined) || CZECH.test(combined);
+}
+
+function jobText(job) {
+  return clean([
+    titleOf(job), flatten(job?.description), flatten(job?.requirements),
+    flatten(job?.category), flatten(job?.job_category), flatten(job?.work_category)
+  ].join(" ")).toLocaleLowerCase("cs-CZ");
+}
+
 function normalizeCountry(job) {
   const country = countryOf(job);
-  const withCountry = country
-    ? { ...job, country, country_code: country }
-    : job;
+  const withCountry = country ? { ...job, country, country_code: country } : job;
   return normalizeLanguageEvidence(withCountry);
 }
 
@@ -151,13 +168,11 @@ function parseJson(text) {
 
 function collect(value, out = [], seen = new Set()) {
   if (value == null || out.length >= 500) return out;
-
   if (typeof value === "string") {
     const parsed = parseJson(value);
     if (parsed) collect(parsed, out, seen);
     return out;
   }
-
   if (typeof value !== "object" || seen.has(value)) return out;
   seen.add(value);
 
@@ -198,6 +213,48 @@ function refreshRolling(items) {
   rolling = dedupe([...items, ...rolling]).slice(0, 200);
 }
 
+function diverseEligiblePool(items) {
+  const eligible = dedupe(items)
+    .map(normalizeCountry)
+    .filter(job => SUPPORTED_COUNTRIES.includes(countryOf(job)))
+    .filter(job => !FORBIDDEN_JOB.test(jobText(job)))
+    .filter(languageAllowed);
+
+  const groups = new Map();
+  for (const country of SUPPORTED_COUNTRIES) groups.set(country, []);
+  for (const job of eligible) groups.get(countryOf(job))?.push(job);
+
+  // First pass: exactly one candidate from every country that is actually
+  // present. This prevents five high-scoring Netherlands jobs from crowding
+  // out valid offers from the other supported countries downstream.
+  const firstPass = [];
+  for (const country of SUPPORTED_COUNTRIES) {
+    const group = groups.get(country) || [];
+    const withDirectLink = group.find(job => linkOf(job));
+    const candidate = withDirectLink || group[0];
+    if (candidate) firstPass.push(candidate);
+  }
+
+  // If at least five different countries are available, do NOT add duplicate
+  // countries. StablePipeline may reorder by job priority, but every candidate
+  // it receives still belongs to a different country.
+  if (firstPass.length >= 5) return firstPass.slice(0, MAX_POOL);
+
+  // Fewer than five countries are genuinely available. Keep the distinct
+  // countries first and only then add additional real jobs to reach a useful
+  // fallback pool. No job or country is invented.
+  const selected = [...firstPass];
+  const used = new Set(selected.map(keyOf));
+  for (const job of eligible) {
+    if (selected.length >= MAX_POOL) break;
+    const key = keyOf(job);
+    if (used.has(key)) continue;
+    used.add(key);
+    selected.push(job);
+  }
+  return selected;
+}
+
 const previousPost = express.application.post;
 
 express.application.post = function collectAllCandidatesPost(path, ...handlers) {
@@ -207,14 +264,12 @@ express.application.post = function collectAllCandidatesPost(path, ...handlers) 
     try {
       const current = dedupe(collect(req.body));
       refreshRolling(current);
+      const pool = diverseEligiblePool(rolling);
 
-      // Give stablePipelinePatch every candidate found anywhere in the payload,
-      // across all 16 supported countries. It remains responsible for the hard
-      // rules: AJ/CZ only and no assembly/montáž roles.
-      if (rolling.length) {
+      if (pool.length) {
         req.body = {
-          jobs: rolling,
-          reels: rolling.slice(0, 2)
+          jobs: pool,
+          reels: pool.slice(0, 2)
         };
       }
 
@@ -223,7 +278,8 @@ express.application.post = function collectAllCandidatesPost(path, ...handlers) 
         const country = countryOf(job) || "unknown";
         byCountry[country] = (byCountry[country] || 0) + 1;
       }
-      console.log(`[ALL CANDIDATES] current=${current.length} rolling=${rolling.length} countries=${JSON.stringify(byCountry)}`);
+      const poolCountries = [...new Set(pool.map(countryOf).filter(Boolean))];
+      console.log(`[ALL CANDIDATES] current=${current.length} rolling=${rolling.length} pool=${pool.length} poolCountries=${JSON.stringify(poolCountries)} allCountries=${JSON.stringify(byCountry)}`);
     } catch (error) {
       console.error(`[ALL CANDIDATES] ${error.message}`);
     }
@@ -233,4 +289,4 @@ express.application.post = function collectAllCandidatesPost(path, ...handlers) 
   return previousPost.call(this, path, collectBeforeStable, ...handlers);
 };
 
-console.log("[ALL CANDIDATES] Full nested payload collector + robust AJ/CZ evidence normalization active.");
+console.log("[ALL CANDIDATES] Diverse all-16-country collector + AJ/CZ filtering active.");
