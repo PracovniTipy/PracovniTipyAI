@@ -1,7 +1,10 @@
 "use strict";
 
 const Module = require("module");
+const fs = require("fs");
+const path = require("path");
 const originalLoad = Module._load;
+const originalJsLoader = Module._extensions[".js"];
 
 const CANONICAL = new Set([
   "Gastronomie",
@@ -41,7 +44,7 @@ function jobText(job) {
 
 function isForbidden(job) {
   const text = jobText(job);
-  return /montážní\s+(?:dělník|pracovník|operátor)|montazni\s+(?:delnik|pracovnik|operator)|assembly\s+(?:worker|operator|operative|line\s+worker)|\bassembler\b/.test(text);
+  return /montážní\s+(?:dělník|pracovník|operátor)|montazni\s+(?:delnik|pracovnik|operator)|montáž\w*\s+(?:výrob|stroj|součást|soucast|auto)|assembly\s+(?:worker|operator|operative|line\s+worker)|\bassembler\b/.test(text);
 }
 
 function normalizeSupplied(value) {
@@ -49,36 +52,20 @@ function normalizeSupplied(value) {
   if (CANONICAL.has(raw)) return raw;
   const lower = raw.toLocaleLowerCase("cs-CZ");
 
-  if (/ovoce|zelenin|sběr|sber|skliz|fruit|vegetable|harvest|picker/.test(lower)) return "Práce s ovocem/zeleninou";
-  if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik/.test(lower)) return "Práce na farmách";
-  if (/úklid|uklid|clean|housekeep|pokojsk|room attendant/.test(lower)) return "Úklid";
-  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|catering/.test(lower)) return "Gastronomie";
-  if (/hotel|resort|hostel|recep/.test(lower)) return "Hotelové práce";
-  if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst/.test(lower)) return "Sklady a logistika";
-  if (/výrob|vyrob|production|factory|potravin/.test(lower)) return "Výroba";
+  if (/ovoce|zelenin|sběr|sber|skliz|fruit|vegetable|harvest|picker|jahod|borůvk|boruvk|jablk|hrozn|malin|ostruž|ostruz|třešn|tresn|hrušk|hrusk|broskv|meruň|merun|švest|svest|rybíz|rybiz|angrešt|angrest|brusink|citrus|meloun|kiwi/.test(lower)) return "Práce s ovocem/zeleninou";
+  if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik|květin|kvetin|flower|horticultur|nursery|vinic|vineyard|orchard|sad(?:u|y)?/.test(lower)) return "Práce na farmách";
+  if (/úklid|uklid|clean|housekeep|pokojsk|room attendant|maid|janitor/.test(lower)) return "Úklid";
+  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|nadob|catering|waiter|waitress/.test(lower)) return "Gastronomie";
+  if (/hotel|resort|hostel|recep|guest service/.test(lower)) return "Hotelové práce";
+  if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst|expedic|zásil|zasil/.test(lower)) return "Sklady a logistika";
+  if (/ryb|fish|seafood|potravin|food processing|food factory|factory|továr|tovar|pekár|pekar|mlékár|mlekar|maso|meat|production/.test(lower)) return "Výroba";
   return "";
 }
 
 function inferCategory(job) {
   const supplied = normalizeSupplied(job?.work_category || job?.job_category || job?.category);
   if (supplied) return supplied;
-
-  const text = jobText(job);
-  if (/ovoce|zelenin|sběr|sber|skliz|fruit|vegetable|berry|berries|jahod|jablk|hrozn|harvest|picker/.test(text)) return "Práce s ovocem/zeleninou";
-  if (/farm|farma|zeměděl|zemedel|agricultur|greenhouse|skleník|sklenik/.test(text)) return "Práce na farmách";
-  if (/úklid|uklid|cleaner|cleaning|housekeep|pokojsk|room attendant|janitor|maid/.test(text)) return "Úklid";
-  if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|catering|waiter|waitress/.test(text)) return "Gastronomie";
-  if (/hotel|resort|hostel|recep|guest service/.test(text)) return "Hotelové práce";
-  if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst/.test(text)) return "Sklady a logistika";
-  if (/výrob|vyrob|production|factory|potravin|operator výroby|operátor výroby/.test(text)) return "Výroba";
-
-  // Generic low-skill manual roles still need a HeroHero category, but this
-  // fallback must never include the explicitly banned assembly role.
-  if (/worker|pracovník|pracovnik|dělník|delnik|helper|pomocn|operative|laborer|labourer/.test(text)) {
-    return "Výroba";
-  }
-
-  return "";
+  return normalizeSupplied(jobText(job));
 }
 
 function prepareJob(job) {
@@ -89,18 +76,50 @@ function prepareJob(job) {
 
   const category = inferCategory(job);
   if (!category) {
-    // Missing classification must not kill the whole 5-post batch. The
-    // original publisher still gets the job and can infer/select a category.
-    console.warn(`[CATEGORY PATCH] Kategorie nebyla určena pro: ${clean(job.title || job.job_title || job.job_title_cz || "bez názvu")}`);
-    return job;
+    throw new Error(`Nepodařilo se určit HeroHero kategorii pro: ${clean(job.title || job.job_title || job.job_title_cz || "bez názvu")}`);
   }
 
   return {
     ...job,
+    category,
     work_category: category,
-    job_category: category
+    job_category: category,
+    herohero_work_category: category
   };
 }
+
+// publishHeroHero.js dříve dovolil pokračovat i tehdy, když se kategorie na
+// HeroHero ve skutečnosti neklikla. Při načtení souboru upravíme pouze tuto
+// část publisheru: typ práce zkusí otevřít až 3x a před náhledem musí být
+// potvrzena jak země, tak pracovní kategorie.
+Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
+  if (!filename.endsWith(`${path.sep}publishHeroHero.js`)) {
+    return originalJsLoader(module, filename);
+  }
+
+  let source = fs.readFileSync(filename, "utf8");
+
+  const oldWorkPicker = `  const opener = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true })).first();\n  if (await opener.isVisible().catch(() => false)) await opener.click({ timeout: 10000 }).catch(() => {});\n  await page.waitForTimeout(500);\n  const matches = page.getByText(label, { exact: true });\n  for (let i = 0; i < await matches.count(); i++) {\n    const match = matches.nth(i);\n    if (await match.isVisible().catch(() => false)) { await match.click({ timeout: 10000 }); logStep(\`Kategorie práce vybrána: \${label}\`); return true; }\n  }\n  logStep(\`Kategorie práce nebyla dostupná: \${label}\`);\n  return false;`;
+
+  const newWorkPicker = `  for (let attempt = 1; attempt <= 3; attempt++) {\n    logStep(\`Výběr kategorie práce \${label}, pokus \${attempt}/3\`);\n    const openers = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true }));\n    for (let i = 0; i < await openers.count(); i++) {\n      const opener = openers.nth(i);\n      if (await opener.isVisible().catch(() => false)) {\n        await opener.click({ timeout: 10000, force: true }).catch(() => {});\n        await page.waitForTimeout(800);\n        break;\n      }\n    }\n\n    const matches = page.getByText(label, { exact: true });\n    for (let i = 0; i < await matches.count(); i++) {\n      const match = matches.nth(i);\n      if (await match.isVisible().catch(() => false)) {\n        await match.click({ timeout: 10000, force: true });\n        await page.waitForTimeout(800);\n        await page.keyboard.press("Escape").catch(() => {});\n        logStep(\`Kategorie práce vybrána: \${label}\`);\n        return true;\n      }\n    }\n\n    await page.keyboard.press("Escape").catch(() => {});\n    await page.waitForTimeout(700);\n  }\n  logStep(\`Kategorie práce nebyla dostupná ani po 3 pokusech: \${label}\`);\n  return false;`;
+
+  if (source.includes(oldWorkPicker)) {
+    source = source.replace(oldWorkPicker, newWorkPicker);
+  } else {
+    console.warn("[CATEGORY PATCH] Work-category picker source pattern nebyl nalezen.");
+  }
+
+  const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
+  const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  if (!countryCategorySelected || !workCategorySelected) {\n    throw new Error(\`HeroHero kategorie nejsou kompletní: země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);\n  }\n  logStep("Obě HeroHero kategorie byly úspěšně vybrány.");`;
+
+  if (source.includes(oldCalls)) {
+    source = source.replace(oldCalls, newCalls);
+  } else {
+    console.warn("[CATEGORY PATCH] Required-category source pattern nebyl nalezen.");
+  }
+
+  module._compile(source, filename);
+};
 
 Module._load = function patchedLoad(request, parent, isMain) {
   const exported = originalLoad.apply(this, arguments);
@@ -118,4 +137,4 @@ Module._load = function patchedLoad(request, parent, isMain) {
   return exported;
 };
 
-console.log("[CATEGORY PATCH] HeroHero category enrichment active without batch blocking.");
+console.log("[CATEGORY PATCH] Required HeroHero country + work categories with retry active.");
