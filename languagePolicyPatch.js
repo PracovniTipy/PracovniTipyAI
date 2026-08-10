@@ -34,7 +34,7 @@ const improvedStripFunction = String.raw`function stripNegatedLanguages(text) {
     .replace(/(?:dutch|german|french|spanish|italian|danish|swedish|norwegian|finnish|greek|estonian|polish|slovak|portuguese)\s+(?:or|nebo)\s+(?:english|angličtina|anglictina|czech|čeština|cestina)/giu, match => /czech|češt|cest/i.test(match) ? " czech " : " english ");
 }`;
 
-function replaceFunction(source, name, replacement) {
+function replaceTextFunction(source, name, replacement) {
   const pattern = new RegExp(`function ${name}\\(text\\) \\{[\\s\\S]*?\\n\\}\\n\\n(?=function )`);
   if (!pattern.test(source)) {
     console.warn(`[LANGUAGE POLICY] ${name} pattern not found.`);
@@ -47,15 +47,6 @@ function patchAllCandidates(source) {
   // When an explicit language field already says English/Czech, the full job
   // description must not reclassify the job merely because it mentions a
   // local language somewhere in unrelated text. Context is fallback evidence.
-  const oldAllowed = String.raw`function languageAllowed(job) {
-  const normalized = normalizeLanguageEvidence(job);
-  const { checkedDirect, checkedContext } = languageEvidence(normalized);
-  const combined = clean(\`${checkedDirect} ${checkedContext}\`);
-  if (!combined) return false;
-  if (FORBIDDEN.test(combined)) return false;
-  return ENGLISH.test(combined) || CZECH.test(combined);
-}`;
-
   const newAllowed = String.raw`function languageAllowed(job) {
   const normalized = normalizeLanguageEvidence(job);
   const { checkedDirect, checkedContext } = languageEvidence(normalized);
@@ -66,11 +57,12 @@ function patchAllCandidates(source) {
   return ENGLISH.test(source) || CZECH.test(source);
 }`;
 
-  if (!source.includes(oldAllowed)) {
+  const pattern = /function languageAllowed\(job\) \{[\s\S]*?\n\}\n\n(?=function jobText)/;
+  if (!pattern.test(source)) {
     console.warn("[LANGUAGE POLICY] languageAllowed pattern not found.");
     return source;
   }
-  return source.replace(oldAllowed, newAllowed);
+  return source.replace(pattern, `${newAllowed}\n\n`);
 }
 
 Module._extensions[".js"] = function languagePolicyLoader(module, filename) {
@@ -78,7 +70,7 @@ Module._extensions[".js"] = function languagePolicyLoader(module, filename) {
   if (!TARGETS.has(basename)) return originalJsLoader(module, filename);
 
   let source = fs.readFileSync(filename, "utf8");
-  source = replaceFunction(source, "stripNegatedLanguages", improvedStripFunction);
+  source = replaceTextFunction(source, "stripNegatedLanguages", improvedStripFunction);
   if (basename === "allCandidatesPatch.js") source = patchAllCandidates(source);
 
   module._compile(source, filename);
