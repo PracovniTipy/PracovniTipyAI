@@ -56,7 +56,6 @@ function monthlySalaryOf(job) {
   const newSafe = String.raw`function safeJob(job, requireLink = false) {
   if (!job || typeof job !== "object" || Array.isArray(job)) return false;
   if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
-  if (!validCityOf(job)) return false;
   if (!monthlySalaryOf(job)) return false;
   if (!languageDecision(job).allowed) return false;
   if (requireLink && !linkOf(job)) return false;
@@ -70,6 +69,6 @@ function monthlySalaryOf(job) {
   const newDebug = oldDebug + ",\n              missingCities: allJobs.filter(job => !validCityOf(job)).map(titleOf).filter(Boolean).slice(0, 10),\n              missingSalaries: allJobs.filter(job => !monthlySalaryOf(job)).map(titleOf).filter(Boolean).slice(0, 10)";
   if (source.includes(oldDebug)) source = source.replace(oldDebug, newDebug);
 
-  console.log("[DATA COMPLETENESS] Required city + monthly CZK salary active.");
+  console.log("[DATA COMPLETENESS] Required country + monthly CZK salary active; city optional.");
   module._compile(source, filename);
 };
