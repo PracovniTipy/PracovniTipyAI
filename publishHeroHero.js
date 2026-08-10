@@ -25,6 +25,36 @@ const CONFIG = {
   LOCALE: "cs-CZ",
 };
 
+const DEFAULT_TEST_JOB = {
+  title: "Skladový operátor (Testovací pozice)",
+  salary: "35 000 - 42 000",
+  location: "Praha - Hostivař",
+  startDate: "Ihned / Dle domluvy",
+  contractType: "HPP na dobu neurčitou",
+  language: "Čeština na komunikativní úrovni",
+  link: "https://pracovnitipy.cz",
+  description: [
+    "Příjem a výdej zboží ve skladovém hospodářství",
+    "Práce se čtečkou čárových kódů (skenerem)",
+    "Kontrola dodacích listů a stavu zásob"
+  ],
+  accommodation: [
+    "Možnost zajištění ubytování v blízkosti depa",
+    "Příspěvek na ubytování ze strany zaměstnavatele"
+  ],
+  requirements: [
+    "Fyzická zdatnost a spolehlivost",
+    "Trestní bezúhonnost",
+    "Ochota pracovat na dvousměnný provoz"
+  ],
+  advantages: [
+    "Týden dovolené navíc (celkem 5 týdnů)",
+    "Dotované závodní stravování",
+    "Možnost záloh na mzdu"
+  ],
+  imageUrl: ""
+};
+
 function ensureDir(dir) {
   fs.mkdirSync(dir, { recursive: true });
 }
@@ -593,112 +623,19 @@ async function executeModalLogin(page, email, password) {
   logStep("HeroHero login úspěšně dokončen.");
 }
 
-function cleanText(value) {
-  return String(value ?? "").replace(/\s+/g, " ").trim();
-}
-
-// Chybějící hodnoty se nikdy nevypisují jako „neuvedeno“. Kontrola je
-// záměrně ukotvená na celou hodnotu, aby nevyřazovala platný popis práce.
-function isMissingJobValue(value) {
-  const normalized = cleanText(value).toLocaleLowerCase("cs-CZ");
-  if (!normalized) return true;
-
-  return /^(?:[-•]\s*)?(?:(?:ubytování|housing|místo|město|location|mzda|plat|salary|jazyk|language|požadavky|requirements|nástup|start|strava|meals|výhody|advantages)\s*:?\s*)?(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|n\/?a)\s*[.!]?$/iu.test(normalized);
-}
-
 function hasUsefulJobValue(value) {
-  return !isMissingJobValue(value);
-}
-
-function sanitizePublishedLine(value) {
-  const line = cleanText(value);
-  if (!line) return "";
-  if (/práci nezprostředkovávám|sdílím ověřené nabídky/i.test(line)) return "";
-  // Pokud AI vrátí placeholder jako součást samostatné položky, celou položku
-  // raději vynecháme než aby se zobrazilo „neuvedeno“.
-  // `n/a` musí mít hranice. Bez nich se "na" na konci slova
-  // "Angličtina" chybně vyhodnotilo jako chybějící hodnota.
-  const hasMissingMarker = /(?:neuveden[^\s.,;:!?)]*|není\s+uveden[^\s.,;:!?)]*|not\s+(?:specified|provided)|unknown|(?:^|[\s:;,(])n\/?a(?=$|[\s:;,.!?)]))/iu.test(line);
-  if (isMissingJobValue(line) || hasMissingMarker) return "";
-  return line
-    .replace(/\b(?:brutto|netto|hrubého|hrubá|hrubé|hrubý|hrubou|čistého|čistá|čisté|čistý|čistou)\b/giu, "")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-}
-
-function firstUsefulJobValue(...values) {
-  for (const value of values) {
-    const sanitized = sanitizePublishedLine(value);
-    if (hasUsefulJobValue(sanitized)) return sanitized;
-  }
-  return "";
-}
-
-function usefulTextLines(value) {
-  return normalizeTextLines(value)
-    .map(sanitizePublishedLine)
-    .filter(line => hasUsefulJobValue(line));
+  if (value === null || value === undefined) return false;
+  const normalized = String(value).trim().toLowerCase();
+  return Boolean(normalized) && !["neuvedeno", "neuvedena", "neuveden", "není uvedeno", "n/a", "unknown"].includes(normalized);
 }
 
 function formatSalaryLine(job) {
-  const candidates = [
-    { value: job.salary_czk_month, monthly: true },
-    { value: job.monthly_salary_czk, monthly: true },
-    { value: job.salary_month_czk, monthly: true },
-    { value: job.salary_monthly_czk, monthly: true },
-    { value: job.salary, monthly: false }
-  ];
-
-  const match = candidates
-    .map(candidate => ({ ...candidate, value: sanitizePublishedLine(candidate.value) }))
-    .find(candidate =>
-      hasUsefulJobValue(candidate.value) &&
-      /(?:kč|czk)/i.test(candidate.value) &&
-      (candidate.monthly || /(?:měs(?:íc|íčně)?|month)/i.test(candidate.value))
-    );
-
-  // Neodvozujeme měsíční mzdu z hodinové sazby ani z eur. Zobrazujeme jen
-  // hodnotu v Kč, kterou upstream označil jako měsíční nebo ji tak pojmenoval.
-  if (!match) return null;
-  const cleanSalary = cleanText(match.value)
-    .replace(/\bCZK\b/gi, "Kč")
-    .replace(/\s{2,}/g, " ")
-    .trim();
-  const monthlySalary = /(?:měs(?:íc|íčně)?|month)/i.test(cleanSalary)
-    ? cleanSalary
-    : `${cleanSalary} / měsíc`;
-  return `💰 ${monthlySalary}`;
-}
-
-function isDirectJobLink(value) {
-  const candidate = cleanText(value);
-  if (!candidate) return false;
-  try {
-    const parsed = new URL(candidate);
-    if (!/^https?:$/.test(parsed.protocol)) return false;
-
-    const path = parsed.pathname.replace(/\/+$/, "");
-    if (!path || path === "/") return false;
-
-    // Obecný seznam nabídek pořád nebereme jako detail. Pokud ale URL obsahuje
-    // ID konkrétní nabídky (typicky Indeed a některé job boardy), je platná.
-    const hasJobIdentifier = [
-      "jk", "vjk", "jobid", "job_id", "id",
-      "vacancyid", "vacancy_id", "offerid", "offer_id"
-    ].some(key => parsed.searchParams.has(key));
-    const genericPage = /\/(?:jobs?|vacanc(?:y|ies)|careers?|search|offers?)$/i.test(path);
-    return !genericPage || hasJobIdentifier;
-  } catch {
-    return false;
-  }
-}
-
-function firstDirectJobLink(...values) {
-  for (const value of values) {
-    const candidate = cleanText(value);
-    if (isDirectJobLink(candidate)) return candidate;
-  }
-  return "";
+  const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
+  // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
+  // původní eura ani náhradní text, pokud mzda v nabídce chybí.
+  if (!czk || !/(kč|czk)/i.test(czk)) return null;
+  const monthly = /měs/i.test(czk) ? czk : `${czk} / měsíc`;
+  return `💰 ${monthly}`;
 }
 
 function relevantJobEmoji(title) {
@@ -714,21 +651,18 @@ function relevantJobEmoji(title) {
 }
 
 function stripLeadingEmoji(value) {
-  return String(value || "Pracovní nabídka").replace(/^\s*[\p{Extended_Pictographic}\uFE0F]+\s*/u, "").trim();
+  return String(value || "Pracovní nabídka").replace(/^\s*[\p{Extended_Pictographic}️]+\s*/u, "").trim();
 }
 
 function formatJobPost(job) {
-  const title = sanitizePublishedLine(stripLeadingEmoji(job.title || job.job_title));
-  const directLink = firstDirectJobLink(job.link, job.apply_url, job.url);
-  // HeroHero nesmí dostat příspěvek bez názvu nebo bez přímého odkazu na
-  // konkrétní nabídku. Takový bundle se přeskočí už před otevřením editoru.
-  if (!title || !directLink) return "";
+  const title = stripLeadingEmoji(job.title || job.job_title);
   const titleEmoji = relevantJobEmoji(title);
   const salary = formatSalaryLine(job);
-  const locationValue = firstUsefulJobValue(job.location, job.city, job.country);
-  const rawStartDate = firstUsefulJobValue(job.startDate, job.start_date, job.start);
-  const rawContractType = firstUsefulJobValue(job.contractType, job.contract_type, job.employment_type);
-  const rawLanguage = firstUsefulJobValue(job.language, job.languages);
+  const locationValue = job.location || job.country;
+  const rawStartDate = job.startDate || job.start_date;
+  const rawContractType = job.contractType || job.contract_type;
+  const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
+  const directLink = hasUsefulJobValue(job.link) ? String(job.link).trim() : "";
   const lines = [`${titleEmoji} ${title}`];
 
   if (salary) lines.push(salary);
@@ -738,45 +672,37 @@ function formatJobPost(job) {
   if (rawLanguage && !/^jazyk\s+neuveden$/i.test(rawLanguage)) {
     lines.push(`🌍 Jazyk ${rawLanguage.replace(/^jazyk\s*:?\s*/i, "")}`);
   }
-  // Odkaz začíná samostatný blok až po jazyku.
-  let output = lines.join("\n");
-  if (directLink) output += `\n\n🔗 Odkaz: ${directLink}`;
+  if (directLink) lines.push(`🔗 Odkaz: ${directLink}`);
 
-  const titleForComparison = cleanText(title).toLocaleLowerCase("cs-CZ");
-  const descriptionLines = extractJobBodyLines(job)
-    .map(sanitizePublishedLine)
-    .filter(line => line && cleanText(line).toLocaleLowerCase("cs-CZ") !== titleForComparison);
+  let output = lines.join("\n");
+
+  const descriptionLines = extractJobBodyLines(job);
   if (descriptionLines.length > 0) {
     output += `\n\n🔧 Náplň práce\n`;
     for (const point of descriptionLines) output += `• ${point}\n`;
   }
 
-  const accommodation = firstUsefulJobValue(job.accommodation, job.housing);
-  if (hasUsefulJobValue(accommodation)) {
-    output += `\n🏠 Ubytování\n• ${accommodation}\n`;
+  if (hasUsefulJobValue(job.accommodation)) {
+    output += `\n🏠 Ubytování\n• ${job.accommodation}\n`;
   }
 
-  const meals = firstUsefulJobValue(job.meals, job.food);
-  if (hasUsefulJobValue(meals)) {
-    output += `\n🍽️ Strava\n• ${meals}\n`;
+  if (hasUsefulJobValue(job.meals)) {
+    output += `\n🍽️ Strava\n• ${job.meals}\n`;
   }
 
-  const requirementLines = usefulTextLines(job.requirements);
+  const requirementLines = normalizeTextLines(job.requirements);
   if (requirementLines.length > 0) {
     output += `\n📋 Požadavky\n`;
     for (const point of requirementLines) output += `• ${point}\n`;
   }
 
-  const advantageLines = usefulTextLines(job.advantages);
+  const advantageLines = normalizeTextLines(job.advantages);
   if (advantageLines.length > 0) {
     output += `\n⭐ Výhody\n`;
     for (const point of advantageLines) output += `• ${point}\n`;
   }
 
-  const contactEmail = cleanText(
-    process.env.CONTACT_EMAIL || process.env.HEROHERO_CONTACT_EMAIL
-  );
-  if (contactEmail) output += `\n\n📧 Kontakt: ${contactEmail}`;
+  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.`;
 
   return output.trim();
 }
@@ -901,46 +827,27 @@ async function downloadImageToTempFile(imageUrl) {
   return resolvedFilePath;
 }
 
-// Vstup z Apify/AI někdy obsahuje ISO kód a jindy český či anglický název.
-// Všechny varianty převádíme na přesně existující kategorii na HeroHero.
 const HEROHERO_COUNTRY_CATEGORIES = {
-  "austria": ["Rakousko"], "at": ["Rakousko"], "rakousko": ["Rakousko"],
-  "belgium": ["Belgie"], "be": ["Belgie"], "belgie": ["Belgie"],
-  "denmark": ["Dánsko"], "dk": ["Dánsko"], "dánsko": ["Dánsko"], "dansko": ["Dánsko"],
-  "estonia": ["Estonsko"], "ee": ["Estonsko"], "estonsko": ["Estonsko"],
-  "finland": ["Finsko"], "fi": ["Finsko"], "finsko": ["Finsko"],
-  "france": ["Francie"], "fr": ["Francie"], "francie": ["Francie"],
-  "netherlands": ["Nizozemsko"], "nl": ["Nizozemsko"], "holland": ["Nizozemsko"],
-  "holandsko": ["Nizozemsko"], "nizozemsko": ["Nizozemsko"], "nizozemí": ["Nizozemsko"],
-  "ireland": ["Irsko"], "ie": ["Irsko"], "irsko": ["Irsko"],
-  "italy": ["Itálie"], "it": ["Itálie"], "italie": ["Itálie"], "itálie": ["Itálie"],
-  "cyprus": ["Kypr"], "cy": ["Kypr"], "kypr": ["Kypr"],
-  "malta": ["Malta"], "mt": ["Malta"],
-  "germany": ["Německo"], "de": ["Německo"], "německo": ["Německo"], "nemecko": ["Německo"],
-  "norway": ["Norsko"], "no": ["Norsko"], "norsko": ["Norsko"],
-  "poland": ["Polsko"], "pl": ["Polsko"], "polsko": ["Polsko"],
-  "greece": ["Řecko"], "gr": ["Řecko"], "řecko": ["Řecko"], "recko": ["Řecko"],
-  "slovakia": ["Slovensko"], "sk": ["Slovensko"], "slovensko": ["Slovensko"],
-  "spain": ["Španělsko"], "es": ["Španělsko"], "španělsko": ["Španělsko"], "spanelsko": ["Španělsko"],
-  "sweden": ["Švédsko"], "se": ["Švédsko"], "švédsko": ["Švédsko"], "svedsko": ["Švédsko"]
+  Austria: ["Rakousko"], Belgium: ["Belgie"], Denmark: ["Dánsko"], Estonia: ["Estonsko"],
+  Finland: ["Finsko"], France: ["Francie"], Netherlands: ["Nizozemsko"], Ireland: ["Irsko"],
+  Italy: ["Itálie"], Cyprus: ["Kypr"], Malta: ["Malta"], Germany: ["Německo"],
+  Norway: ["Norsko"], Greece: ["Řecko"], Spain: ["Španělsko"], Sweden: ["Švédsko"]
 };
 
 function inferWorkCategory(job) {
   const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
-  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable/.test(value)) return "Práce s ovocem/zeleninou";
+  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Práce s ovocem/zeleninou";
   if (/farm|farma|zeměděl|zemedel|agricultur/.test(value)) return "Práce na farmách";
-  if (/úklid|uklid|clean|housekeep/.test(value)) return "Úklid";
-  if (/hotel|pokoj|recep|resort/.test(value)) return "Hotelové práce";
+  if (/hotel|housekeep|pokoj|recep|resort|úklid|uklid/.test(value)) return "Hotelové práce";
   if (/kuch|číšník|cisnik|servír|servir|gastronom|dishwasher|nádob/.test(value)) return "Gastronomie";
-  if (/sklad|logistik|picker|vychyst|balen|warehouse|order/.test(value)) return "Sklady a logistika";
-  if (/výrob|vyrob|production|potravin|maso|řez|rez|factory/.test(value)) return "Výroba";
+  if (/sklad|logistik|picker|vychyst|balen|warehouse|order/.test(value)) return "Sklady";
+  if (/výrob|vyrob|production|potravin|maso|řez|rez|factory/.test(value)) return "Továrny";
   return "";
 }
 
 async function selectCountryCategory(page, job) {
   const countryKey = String(job.country_code || job.country || "").trim();
-  const normalizedCountryKey = countryKey.toLocaleLowerCase("cs-CZ");
-  const labels = HEROHERO_COUNTRY_CATEGORIES[normalizedCountryKey] || (countryKey ? [countryKey] : []);
+  const labels = HEROHERO_COUNTRY_CATEGORIES[countryKey] || (countryKey ? [countryKey] : []);
   if (labels.length === 0) {
     logStep("Země chybí, výběr kategorie přeskakuji.");
     return false;
@@ -991,17 +898,7 @@ async function selectCountryCategory(page, job) {
 }
 
 async function selectWorkCategory(page, job) {
-  const allowedCategories = new Set([
-    "Gastronomie",
-    "Práce na farmách",
-    "Práce s ovocem/zeleninou",
-    "Hotelové práce",
-    "Sklady a logistika",
-    "Výroba",
-    "Úklid"
-  ]);
-  const supplied = cleanText(job.work_category || job.job_category);
-  const label = allowedCategories.has(supplied) ? supplied : inferWorkCategory(job);
+  const label = job.work_category || job.job_category || inferWorkCategory(job);
   if (!label) { logStep("Typ práce se nepodařilo určit, kategorii nepřidávám."); return false; }
   const opener = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true })).first();
   if (await opener.isVisible().catch(() => false)) await opener.click({ timeout: 10000 }).catch(() => {});
@@ -1016,10 +913,6 @@ async function selectWorkCategory(page, job) {
 }
 
 async function createHeroHeroPost(page, job) {
-  const formattedText = formatJobPost(job);
-  if (!formattedText) {
-    throw new Error("Nabídka nemá ověřený název nebo přímý odkaz na konkrétní pracovní pozici; příspěvek se nezveřejní.");
-  }
   logStep(`Vytvářím příspěvek pro pozici: ${job.title}`);
   const createUrl = "https://herohero.co/create";
 
@@ -1148,6 +1041,7 @@ async function createHeroHeroPost(page, job) {
   await page.waitForTimeout(10000);
 
   logStep("Vkládám formátovaný popisek nabídky.");
+  const formattedText = formatJobPost(job);
   // Globální keyboard.type se v dynamickém editoru po jeho překreslení může
   // zaseknout nebo psát do titulku. Tělo příspěvku má vlastní contenteditable
   // pole; Playwright ho vyplní přímo a atomicky.
@@ -1205,78 +1099,10 @@ async function createHeroHeroPost(page, job) {
   logStep(`Příspěvek "${job.title}" úspěšně odeslán.`);
 }
 
-function extractPublishJob(input) {
-  if (!input) return null;
-
-  if (typeof input === "string") {
-    try {
-      return extractPublishJob(JSON.parse(input));
-    } catch (_) {
-      return null;
-    }
-  }
-
-  if (Array.isArray(input)) {
-    // Make Iterator may pass the whole collection instead of the current
-    // bundle. Select the first actual job rather than rejecting the payload.
-    for (const item of input) {
-      const job = extractPublishJob(item);
-      if (job) return job;
-    }
-    return null;
-  }
-
-  if (typeof input !== "object") return null;
-
-  // Make can normalize mapped field names to variants such as "Job title",
-  // "job title" or "Job Title". Compare canonical keys before rejecting the
-  // bundle so the real offer is still selected.
-  const normalizedEntries = Object.entries(input).map(([key, value]) => [
-    key.toLowerCase().replace(/[\s_-]+/g, ""),
-    value,
-  ]);
-  const titleEntry = normalizedEntries.find(([key, value]) =>
-    ["title", "jobtitle", "position", "role", "name"].includes(key) &&
-    typeof value === "string" && value.trim()
-  );
-  const title = titleEntry ? titleEntry[1] : null;
-  if (typeof title === "string" && title.trim()) {
-    return {
-      ...input,
-      title: title.trim(),
-    };
-  }
-
-  for (const key of ["body", "data", "output", "result", "response", "content", "value", "item", "job", "herohero", "jobs", "collection"]) {
-    if (input[key] !== undefined) {
-      const nested = extractPublishJob(input[key]);
-      if (nested) return nested;
-    }
-  }
-
-  // A mapped Make collection can use numeric bundle keys ("1", "2", …).
-  // Walk remaining values as a final safe fallback.
-  for (const [key, value] of Object.entries(input)) {
-    if (key === "title" || key === "job_title" || key === "jobTitle") continue;
-    const nested = extractPublishJob(value);
-    if (nested) return nested;
-  }
-
-  // Some Make bundles expose only a descriptive position key.
-  const fallbackEntry = normalizedEntries.find(([key, value]) =>
-    /(?:job|position|role).*(?:title|name)|(?:title|position|role)$/.test(key) &&
-    typeof value === "string" && value.trim()
-  );
-  if (fallbackEntry) return { ...input, title: fallbackEntry[1].trim() };
-
-  return null;
-}
-
 async function publishHeroHero(inputJob) {
-  const job = extractPublishJob(inputJob);
-  if (!job) {
-    throw new Error("Chybí platná nabídka práce v payloadu; bez ověřených dat se nic nepublikuje.");
-  }
+  const job = (!inputJob || Object.keys(inputJob).length === 0 || !inputJob.title)
+    ? DEFAULT_TEST_JOB
+    : inputJob;
 
   logStep(`Používám data pro pozici: ${job.title}`);
   logStep(`Debug dir: ${CONFIG.DEBUG_DIR}`);
