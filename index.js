@@ -1127,6 +1127,26 @@ app.post(
     }
 );
 
+// ==================== Privacy Policy (required for Meta App Publish) ====================
+
+app.get("/privacy", (req, res) => {
+    res.type("html").send(`<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Zásady ochrany osobních údajů — Pracovní Tipy</title>
+<style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{font-size:1.5em}</style>
+</head>
+<body>
+<h1>Zásady ochrany osobních údajů</h1>
+<p>Tato aplikace ("Pracovní Tipy Automation") slouží k automatickému odpovídání na komentáře a přímé zprávy (DM) na Instagram účtu @pracovni_tipy s odkazem na nabídky práce v zahraničí.</p>
+<p>Aplikace zpracovává pouze: ID a text komentářů/zpráv nutné k odeslání automatické odpovědi. Tyto údaje neukládáme trvale, nesdílíme s třetími stranami a nepoužíváme k žádnému jinému účelu.</p>
+<p>Pokud chcete své údaje smazat nebo máte dotaz, napište na e-mail provozovatele: dudypetr1@seznam.cz</p>
+<p>Poslední aktualizace: srpen 2026</p>
+</body>
+</html>`);
+});
+
 // ==================== Instagram Webhook (DM + private reply automation) ====================
 
 const IG_GRAPH_VERSION = "v21.0";
