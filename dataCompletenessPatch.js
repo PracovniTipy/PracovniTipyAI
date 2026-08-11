@@ -75,41 +75,4 @@ function monthlySalaryOf(job) {
 
   console.log("[DATA COMPLETENESS] Country required; salary reported but no longer blocking; city optional.");
   module._compile(source, filename);
-};  return "";
-}
-`;
-
-  const insertBefore = "function safeJob(job, requireLink = false) {";
-  if (!source.includes(insertBefore)) {
-    console.warn("[DATA COMPLETENESS] safeJob marker not found.");
-    return module._compile(source, filename);
-  }
-  source = source.replace(insertBefore, helpers + "\n" + insertBefore);
-
-  const oldSafe = String.raw`function safeJob(job, requireLink = false) {
-  if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
-  if (!languageDecision(job).allowed) return false;
-  if (requireLink && !linkOf(job)) return false;
-  return true;
-}`;
-
-  const newSafe = String.raw`function safeJob(job, requireLink = false) {
-  if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
-  if (!monthlySalaryOf(job)) return false;
-  if (!languageDecision(job).allowed) return false;
-  if (requireLink && !linkOf(job)) return false;
-  return true;
-}`;
-
-  if (source.includes(oldSafe)) source = source.replace(oldSafe, newSafe);
-  else console.warn("[DATA COMPLETENESS] exact safeJob source not found.");
-
-  const oldDebug = "              missingLinks: normalizedJobs.filter(job => !linkOf(job)).map(titleOf).slice(0, 10)";
-  const newDebug = oldDebug + ",\n              missingCities: allJobs.filter(job => !validCityOf(job)).map(titleOf).filter(Boolean).slice(0, 10),\n              missingSalaries: allJobs.filter(job => !monthlySalaryOf(job)).map(titleOf).filter(Boolean).slice(0, 10)";
-  if (source.includes(oldDebug)) source = source.replace(oldDebug, newDebug);
-
-  console.log("[DATA COMPLETENESS] Required country + monthly CZK salary active; city optional.");
-  module._compile(source, filename);
 };
