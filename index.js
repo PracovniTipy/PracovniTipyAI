@@ -16,12 +16,36 @@ ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
 
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(express.json());
+app.use(express.json({ limit: "25mb" }));
+
+// Zachytí chyby z parsování požadavku (např. neplatný/zkomprimovaný JSON
+// od Make.com), zaloguje je do Railway logů a vrátí čitelnou odpověď
+// místo tichého selhání nebo obecné chyby od platformy.
+app.use((err, req, res, next) => {
+    if (err) {
+        console.error(
+            "[REQUEST PARSE ERROR]",
+            req.method,
+            req.originalUrl,
+            "Content-Type:", req.headers["content-type"],
+            "Content-Encoding:", req.headers["content-encoding"],
+            "status:", err.status || err.statusCode,
+            "message:", err.message
+        );
+
+        return res.status(400).json({
+            success: false,
+            error: "Request parse error: " + err.message
+        });
+    }
+
+    next();
+});
 
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -1082,6 +1106,8 @@ app.post(
                 instagram
             });
         } catch (err) {
+            console.error("[/generate ERROR]", err.stack || err.message);
+
             res.status(500).json({
                 success: false,
                 error: err.message
@@ -1109,6 +1135,8 @@ app.post(
                 result
             });
         } catch (e) {
+            console.error("[/publishHeroHero ERROR]", e.stack || e.message);
+
             res.status(500).json({
                 success: false,
                 error: e.message
