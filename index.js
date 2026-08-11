@@ -47,6 +47,25 @@ app.use((err, req, res, next) => {
     next();
 });
 
+// Dočasný debug log: ukáže přesný tvar těla, které na /generate reálně
+// dorazí z Make (před tím, než ho jakkoli upraví patch soubory). Až se 422
+// vyřeší, tenhle blok zase odstraníme.
+app.use((req, res, next) => {
+    if (req.method === "POST" && req.path === "/generate") {
+        try {
+            const preview = JSON.stringify(req.body);
+            console.log(
+                "[DEBUG /generate BODY]",
+                "length:", preview ? preview.length : 0,
+                "preview:", preview ? preview.slice(0, 1500) : String(req.body)
+            );
+        } catch (e) {
+            console.log("[DEBUG /generate BODY] stringify failed:", e.message, "raw typeof:", typeof req.body);
+        }
+    }
+    next();
+});
+
 cloudinary.config({
     cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
     api_key: process.env.CLOUDINARY_API_KEY,
