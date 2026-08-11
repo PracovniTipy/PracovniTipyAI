@@ -684,25 +684,26 @@ async function createReelImage(
 
     const countrySize = 135;
 
-    drawStrokeBlock(ctx, {
-        text: country,
+    const countryHeight =
+        drawStrokeBlock(ctx, {
+            text: country,
 
-        x: startX,
-        y: startY,
+            x: startX,
+            y: startY,
 
-        maxWidth,
+            maxWidth,
 
-        startSize:
-            countrySize,
+            startSize:
+                countrySize,
 
-        minSize: 90,
-        maxLines: 1,
-        lineWidth: 9
-    });
+            minSize: 90,
+            maxLines: 1,
+            lineWidth: 4
+        });
 
     let currentY =
         startY +
-        countrySize * 0.95 +
+        countryHeight +
         115;
 
     currentY +=
@@ -717,7 +718,7 @@ async function createReelImage(
             startSize: 82,
             minSize: 38,
             maxLines: 3,
-            lineWidth: 7
+            lineWidth: 3
         }) + 30;
 
     currentY +=
@@ -732,7 +733,7 @@ async function createReelImage(
             startSize: 68,
             minSize: 38,
             maxLines: 2,
-            lineWidth: 6
+            lineWidth: 3
         }) + 24;
 
     currentY +=
@@ -747,7 +748,7 @@ async function createReelImage(
             startSize: 48,
             minSize: 30,
             maxLines: 2,
-            lineWidth: 5
+            lineWidth: 2
         }) + 12;
 
     drawStrokeBlock(ctx, {
@@ -761,7 +762,7 @@ async function createReelImage(
         startSize: 48,
         minSize: 30,
         maxLines: 2,
-        lineWidth: 5
+        lineWidth: 2
     });
 
     return canvas.toBuffer(
