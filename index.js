@@ -1156,10 +1156,16 @@ const IG_BUSINESS_ID = process.env.IG_BUSINESS_ID;
 const HEROHERO_LINK = "https://herohero.co/devotedzxfepftuubeim";
 
 const DM_WELCOME_MESSAGE =
-    "Ahoj! 👋 Díky za zprávu. Každý den sdílím ověřené nabídky práce ze zahraničí — práci nezprostředkovávám, jen sdílím ověřené nabídky. Aktuální nabídky najdeš tady: " + HEROHERO_LINK;
+    "Ahoj! 👋😊 Díky za zprávu!\n\n" +
+    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
+    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
+    "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
 
 const COMMENT_PRIVATE_REPLY_MESSAGE =
-    "Ahoj! 👋 Díky za komentář. Každý den sdílím ověřené nabídky práce ze zahraničí — práci nezprostředkovávám, jen sdílím ověřené nabídky. Aktuální nabídky najdeš tady: " + HEROHERO_LINK;
+    "Ahoj! 👋😊 Díky za komentář!\n\n" +
+    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
+    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
+    "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
 
 async function sendInstagramMessage(recipient, messageText) {
     if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
