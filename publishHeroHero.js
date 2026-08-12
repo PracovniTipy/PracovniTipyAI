@@ -877,7 +877,7 @@ async function selectCountryCategory(page, job) {
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
     for (const label of labels) {
-      const matches = page.getByText(label, { exact: true });
+      const matches = page.getByText(label, { exact: false });
       for (let index = 0; index < await matches.count(); index++) {
         const candidate = matches.nth(index);
         if (await candidate.isVisible().catch(() => false)) {
@@ -903,7 +903,7 @@ async function selectWorkCategory(page, job) {
   const opener = page.getByText("Přidat kategorii", { exact: true }).or(page.getByText("Add category", { exact: true })).first();
   if (await opener.isVisible().catch(() => false)) await opener.click({ timeout: 10000 }).catch(() => {});
   await page.waitForTimeout(500);
-  const matches = page.getByText(label, { exact: true });
+  const matches = page.getByText(label, { exact: false });
   for (let i = 0; i < await matches.count(); i++) {
     const match = matches.nth(i);
     if (await match.isVisible().catch(() => false)) { await match.click({ timeout: 10000 }); logStep(`Kategorie práce vybrána: ${label}`); return true; }
