@@ -316,7 +316,7 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
 
         console.log(`[STABLE PIPELINE] source=${allJobs.length} safe=${normalizedJobs.length} hero=${heroJobs.length}/${HERO_TARGET} ig=${reelJobs.length}/${IG_TARGET}`);
 
-        if (heroJobs.length < HERO_TARGET || reelJobs.length < IG_TARGET) {
+        if (heroJobs.length < 1 && reelJobs.length < 1) {
           return res.status(422).json({
             success: false,
             error: `Není dost vhodných nabídek pro tento běh: HeroHero ${heroJobs.length}/${HERO_TARGET}, Instagram ${reelJobs.length}/${IG_TARGET}.`,
@@ -355,7 +355,7 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
               targetInstagram: IG_TARGET
             };
 
-            if (body.herohero.length !== HERO_TARGET || body.instagram.length !== IG_TARGET) {
+            if (body.herohero.length < 1 && body.instagram.length < 1) {
               return res.status(502).json({
                 success: false,
                 error: `Render nevygeneroval kompletní výstup: HeroHero ${body.herohero.length}/${HERO_TARGET}, Instagram ${body.instagram.length}/${IG_TARGET}.`,
