@@ -170,7 +170,7 @@ function normalizeHousing(value) {
     const lower = raw.toLowerCase();
 
     if (!raw || /neuved|not specified|unknown|n\/a/.test(lower)) {
-        return "Ubytování neuvedeno";
+        return "";
     }
 
     if (/not provided|no accommodation|bez ubyt|nezajiště/.test(lower)) {
@@ -201,7 +201,7 @@ function normalizeLanguage(value) {
     const raw = cleanText(value);
 
     if (!raw || /neuved|not specified|unknown|n\/a/i.test(raw)) {
-        return "Jazyk neuveden";
+        return "";
     }
 
     return raw
@@ -272,7 +272,7 @@ function formatMonthlyCzkSalary(...values) {
         return salary;
     }
 
-    return "Mzda v Kč neuvedena";
+    return "";
 }
 
 function createWrappedLines(
@@ -430,7 +430,8 @@ function drawHeroBlock(ctx, options) {
         minSize,
         maxLines,
         rotation = 0,
-        lineHeight = 1.05
+        lineHeight = 1.05,
+        outline = false
     } = options;
 
     const fitted = fitText(
@@ -462,13 +463,15 @@ function drawHeroBlock(ctx, options) {
     ctx.textBaseline = "top";
 
     actualLines.forEach((line, index) => {
-        ctx.fillText(
-            line,
-            0,
-            index *
-            fitted.size *
-            lineHeight
-        );
+        const lineY = index * fitted.size * lineHeight;
+        if (outline) {
+            ctx.lineJoin = "round";
+            ctx.miterLimit = 2;
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = Math.max(0.6, fitted.size * 0.02);
+            ctx.strokeText(line, 0, lineY);
+        }
+        ctx.fillText(line, 0, lineY);
     });
 
     ctx.restore();
@@ -484,6 +487,8 @@ async function createHeroImage(
     job,
     templateFile
 ) {
+    const applyOutline = templateFile === heroTemplates.Ireland || templateFile === heroTemplates.Italy;
+
     const fullPath = path.join(
         TEMPLATE_FOLDER,
         templateFile
@@ -528,8 +533,7 @@ async function createHeroImage(
     );
 
     const city = cleanText(
-        job.city ||
-        "Město neuvedeno"
+        job.city
     );
 
     const housing = normalizeHousing(
@@ -570,10 +574,13 @@ async function createHeroImage(
 
             maxLines: 2,
 
-            lineHeight: 1.02
+            lineHeight: 1.02,
+
+            outline: applyOutline
         });
 
-    drawHeroBlock(ctx, {
+if (city) {
+        drawHeroBlock(ctx, {
         text: city,
 
         centerX:
@@ -593,13 +600,18 @@ async function createHeroImage(
         minSize:
             23 * fontScale,
 
-        maxLines: 1
+        maxLines: 1,
+
+        outline: applyOutline
     });
+    }
 
     const housingTop =
         305 * scaleY;
 
-    const housingHeight =
+    let housingHeight = 0;
+    if (housing) {
+        housingHeight =
         drawHeroBlock(ctx, {
             text: housing,
 
@@ -622,10 +634,14 @@ async function createHeroImage(
 
             rotation: -0.16,
 
-            lineHeight: 1.02
-        });
+            lineHeight: 1.02,
 
-    drawHeroBlock(ctx, {
+            outline: applyOutline
+        });
+    }
+
+if (salary) {
+        drawHeroBlock(ctx, {
         text: salary,
 
         centerX:
@@ -647,8 +663,11 @@ async function createHeroImage(
 
         maxLines: 2,
 
-        rotation: -0.04
+        rotation: -0.04,
+
+        outline: applyOutline
     });
+    }
 
     return canvas.toBuffer(
         "image/png"
@@ -764,7 +783,8 @@ async function createReelImage(
             lineWidth: 3
         }) + 30;
 
-    currentY +=
+if (salary) {
+        currentY +=
         drawStrokeBlock(ctx, {
             text: salary,
 
@@ -778,8 +798,10 @@ async function createReelImage(
             maxLines: 2,
             lineWidth: 3
         }) + 24;
+    }
 
-    currentY +=
+if (housing) {
+        currentY +=
         drawStrokeBlock(ctx, {
             text: housing,
 
@@ -793,8 +815,10 @@ async function createReelImage(
             maxLines: 2,
             lineWidth: 2
         }) + 12;
+    }
 
-    drawStrokeBlock(ctx, {
+if (language) {
+        drawStrokeBlock(ctx, {
         text: language,
 
         x: startX,
@@ -807,6 +831,7 @@ async function createReelImage(
         maxLines: 2,
         lineWidth: 2
     });
+    }
 
     return canvas.toBuffer(
         "image/png"
