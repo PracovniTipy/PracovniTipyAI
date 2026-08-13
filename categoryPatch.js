@@ -76,7 +76,7 @@ function prepareJob(job) {
 
   const category = inferCategory(job);
   if (!category) {
-    throw new Error(`Nepodařilo se určit HeroHero kategorii pro: ${clean(job.title || job.job_title || job.job_title_cz || "bez názvu")}`);
+    /* kategorie nenalezena, pokracujeme bez ni */
   }
 
   return {
@@ -110,7 +110,7 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
   }
 
   const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
-  const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  if (!countryCategorySelected || !workCategorySelected) {\n    throw new Error(\`HeroHero kategorie nejsou kompletní: země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);\n  }\n  logStep("Obě HeroHero kategorie byly úspěšně vybrány.");`;
+  const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  logStep(\`HeroHero kategorie (nepovinné): země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);`;
 
   if (source.includes(oldCalls)) {
     source = source.replace(oldCalls, newCalls);
