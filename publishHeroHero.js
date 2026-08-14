@@ -663,7 +663,7 @@ function formatJobPost(job) {
   const rawContractType = job.contractType || job.contract_type;
   const rawLanguage = hasUsefulJobValue(job.language) ? String(job.language).trim() : "";
   const directLink = hasUsefulJobValue(job.link) ? String(job.link).trim() : "";
-  const lines = [`${titleEmoji} ${title}`];
+  const lines = [];
 
   if (salary) lines.push(salary);
   if (hasUsefulJobValue(locationValue)) lines.push(`📍 ${locationValue}`);
@@ -702,7 +702,6 @@ function formatJobPost(job) {
     for (const point of advantageLines) output += `• ${point}\n`;
   }
 
-  output += `\nℹ️ Práci nezprostředkovávám, sdílím ověřené nabídky.`;
 
   return output.trim();
 }
@@ -834,6 +833,34 @@ const HEROHERO_COUNTRY_CATEGORIES = {
   Norway: ["Norsko"], Greece: ["Řecko"], Spain: ["Španělsko"], Sweden: ["Švédsko"]
 };
 
+const HEROHERO_COUNTRY_ISO = {
+  at: "Austria", be: "Belgium", cy: "Cyprus", dk: "Denmark", ee: "Estonia",
+  fi: "Finland", fr: "France", de: "Germany", gr: "Greece", ie: "Ireland",
+  it: "Italy", mt: "Malta", nl: "Netherlands", no: "Norway", es: "Spain", se: "Sweden",
+};
+
+function resolveHeroHeroCountryLabels(job) {
+  const lookup = {};
+  for (const key of Object.keys(HEROHERO_COUNTRY_CATEGORIES)) {
+    const vals = HEROHERO_COUNTRY_CATEGORIES[key];
+    lookup[key.toLowerCase()] = vals;
+    for (const label of vals) lookup[label.toLowerCase()] = vals;
+  }
+  const candidates = [];
+  const code = String(job.country_code || "").trim().toLowerCase();
+  if (code && HEROHERO_COUNTRY_ISO[code]) candidates.push(HEROHERO_COUNTRY_ISO[code]);
+  if (job.country) candidates.push(String(job.country).trim());
+  if (job.location) {
+    const parts = String(job.location).split(",");
+    candidates.push(parts[parts.length - 1].trim());
+  }
+  for (const candidate of candidates) {
+    const found = lookup[candidate.toLowerCase()];
+    if (found) return found;
+  }
+  return [];
+}
+
 function inferWorkCategory(job) {
   const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
   if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Práce s ovocem/zeleninou";
@@ -846,8 +873,7 @@ function inferWorkCategory(job) {
 }
 
 async function selectCountryCategory(page, job) {
-  const countryKey = String(job.country_code || job.country || "").trim();
-  const labels = HEROHERO_COUNTRY_CATEGORIES[countryKey] || (countryKey ? [countryKey] : []);
+  const labels = resolveHeroHeroCountryLabels(job);
   if (labels.length === 0) {
     logStep("Země chybí, výběr kategorie přeskakuji.");
     return false;
