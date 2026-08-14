@@ -1140,7 +1140,11 @@ app.post(
 
                 instagram.push({
                     ...reel,
-                    videoUrl
+                    caption:
+                        typeof reel.caption === "string" && reel.caption.trim()
+                            ? reel.caption
+                            : `${reel.herohero_title || reel.job_title || reel.title || "Nova pracovni nabidka ze zahranici"} \n\nPro vice praci ze zahranici napis do komentare "${reel.country || ""}".`,
+                    videoUrl,
                 });
             }
 
