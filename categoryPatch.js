@@ -11,8 +11,8 @@ const CANONICAL = new Set([
   "Práce na farmách",
   "Práce s ovocem/zeleninou",
   "Hotelové práce",
-  "Sklady a logistika",
-  "Výroba",
+  "Sklady",
+  "Továrny",
   "Úklid"
 ]);
 
@@ -57,8 +57,8 @@ function normalizeSupplied(value) {
   if (/úklid|uklid|clean|housekeep|pokojsk|room attendant|maid|janitor/.test(lower)) return "Úklid";
   if (/gastro|kuch|restaurant|restaur|číš|cis|servír|servir|barista|dishwasher|nádob|nadob|catering|waiter|waitress/.test(lower)) return "Gastronomie";
   if (/hotel|resort|hostel|recep|guest service/.test(lower)) return "Hotelové práce";
-  if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst|expedic|zásil|zasil/.test(lower)) return "Sklady a logistika";
-  if (/ryb|fish|seafood|potravin|food processing|food factory|factory|továr|tovar|pekár|pekar|mlékár|mlekar|maso|meat|production/.test(lower)) return "Výroba";
+  if (/sklad|warehouse|logisti|balen|packing|packer|order picker|vychyst|expedic|zásil|zasil/.test(lower)) return "Sklady";
+  if (/ryb|fish|seafood|potravin|food processing|food factory|factory|továr|tovar|pekár|pekar|mlékár|mlekar|maso|meat|production/.test(lower)) return "Továrny";
   return "";
 }
 
@@ -76,7 +76,7 @@ function prepareJob(job) {
 
   const category = inferCategory(job);
   if (!category) {
-    /* kategorie nenalezena, pokracujeme bez ni */
+    throw new Error(`Pozice mimo podporovane kategorie, preskakuji: ${job?.job_title || job?.title || "?"}`);
   }
 
   return {
