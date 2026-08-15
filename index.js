@@ -993,7 +993,7 @@ app.post(
         // (má sloužit jako zásoba náhradních kandidátů), ale na HeroHero má
         // jít jen finálních 5 a na Instagram jen 2 reels — dřív tenhle výběr
         // nikde neproběhl a publikovalo by se všech až 15 najednou.
-        const HEROHERO_LIMIT = 5;
+        const HEROHERO_LIMIT = 2;
         const INSTAGRAM_LIMIT = 2;
 
         const jobs = rawJobs
