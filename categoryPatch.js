@@ -128,7 +128,18 @@ Module._load = function patchedLoad(request, parent, isMain) {
     if (typeof exported !== "function" || exported.__categoryPatched) return exported;
 
     const wrapped = async function categoryPatchedPublish(inputJob) {
-      return exported(prepareJob(inputJob));
+      let prepared;
+      try {
+        prepared = prepareJob(inputJob);
+      } catch (err) {
+        console.warn(`[CATEGORY PATCH] Preskakuji pozici (neni chyba behu): ${err && err.message}`);
+        return {
+          success: true,
+          skipped: true,
+          reason: err && err.message,
+        };
+      }
+      return exported(prepared);
     };
     Object.defineProperty(wrapped, "__categoryPatched", { value: true });
     return wrapped;
