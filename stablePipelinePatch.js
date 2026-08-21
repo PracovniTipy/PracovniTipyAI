@@ -356,7 +356,8 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
             };
 
             if (body.herohero.length < 1 && body.instagram.length < 1) {
-              return res.status(502).json({
+              res.status(502);
+              return originalJson({
                 success: false,
                 error: `Render nevygeneroval kompletní výstup: HeroHero ${body.herohero.length}/${HERO_TARGET}, Instagram ${body.instagram.length}/${IG_TARGET}.`,
                 debugCounts: body.debugCounts
