@@ -1104,6 +1104,14 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(10000);
 
+    logStep("Otevírám Nastavení obsahu kvůli výběru kategorií.");
+    await findAndClickButton(page, "Nastavení obsahu (kategorie)", async ({ text }) => {
+      return text === "Nastavení obsahu" || text === "Content settings";
+    }).catch(error => {
+      logStep(`Otevření Nastavení obsahu selhalo: ${error.message}`);
+    });
+    await page.waitForTimeout(1500);
+
   await selectCountryCategory(page, job);
   await selectWorkCategory(page, job);
 
