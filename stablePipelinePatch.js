@@ -231,11 +231,11 @@ function parseJsonString(text) {
   try { return JSON.parse(cleaned); } catch (_) { return null; }
 }
 
-function extractPayload(input, seen = new Set()) {
-  if (!input) return {};
+function extractPayload(input, seen = new Set(), depth = 0) {
+  if (!input || depth > 40) return {};
   if (typeof input === "string") {
     const parsed = parseJsonString(input);
-    return parsed ? extractPayload(parsed, seen) : {};
+    return parsed ? extractPayload(parsed, seen, depth + 1) : {};
   }
   if (typeof input !== "object" || seen.has(input)) return {};
   seen.add(input);
@@ -244,7 +244,7 @@ function extractPayload(input, seen = new Set()) {
     const jobs = [];
     const reels = [];
     for (const item of input) {
-      const nested = extractPayload(item, seen);
+      const nested = extractPayload(item, seen, depth + 1);
       if (Array.isArray(nested.jobs)) jobs.push(...nested.jobs);
       if (Array.isArray(nested.reels)) reels.push(...nested.reels);
     }
@@ -268,13 +268,13 @@ function extractPayload(input, seen = new Set()) {
 
   const messageContent = input.choices?.[0]?.message?.content;
   if (messageContent !== undefined) {
-    const nested = extractPayload(messageContent, seen);
+    const nested = extractPayload(messageContent, seen, depth + 1);
     if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
   }
 
   for (const key of ["body", "data", "output", "result", "response", "content", "text", "value", "item", "collection", "items", "payload", "json"]) {
     if (input[key] !== undefined) {
-      const nested = extractPayload(input[key], seen);
+      const nested = extractPayload(input[key], seen, depth + 1);
       if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
     }
   }
@@ -283,7 +283,7 @@ function extractPayload(input, seen = new Set()) {
   if (jobLike) return { jobs: [input], reels: [] };
 
   for (const value of Object.values(input)) {
-    const nested = extractPayload(value, seen);
+    const nested = extractPayload(value, seen, depth + 1);
     if (Array.isArray(nested.jobs) || Array.isArray(nested.reels)) return nested;
   }
   return {};
