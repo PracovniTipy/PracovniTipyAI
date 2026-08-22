@@ -1151,6 +1151,10 @@ async function createHeroHeroPost(page, job) {
     });
     await page.waitForTimeout(1500);
 
+    const postExpandDump = await page.locator('button:visible, [role="option"]:visible, li:visible, div[role="checkbox"]:visible').allInnerTexts().catch(() => []);
+    logStep(`DEBUG stav po kliknutí na Nastavení obsahu (${postExpandDump.length} prvků): ${postExpandDump.slice(0, 60).join(" | ").slice(0, 2000)}`);
+
+
   await selectCountryCategory(page, job);
   await selectWorkCategory(page, job);
 
