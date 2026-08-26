@@ -630,12 +630,18 @@ function hasUsefulJobValue(value) {
 }
 
 function formatSalaryLine(job) {
-  const czk = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
-  // HeroHero vždy zobrazuje jen přepočtenou měsíční částku v Kč. Neuvádíme
-  // původní eura ani náhradní text, pokud mzda v nabídce chybí.
-  if (!czk || !/(kč|czk)/i.test(czk)) return null;
-  const monthly = /měs/i.test(czk) ? czk : `${czk} / měsíc`;
-  return `💰 ${monthly}`;
+  const raw = hasUsefulJobValue(job.salary_czk_month) ? String(job.salary_czk_month).trim() : "";
+  if (!raw) return null;
+  // AI nyni posila salary_czk_month jako holé číslice (napr. "38000"), ne
+  // uz hotovy retezec s "Kc". Pokud uz "Kc"/"CZK" obsahuje, pouzijeme beze
+  // zmeny; pokud je to jen cislo, doplnime format sami misto zahozeni radku.
+  if (/(kč|czk)/i.test(raw)) {
+    const monthly = /měs/i.test(raw) ? raw : `${raw} / měsíc`;
+    return `💰 ${monthly}`;
+  }
+  const numeric = Number(raw.replace(/[^0-9]/g, ""));
+  if (!Number.isFinite(numeric) || numeric <= 0) return null;
+  return `💰 cca ${numeric.toLocaleString("cs-CZ")} Kč / měsíc`;
 }
 
 function relevantJobEmoji(title) {
@@ -1151,8 +1157,12 @@ async function createHeroHeroPost(page, job) {
     });
     await page.waitForTimeout(1500);
 
-    const postExpandDump = await page.locator('button:visible, [role="option"]:visible, li:visible, div[role="checkbox"]:visible').allInnerTexts().catch(() => []);
-    logStep(`DEBUG stav po kliknutí na Nastavení obsahu (${postExpandDump.length} prvků): ${postExpandDump.slice(0, 60).join(" | ").slice(0, 2000)}`);
+    await page.waitForTimeout(2000);
+    const bodyDumpEarly = await page.locator('body').innerText().catch(() => '');
+    logStep(`DEBUG body text ihned po kliknutí (${bodyDumpEarly.length} znaků): ${bodyDumpEarly.replace(/\s+/g, ' ').slice(0, 1800)}`);
+    await page.waitForTimeout(3000);
+    const bodyDumpLater = await page.locator('body').innerText().catch(() => '');
+    logStep(`DEBUG body text po dalsich 3s (${bodyDumpLater.length} znaků): ${bodyDumpLater.replace(/\s+/g, ' ').slice(0, 1800)}`);
 
 
   await selectCountryCategory(page, job);
