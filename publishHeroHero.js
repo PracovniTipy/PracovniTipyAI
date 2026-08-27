@@ -1149,21 +1149,13 @@ async function createHeroHeroPost(page, job) {
   });
   await page.waitForTimeout(10000);
 
-    logStep("Otevírám Nastavení obsahu kvůli výběru kategorií.");
-    await findAndClickButton(page, "Nastavení obsahu (kategorie)", async ({ text }) => {
-      return text === "Nastavení obsahu" || text === "Content settings";
-    }).catch(error => {
-      logStep(`Otevření Nastavení obsahu selhalo: ${error.message}`);
-    });
-    await page.waitForTimeout(1500);
-
-    await page.waitForTimeout(2000);
-    const bodyDumpEarly = await page.locator('body').innerText().catch(() => '');
-    logStep(`DEBUG body text ihned po kliknutí (${bodyDumpEarly.length} znaků): ${bodyDumpEarly.replace(/\s+/g, ' ').slice(0, 1800)}`);
-    await page.waitForTimeout(3000);
-    const bodyDumpLater = await page.locator('body').innerText().catch(() => '');
-    logStep(`DEBUG body text po dalsich 3s (${bodyDumpLater.length} znaků): ${bodyDumpLater.replace(/\s+/g, ' ').slice(0, 1800)}`);
-
+  // Kategorie (zeme + typ prace) se vybiraji primo na obrazovce "Moznosti
+  // prispevku" pres radek s cipy a polem "Pridat kategorii", ktere je videt
+  // hned po nacteni teto obrazovky. Sekce "Nastaveni obsahu" obsahuje pouze
+  // prepinace vekoveho omezeni / sponzorovaneho obsahu - nema s kategoriemi
+  // nic spolecneho. Drivejsi klikani na ni bylo omylem a proto se kategorie
+  // nikdy nenastavily.
+  logStep("Vybirám kategorie na obrazovce Moznosti prispevku.");
 
   await selectCountryCategory(page, job);
   await selectWorkCategory(page, job);
