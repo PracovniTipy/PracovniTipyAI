@@ -869,9 +869,10 @@ function resolveHeroHeroCountryLabels(job) {
 
 function inferWorkCategory(job) {
   const value = `${job.job_title || ""} ${job.title || ""} ${job.description || ""}`.toLowerCase();
-  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable|farm/.test(value)) return "Sklizeň ovoce/zelenina";
+  if (/ovoce|zelenin|skliz|sběr|sber|jahod|fruit|vegetable/.test(value)) return "Sklizeň ovoce/zelenina";
   if (/farm|farma|zeměděl|zemedel|agricultur/.test(value)) return "Práce na farmách";
-  if (/hotel|housekeep|pokoj|recep|resort|úklid|uklid/.test(value)) return "Hotelové práce";
+  if (/úklid|uklid|cleaner|cleaning/.test(value)) return "Úklid";
+  if (/hotel|housekeep|pokoj|recep|resort/.test(value)) return "Hotelové práce";
   if (/kuch|číšník|cisnik|servír|servir|gastronom|dishwasher|nádob/.test(value)) return "Gastronomie";
   if (/sklad|logistik|picker|vychyst|balen|warehouse|order/.test(value)) return "Sklady";
   if (/výrob|vyrob|production|potravin|maso|řez|rez|factory/.test(value)) return "Továrny";
