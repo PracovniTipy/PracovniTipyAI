@@ -878,108 +878,90 @@ function inferWorkCategory(job) {
   return "";
 }
 
-async function selectCountryCategory(page, job) {
-  const labels = resolveHeroHeroCountryLabels(job);
-  if (labels.length === 0) {
-    logStep("Země chybí, výběr kategorie přeskakuji.");
+async function openCategoryPicker(page) {
+  const input = page.locator('input.category-addNew-input, input[placeholder="Pridat kategorii"], input[placeholder="Add category"]').first();
+  if (!(await input.isVisible().catch(() => false))) {
+    logStep("Pole pro pridani kategorie nenalezeno.");
     return false;
   }
+  await input.click({ timeout: 10000 }).catch(error => {
+    logStep(`Kliknuti na pole pro pridani kategorie selhalo: ${error.message}`);
+  });
+  await page.waitForTimeout(800);
+  return true;
+}
 
-  logStep(`Vybírám kategorii země, podporované názvy: ${labels.join(" / ")}`);
-
-  // HeroHero seznam kategorií nenačte, dokud uživatel neotevře pole
-  // „Přidat kategorii“. Přímé čekání na název země proto končilo timeoutem.
-  const categoryOpeners = ["Přidat kategorii", "Add category"];
-  for (const openerText of categoryOpeners) {
-    const openers = page.getByText(openerText, { exact: true });
-    for (let index = 0; index < await openers.count(); index++) {
-      const opener = openers.nth(index);
-      if (await opener.isVisible().catch(() => false)) {
-        await opener.click({ timeout: 10000 }).catch(error => {
-          logStep(`Otevření seznamu kategorií přes „${openerText}“ selhalo: ${error.message}`);
-        });
+async function clickCategoryLabel(page, label) {
+  const deadline = Date.now() + 12000;
+  while (Date.now() < deadline) {
+    const buttonMatches = page.getByRole("button", { name: label, exact: true });
+    const buttonCount = await buttonMatches.count().catch(() => 0);
+    for (let index = 0; index < buttonCount; index++) {
+      const candidate = buttonMatches.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        await candidate.click({ timeout: 10000 });
         await page.waitForTimeout(800);
-        break;
+        return true;
       }
     }
-  }
-
-  // Krátce prohledáváme všechny povolené názvy a klikáme jen na viditelnou
-  // kategorii.
-  const countrySearchInput = page.locator('input[placeholder*="Hledat" i], input[placeholder*="hledej" i], input[placeholder*="search" i], input[type="search"]:visible').first(); if (await countrySearchInput.isVisible().catch(() => false)) { logStep(`Vyplňuji vyhledávací pole kategorií zemí: ${labels[0]}`); await countrySearchInput.fill(labels[0]).catch(() => {}); await page.waitForTimeout(700); } else { logStep("Vyhledávací pole kategorií zemí nenalezeno."); } const deadline = Date.now() + 12000;
-  while (Date.now() < deadline) {
-    for (const label of labels) {
-      const matches = page.getByText(label, { exact: false });
-      for (let index = 0; index < await matches.count(); index++) {
-        const candidate = matches.nth(index);
-        if (await candidate.isVisible().catch(() => false)) {
-          await candidate.click({ timeout: 10000 });
-          await page.waitForTimeout(1000);
-          logStep(`Kategorie země vybrána: ${label}`);
-          return true;
-        }
+    const textMatches = page.getByText(label, { exact: true });
+    const textCount = await textMatches.count().catch(() => 0);
+    for (let index = 0; index < textCount; index++) {
+      const candidate = textMatches.nth(index);
+      if (await candidate.isVisible().catch(() => false)) {
+        await candidate.click({ timeout: 10000 });
+        await page.waitForTimeout(800);
+        return true;
       }
     }
     await page.waitForTimeout(400);
   }
+  return false;
+}
 
-  // Kategorie je užitečná, ale její dočasná nedostupnost nesmí zablokovat
-  // zveřejnění celé dávky pracovních nabídek.
-  const countryOptionTexts = await page.locator('[role="option"]:visible, li:visible, button:visible').allInnerTexts().catch(() => []); logStep(`DEBUG viditelné možnosti při selhání země (${countryOptionTexts.length}): ${countryOptionTexts.slice(0, 40).join(" | ").slice(0, 1500)}`); logStep(`Kategorie země nebyla dostupná (${labels.join(" / ")}); pokračuji bez kategorie.`);
+async function selectCountryCategory(page, job) {
+  const labels = resolveHeroHeroCountryLabels(job);
+  if (labels.length === 0) {
+    logStep("Zeme chybi, vyber kategorie preskakuji.");
+    return false;
+  }
+
+  logStep(`Vybirám kategorii zeme, podporovane nazvy: ${labels.join(" / ")}`);
+  await openCategoryPicker(page);
+
+  for (const label of labels) {
+    const clicked = await clickCategoryLabel(page, label);
+    if (clicked) {
+      logStep(`Kategorie zeme vybrana: ${label}`);
+      return true;
+    }
+  }
+
+  const countryOptionTexts = await page.locator('[role="option"]:visible, li:visible, button:visible').allInnerTexts().catch(() => []);
+  logStep(`DEBUG viditelne moznosti pri selhani zeme (${countryOptionTexts.length}): ${countryOptionTexts.slice(0, 40).join(" | ").slice(0, 1500)}`);
+  logStep(`Kategorie zeme nebyla dostupna (${labels.join(" / ")}); pokracuji bez kategorie.`);
   return false;
 }
 
 async function selectWorkCategory(page, job) {
   const label = job.work_category || job.job_category || inferWorkCategory(job);
   if (!label) {
-    logStep("Typ práce se nepodařilo určit, kategorii nepřidávám.");
+    logStep("Typ prace se nepodarilo urcit, kategorii nepridavam.");
     return false;
   }
 
-  logStep(`Vybírám kategorii typu práce: ${label}`);
+  logStep(`Vybirám kategorii typu prace: ${label}`);
+  await openCategoryPicker(page);
 
-  const categoryOpeners = ["Přidat kategorii", "Add category", "Přidat další kategorii", "Add another category"];
-  for (const openerText of categoryOpeners) {
-    const openers = page.getByText(openerText, { exact: true });
-    for (let index = 0; index < await openers.count(); index++) {
-      const opener = openers.nth(index);
-      if (await opener.isVisible().catch(() => false)) {
-        await opener.click({ timeout: 10000 }).catch(error => {
-          logStep(`Otevření seznamu kategorií přes „${openerText}“ selhalo: ${error.message}`);
-        });
-        await page.waitForTimeout(800);
-        break;
-      }
-    }
-  }
-
-  const workSearchInput = page.locator('input[placeholder*="Hledat" i], input[placeholder*="hledej" i], input[placeholder*="search" i], input[type="search"]:visible').first();
-  if (await workSearchInput.isVisible().catch(() => false)) {
-    logStep(`Vyplňuji vyhledávací pole kategorie práce: ${label}`);
-    await workSearchInput.fill(label).catch(() => {});
-    await page.waitForTimeout(700);
-  } else {
-    logStep("Vyhledávací pole kategorie práce nenalezeno.");
-  }
-
-  const deadline = Date.now() + 12000;
-  while (Date.now() < deadline) {
-    const matches = page.getByText(label, { exact: false });
-    for (let index = 0; index < await matches.count(); index++) {
-      const candidate = matches.nth(index);
-      if (await candidate.isVisible().catch(() => false)) {
-        await candidate.click({ timeout: 10000 });
-        await page.waitForTimeout(1000);
-        logStep(`Kategorie práce vybrána: ${label}`);
-        return true;
-      }
-    }
-    await page.waitForTimeout(400);
+  const clicked = await clickCategoryLabel(page, label);
+  if (clicked) {
+    logStep(`Kategorie prace vybrana: ${label}`);
+    return true;
   }
 
   const workOptionTexts = await page.locator('[role="option"]:visible, li:visible, button:visible').allInnerTexts().catch(() => []);
-  logStep(`DEBUG viditelné možnosti při selhání práce (${workOptionTexts.length}): ${workOptionTexts.slice(0, 40).join(" | ").slice(0, 1500)}`);
-  logStep(`Kategorie práce nebyla dostupná: ${label}`);
+  logStep(`DEBUG viditelne moznosti pri selhani prace (${workOptionTexts.length}): ${workOptionTexts.slice(0, 40).join(" | ").slice(0, 1500)}`);
+  logStep(`Kategorie prace nebyla dostupna: ${label}`);
   return false;
 }
 
