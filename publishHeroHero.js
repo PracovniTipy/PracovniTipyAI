@@ -944,14 +944,33 @@ async function selectCountryCategory(page, job) {
   return false;
 }
 
+const VALID_WORK_CATEGORIES = ["Uklid", "Sklizen ovoce/zelenina", "Prace na farmach", "Gastronomie", "Hotelove prace", "Sklady", "Tovarny"].map(v => v);
+const REAL_WORK_CATEGORY_LABELS = ["\u00daklid", "Sklize\u0148 ovoce/zelenina", "Pr\u00e1ce na farm\u00e1ch", "Gastronomie", "Hotelov\u00e9 pr\u00e1ce", "Sklady", "Tov\u00e1rny"];
+
+function normalizeWorkCategoryLabel(rawLabel, job) {
+  const trimmed = (rawLabel || "").trim();
+  if (trimmed && REAL_WORK_CATEGORY_LABELS.includes(trimmed)) {
+    return trimmed;
+  }
+  // AI casem vrati blizky, ale ne presny nazev kategorie (napr. "Prace s
+  // ovocem/zeleninou" misto "Sklizen ovoce/zelenina"). Takovy text proto
+  // znovu projedeme stejnym rozpoznavacem jako popis nabidky, aby se
+  // namapoval na skutecny nazev tlacitka na HeroHero.
+  return inferWorkCategory({
+    job_title: `${job.job_title || ""} ${job.title || ""} ${trimmed}`,
+    description: job.description
+  });
+}
+
 async function selectWorkCategory(page, job) {
-  const label = job.work_category || job.job_category || inferWorkCategory(job);
+  const rawLabel = job.work_category || job.job_category || "";
+  const label = normalizeWorkCategoryLabel(rawLabel, job) || inferWorkCategory(job);
   if (!label) {
     logStep("Typ prace se nepodarilo urcit, kategorii nepridavam.");
     return false;
   }
 
-  logStep(`Vybirám kategorii typu prace: ${label}`);
+  logStep(`Vybirám kategorii typu prace: ${label}${rawLabel && rawLabel !== label ? ` (puvodni text od AI: "${rawLabel}")` : ""}`);
   await openCategoryPicker(page);
 
   const clicked = await clickCategoryLabel(page, label);
