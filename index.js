@@ -27,114 +27,114 @@ app.use(express.json({ limit: "25mb" }));
 // od Make.com), zaloguje je do Railway logů a vrátí čitelnou odpověď
 // místo tichého selhání nebo obecné chyby od platformy.
 app.use((err, req, res, next) => {
-    if (err) {
-        console.error(
-            "[REQUEST PARSE ERROR]",
-            req.method,
-            req.originalUrl,
-            "Content-Type:", req.headers["content-type"],
-            "Content-Encoding:", req.headers["content-encoding"],
-            "status:", err.status || err.statusCode,
-            "message:", err.message
-        );
+        if (err) {
+                    console.error(
+                                    "[REQUEST PARSE ERROR]",
+                                    req.method,
+                                    req.originalUrl,
+                                    "Content-Type:", req.headers["content-type"],
+                                    "Content-Encoding:", req.headers["content-encoding"],
+                                    "status:", err.status || err.statusCode,
+                                    "message:", err.message
+                                );
 
-        return res.status(400).json({
-            success: false,
-            error: "Request parse error: " + err.message
-        });
-    }
+            return res.status(400).json({
+                            success: false,
+                            error: "Request parse error: " + err.message
+            });
+        }
 
-    next();
+            next();
 });
 
 // Dočasný debug log: ukáže přesný tvar těla, které na /generate reálně
 // dorazí z Make (před tím, než ho jakkoli upraví patch soubory). Až se 422
 // vyřeší, tenhle blok zase odstraníme.
 app.use((req, res, next) => {
-    if (req.method === "POST" && req.path === "/generate") {
-        try {
-            const preview = JSON.stringify(req.body);
-            console.log(
-                "[DEBUG /generate BODY]",
-                "length:", preview ? preview.length : 0,
-                "preview:", preview ? preview.slice(0, 1500) : String(req.body)
-            );
-        } catch (e) {
-            console.log("[DEBUG /generate BODY] stringify failed:", e.message, "raw typeof:", typeof req.body);
+        if (req.method === "POST" && req.path === "/generate") {
+                    try {
+                                    const preview = JSON.stringify(req.body);
+                                    console.log(
+                                                        "[DEBUG /generate BODY]",
+                                                        "length:", preview ? preview.length : 0,
+                                                        "preview:", preview ? preview.slice(0, 1500) : String(req.body)
+                                                    );
+                    } catch (e) {
+                                    console.log("[DEBUG /generate BODY] stringify failed:", e.message, "raw typeof:", typeof req.body);
+                    }
         }
-    }
-    next();
+        next();
 });
 
 cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
+        cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+        api_key: process.env.CLOUDINARY_API_KEY,
+        api_secret: process.env.CLOUDINARY_API_SECRET
 });
 
 const PORT = process.env.PORT || 3000;
 const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
 registerFont(
-    path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
+        path.join(__dirname, "fonts", "BebasNeue-Regular.ttf"),
     { family: "Bebas Neue" }
-);
+    );
 
 const heroTemplates = {
-    Austria: "Herohero/Rakousko Herohero.png",
-    Belgium: "Herohero/Belgie Herohero.png",
-    Denmark: "Herohero/Dansko Herohero.png",
-    Estonia: "Herohero/Estonsko Herohero.png",
-    Finland: "Herohero/Finsko Herohero.png",
-    France: "Herohero/Francie Herohero.png",
-    Netherlands: "Herohero/Holandsko Herohero.png",
-    Ireland: "Herohero/Irsko Herohero.png",
-    Italy: "Herohero/Italie Herohero.png",
-    Cyprus: "Herohero/Kypr Herohero.png",
-    Malta: "Herohero/Malta Herohero.png",
-    Germany: "Herohero/Nemecko Herohero.png",
-    Norway: "Herohero/Norsko Herohero.png",
-    Greece: "Herohero/Recko Herohero.png",
-    Spain: "Herohero/Spanelsko Herohero.png",
-    Sweden: "Herohero/Svedsko Herohero.png"
+        Austria: "Herohero/Rakousko Herohero.png",
+        Belgium: "Herohero/Belgie Herohero.png",
+        Denmark: "Herohero/Dansko Herohero.png",
+        Estonia: "Herohero/Estonsko Herohero.png",
+        Finland: "Herohero/Finsko Herohero.png",
+        France: "Herohero/Francie Herohero.png",
+        Netherlands: "Herohero/Holandsko Herohero.png",
+        Ireland: "Herohero/Irsko Herohero.png",
+        Italy: "Herohero/Italie Herohero.png",
+        Cyprus: "Herohero/Kypr Herohero.png",
+        Malta: "Herohero/Malta Herohero.png",
+        Germany: "Herohero/Nemecko Herohero.png",
+        Norway: "Herohero/Norsko Herohero.png",
+        Greece: "Herohero/Recko Herohero.png",
+        Spain: "Herohero/Spanelsko Herohero.png",
+        Sweden: "Herohero/Svedsko Herohero.png"
 };
 
 const reelTemplates = {
-    Austria: "reel/Rakousko reel.png",
-    Belgium: "reel/Belgie reel.png",
-    Denmark: "reel/Dansko reel.png",
-    Estonia: "reel/Estonsko reel.png",
-    Finland: "reel/Finsko reel.png",
-    France: "reel/Francie reel.png",
-    Netherlands: "reel/Holandsko reel.png",
-    Ireland: "reel/Irsko reel.png",
-    Italy: "reel/Italie reel.png",
-    Cyprus: "reel/Kypr reel.png",
-    Malta: "reel/Malta reel.png",
-    Germany: "reel/Nemecko reel.png",
-    Norway: "reel/Norsko reel.png",
-    Greece: "reel/Recko reel.png",
-    Spain: "reel/Spanelsko reel.png",
-    Sweden: "reel/Svedsko reel.png"
+        Austria: "reel/Rakousko reel.png",
+        Belgium: "reel/Belgie reel.png",
+        Denmark: "reel/Dansko reel.png",
+        Estonia: "reel/Estonsko reel.png",
+        Finland: "reel/Finsko reel.png",
+        France: "reel/Francie reel.png",
+        Netherlands: "reel/Holandsko reel.png",
+        Ireland: "reel/Irsko reel.png",
+        Italy: "reel/Italie reel.png",
+        Cyprus: "reel/Kypr reel.png",
+        Malta: "reel/Malta reel.png",
+        Germany: "reel/Nemecko reel.png",
+        Norway: "reel/Norsko reel.png",
+        Greece: "reel/Recko reel.png",
+        Spain: "reel/Spanelsko reel.png",
+        Sweden: "reel/Svedsko reel.png"
 };
 
 const countryNamesCz = {
-    Austria: "Rakousko",
-    Belgium: "Belgie",
-    Denmark: "Dánsko",
-    Estonia: "Estonsko",
-    Finland: "Finsko",
-    France: "Francie",
-    Netherlands: "Nizozemsko",
-    Ireland: "Irsko",
-    Italy: "Itálie",
-    Cyprus: "Kypr",
-    Malta: "Malta",
-    Germany: "Německo",
-    Norway: "Norsko",
-    Greece: "Řecko",
-    Spain: "Španělsko",
-    Sweden: "Švédsko"
+        Austria: "Rakousko",
+        Belgium: "Belgie",
+        Denmark: "Dánsko",
+        Estonia: "Estonsko",
+        Finland: "Finsko",
+        France: "Francie",
+        Netherlands: "Nizozemsko",
+        Ireland: "Irsko",
+        Italy: "Itálie",
+        Cyprus: "Kypr",
+        Malta: "Malta",
+        Germany: "Německo",
+        Norway: "Norsko",
+        Greece: "Řecko",
+        Spain: "Španělsko",
+        Sweden: "Švédsko"
 };
 
 // Bezpečnostní pojistka proti montážním/výrobním pozicím, které by AI výběr
@@ -143,1084 +143,1084 @@ const countryNamesCz = {
 const ASSEMBLY_BLOCK_REGEX = /mont|assembl/i;
 
 function isBlockedAssemblyJob(item) {
-    const value = cleanText(
-        `${item.job_title || item.title || ""} ${item.description || ""}`
-    );
-    return ASSEMBLY_BLOCK_REGEX.test(value);
+        const value = cleanText(
+                    `${item.job_title || item.title || ""} ${item.description || ""}`
+                );
+        return ASSEMBLY_BLOCK_REGEX.test(value);
 }
 
 function cleanText(value) {
-    return String(value ?? "").replace(/\s+/g, " ").trim();
+        return String(value ?? "").replace(/\s+/g, " ").trim();
 }
 
 function getCountryCz(item) {
-    const countryCode = cleanText(item.country_code);
-    const country = cleanText(item.country);
+        const countryCode = cleanText(item.country_code);
+        const country = cleanText(item.country);
 
     return (
-        countryNamesCz[countryCode] ||
-        countryNamesCz[country] ||
-        country ||
-        "Země neuvedena"
-    );
+                countryNamesCz[countryCode] ||
+                countryNamesCz[country] ||
+                country ||
+                "Země neuvedena"
+            );
 }
 
 function normalizeHousing(value) {
-    const raw = cleanText(value);
-    const lower = raw.toLowerCase();
+        const raw = cleanText(value);
+        const lower = raw.toLowerCase();
 
     if (!raw || /neuved|not specified|unknown|n\/a/.test(lower)) {
-        return "";
+                return "";
     }
 
     if (/not provided|no accommodation|bez ubyt|nezajiště/.test(lower)) {
-        return "Ubytování nezajištěno";
+                return "Ubytování nezajištěno";
     }
 
     if (/free|included|zdarma/.test(lower)) {
-        return "Ubytování zdarma";
+                return "Ubytování zdarma";
     }
 
     if (/allowance|contribution|příspěvek/.test(lower)) {
-        return "Příspěvek na ubytování";
+                return "Příspěvek na ubytování";
     }
 
     if (/provided|available|arranged|zajiště|poskyt/.test(lower)) {
-        return "Ubytování zajištěno";
+                return "Ubytování zajištěno";
     }
 
     return raw
-        .replace(/accommodation/gi, "ubytování")
-        .replace(/provided/gi, "zajištěno")
-        .replace(/available/gi, "k dispozici")
-        .replace(/free/gi, "zdarma")
-        .replace(/not specified/gi, "neuvedeno");
+            .replace(/accommodation/gi, "ubytování")
+            .replace(/provided/gi, "zajištěno")
+            .replace(/available/gi, "k dispozici")
+            .replace(/free/gi, "zdarma")
+            .replace(/not specified/gi, "neuvedeno");
 }
 
 function normalizeLanguage(value) {
-    const raw = cleanText(value);
+        const raw = cleanText(value);
 
     if (!raw || /neuved|not specified|unknown|n\/a/i.test(raw)) {
-        return "";
+                return "";
     }
 
     return raw
-        .replace(/\bEnglish\b/gi, "angličtina")
-        .replace(/\bGerman\b/gi, "němčina")
-        .replace(/\bDutch\b/gi, "nizozemština")
-        .replace(/\bSpanish\b/gi, "španělština")
-        .replace(/\bItalian\b/gi, "italština")
-        .replace(/\bFrench\b/gi, "francouzština")
-        .replace(/\bDanish\b/gi, "dánština")
-        .replace(/\bSwedish\b/gi, "švédština")
-        .replace(/\bNorwegian\b/gi, "norština")
-        .replace(/\bFinnish\b/gi, "finština")
-        .replace(/\bGreek\b/gi, "řečtina")
-        .replace(/\bEstonian\b/gi, "estonština")
-        .replace(/\bor\b/gi, "nebo");
+            .replace(/\bEnglish\b/gi, "angličtina")
+            .replace(/\bGerman\b/gi, "němčina")
+            .replace(/\bDutch\b/gi, "nizozemština")
+            .replace(/\bSpanish\b/gi, "španělština")
+            .replace(/\bItalian\b/gi, "italština")
+            .replace(/\bFrench\b/gi, "francouzština")
+            .replace(/\bDanish\b/gi, "dánština")
+            .replace(/\bSwedish\b/gi, "švédština")
+            .replace(/\bNorwegian\b/gi, "norština")
+            .replace(/\bFinnish\b/gi, "finština")
+            .replace(/\bGreek\b/gi, "řečtina")
+            .replace(/\bEstonian\b/gi, "estonština")
+            .replace(/\bor\b/gi, "nebo");
 }
 
 function formatMonthlyCzkSalary(...values) {
-    const candidates = values.map(cleanText).filter(Boolean);
+        const candidates = values.map(cleanText).filter(Boolean);
 
     for (const candidate of candidates) {
-        if (/neuved|not specified|unknown|n\/a/i.test(candidate)) {
-            continue;
-        }
+                if (/neuved|not specified|unknown|n\/a/i.test(candidate)) {
+                                continue;
+                }
 
-        let salary = candidate;
+            let salary = candidate;
 
-        const czkMatch = salary.match(
-            /(?:cca\s*)?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?\s*(?:Kč|CZK)(?:\s*(?:brutto|netto|hrubého|čistého|hrubá|čistá))?(?:\s*(?:\/|za)?\s*(?:měsíc|měsíčně|month))?/i
-        );
+            const czkMatch = salary.match(
+                            /(?:cca\s*)?\d{1,3}(?:[ .]\d{3})*(?:,\d+)?\s*(?:Kč|CZK)(?:\s*(?:brutto|netto|hrubého|čistého|hrubá|čistá))?(?:\s*(?:\/|za)?\s*(?:měsíc|měsíčně|month))?/i
+                        );
 
-        if (czkMatch) {
-            salary = czkMatch[0];
-        } else if (/^\d[\d\s.,]*$/.test(salary)) {
-            const numeric = Number(
-                salary.replace(/\s/g, "").replace(",", ".")
-            );
+            if (czkMatch) {
+                            salary = czkMatch[0];
+            } else if (/^\d[\d\s.,]*$/.test(salary)) {
+                            const numeric = Number(
+                                                salary.replace(/\s/g, "").replace(",", ".")
+                                            );
 
-            if (Number.isFinite(numeric)) {
-                salary =
-                    `${Math.round(numeric).toLocaleString("cs-CZ")} Kč`;
+                    if (Number.isFinite(numeric)) {
+                                        salary =
+                                                                `${Math.round(numeric).toLocaleString("cs-CZ")} Kč`;
+                    }
             }
-        }
 
-        if (!/(?:Kč|CZK)/i.test(salary)) {
-            continue;
-        }
+            if (!/(?:Kč|CZK)/i.test(salary)) {
+                            continue;
+            }
 
-        salary = salary
-            .replace(/\bCZK\b/gi, "Kč")
-            .replace(/\bbrutto\b/gi, "hrubého")
-            .replace(/\bnetto\b/gi, "čistého")
-            .replace(/\bmonth\b/gi, "měsíc")
-            .replace(/měsíčně/gi, "měsíc")
-            .replace(/\s*(?:\/|za)?\s*měsíc/gi, " / měsíc")
-            .replace(/\s+/g, " ")
-            .trim();
+            salary = salary
+                    .replace(/\bCZK\b/gi, "Kč")
+                    .replace(/\bbrutto\b/gi, "hrubého")
+                    .replace(/\bnetto\b/gi, "čistého")
+                    .replace(/\bmonth\b/gi, "měsíc")
+                    .replace(/měsíčně/gi, "měsíc")
+                    .replace(/\s*(?:\/|za)?\s*měsíc/gi, " / měsíc")
+                    .replace(/\s+/g, " ")
+                    .trim();
 
-        if (!/měsíc/i.test(salary)) {
-            salary += " / měsíc";
-        }
+            if (!/měsíc/i.test(salary)) {
+                            salary += " / měsíc";
+            }
 
-        if (!/^cca\b/i.test(salary)) {
-            salary = `cca ${salary}`;
-        }
+            if (!/^cca\b/i.test(salary)) {
+                            salary = `cca ${salary}`;
+            }
 
-        return salary;
+            return salary;
     }
 
     return "";
 }
 
 function createWrappedLines(
-    ctx,
-    text,
-    maxWidth,
-    fontSize,
-    fontFamily
-) {
-    ctx.font = `bold ${fontSize}px ${fontFamily}`;
+        ctx,
+        text,
+        maxWidth,
+        fontSize,
+        fontFamily
+    ) {
+        ctx.font = `bold ${fontSize}px ${fontFamily}`;
 
     const words = cleanText(text)
-        .split(" ")
-        .filter(Boolean);
+            .split(" ")
+            .filter(Boolean);
 
     const lines = [];
-    let line = "";
+        let line = "";
 
     for (const word of words) {
-        const test = line ? `${line} ${word}` : word;
+                const test = line ? `${line} ${word}` : word;
 
-        if (
-            ctx.measureText(test).width <= maxWidth ||
-            !line
-        ) {
-            line = test;
-        } else {
-            lines.push(line);
-            line = word;
-        }
+            if (
+                            ctx.measureText(test).width <= maxWidth ||
+                            !line
+                        ) {
+                            line = test;
+            } else {
+                            lines.push(line);
+                            line = word;
+            }
     }
 
     if (line) {
-        lines.push(line);
+                lines.push(line);
     }
 
     return lines;
 }
 
 function fitText(
-    ctx,
-    text,
-    maxWidth,
-    startSize,
-    minSize,
-    maxLines,
-    fontFamily
-) {
-    for (
-        let size = startSize;
-        size >= minSize;
-        size--
+        ctx,
+        text,
+        maxWidth,
+        startSize,
+        minSize,
+        maxLines,
+        fontFamily
     ) {
-        const lines = createWrappedLines(
-            ctx,
-            text,
-            maxWidth,
-            size,
-            fontFamily
-        );
+        for (
+                    let size = startSize;
+                    size >= minSize;
+                    size--
+                ) {
+                    const lines = createWrappedLines(
+                                    ctx,
+                                    text,
+                                    maxWidth,
+                                    size,
+                                    fontFamily
+                                );
 
-        if (lines.length <= maxLines) {
-            return {
-                size,
-                lines
-            };
+            if (lines.length <= maxLines) {
+                            return {
+                                                size,
+                                                lines
+                            };
+            }
         }
-    }
 
     return {
-        size: minSize,
-        lines: createWrappedLines(
-            ctx,
-            text,
-            maxWidth,
-            minSize,
-            fontFamily
-        )
+                size: minSize,
+                lines: createWrappedLines(
+                                ctx,
+                                text,
+                                maxWidth,
+                                minSize,
+                                fontFamily
+                            )
     };
 }
 
 function drawStrokeBlock(ctx, options) {
-    const {
-        text,
-        x,
-        y,
-        maxWidth,
-        startSize,
-        minSize,
-        maxLines,
-        lineWidth,
-        lineHeight = 1.12
-    } = options;
+        const {
+                    text,
+                    x,
+                    y,
+                    maxWidth,
+                    startSize,
+                    minSize,
+                    maxLines,
+                    lineWidth,
+                    lineHeight = 1.12
+        } = options;
 
     const fitted = fitText(
-        ctx,
-        text,
-        maxWidth,
-        startSize,
-        minSize,
-        maxLines,
-        "Bebas Neue"
-    );
+                ctx,
+                text,
+                maxWidth,
+                startSize,
+                minSize,
+                maxLines,
+                "Bebas Neue"
+            );
 
     const actualLines = fitted.lines;
 
     ctx.font =
-        `bold ${fitted.size}px Bebas Neue`;
+                `bold ${fitted.size}px Bebas Neue`;
 
     ctx.textAlign = "left";
-    ctx.textBaseline = "top";
-    ctx.lineJoin = "round";
-    ctx.lineCap = "round";
-    ctx.miterLimit = 2;
+        ctx.textBaseline = "top";
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.miterLimit = 2;
 
     actualLines.forEach((line, index) => {
-        const lineY =
-            y +
-            index *
-            fitted.size *
-            lineHeight;
+                const lineY =
+                                y +
+                                index *
+                                fitted.size *
+                                lineHeight;
 
-        ctx.strokeStyle = "#000000";
-        ctx.lineWidth = lineWidth;
+                                ctx.strokeStyle = "#000000";
+                ctx.lineWidth = lineWidth;
 
-        ctx.strokeText(
-            line,
-            x,
-            lineY
-        );
+                                ctx.strokeText(
+                                                line,
+                                                x,
+                                                lineY
+                                            );
 
-        ctx.fillStyle = "#ffffff";
+                                ctx.fillStyle = "#ffffff";
 
-        ctx.fillText(
-            line,
-            x,
-            lineY
-        );
+                                ctx.fillText(
+                                                line,
+                                                x,
+                                                lineY
+                                            );
     });
 
     return (
-        actualLines.length *
-        fitted.size *
-        lineHeight
-    );
+                actualLines.length *
+                fitted.size *
+                lineHeight
+            );
 }
 
 function drawHeroBlock(ctx, options) {
-    const {
-        text,
-        centerX,
-        topY,
-        maxWidth,
-        startSize,
-        minSize,
-        maxLines,
-        rotation = 0,
-        lineHeight = 1.05,
-        outline = false
-    } = options;
+        const {
+                    text,
+                    centerX,
+                    topY,
+                    maxWidth,
+                    startSize,
+                    minSize,
+                    maxLines,
+                    rotation = 0,
+                    lineHeight = 1.05,
+                    outline = false
+        } = options;
 
     const fitted = fitText(
-        ctx,
-        text,
-        maxWidth,
-        startSize,
-        minSize,
-        maxLines,
-        "serif"
-    );
+                ctx,
+                text,
+                maxWidth,
+                startSize,
+                minSize,
+                maxLines,
+                "serif"
+            );
 
     const actualLines = fitted.lines;
 
     ctx.save();
 
     ctx.translate(
-        centerX,
-        topY
-    );
+                centerX,
+                topY
+            );
 
     ctx.rotate(rotation);
 
     ctx.font =
-        `bold ${fitted.size}px serif`;
+                `bold ${fitted.size}px serif`;
 
     ctx.fillStyle = "#000000";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "top";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
 
     actualLines.forEach((line, index) => {
-        const lineY = index * fitted.size * lineHeight;
-        if (outline) {
-            ctx.lineJoin = "round";
-            ctx.miterLimit = 2;
-            ctx.strokeStyle = "#ffffff";
-            ctx.lineWidth = Math.max(0.6, fitted.size * 0.02);
-            ctx.strokeText(line, 0, lineY);
-        }
-        ctx.fillText(line, 0, lineY);
+                const lineY = index * fitted.size * lineHeight;
+                if (outline) {
+                                ctx.lineJoin = "round";
+                                ctx.miterLimit = 2;
+                                ctx.strokeStyle = "#ffffff";
+                                ctx.lineWidth = Math.max(0.6, fitted.size * 0.02);
+                                ctx.strokeText(line, 0, lineY);
+                }
+                ctx.fillText(line, 0, lineY);
     });
 
     ctx.restore();
 
     return (
-        actualLines.length *
-        fitted.size *
-        lineHeight
-    );
+                actualLines.length *
+                fitted.size *
+                lineHeight
+            );
 }
 
 async function createHeroImage(
-    job,
-    templateFile
-) {
-    const applyOutline = templateFile === heroTemplates.Ireland || templateFile === heroTemplates.Italy;
+        job,
+        templateFile
+    ) {
+        const applyOutline = templateFile === heroTemplates.Ireland || templateFile === heroTemplates.Italy;
 
     const fullPath = path.join(
-        TEMPLATE_FOLDER,
-        templateFile
-    );
+                TEMPLATE_FOLDER,
+                templateFile
+            );
 
     if (!fs.existsSync(fullPath)) {
-        throw new Error(
-            `Template not found: ${fullPath}`
-        );
+                throw new Error(
+                                `Template not found: ${fullPath}`
+                            );
     }
 
     const template =
-        await loadImage(fullPath);
+                await loadImage(fullPath);
 
     const canvas = createCanvas(
-        template.width,
-        template.height
-    );
+                template.width,
+                template.height
+            );
 
     const ctx =
-        canvas.getContext("2d");
+                canvas.getContext("2d");
 
     ctx.drawImage(
-        template,
-        0,
-        0
-    );
+                template,
+                0,
+                0
+            );
 
     const scaleX =
-        template.width / 1080;
+                template.width / 1080;
 
     const scaleY =
-        template.height / 1350;
+                template.height / 1350;
 
     const fontScale =
-        Math.min(scaleX, scaleY);
+                Math.min(scaleX, scaleY);
 
     const jobTitle = cleanText(
-        job.job_title ||
-        job.title ||
-        "Pracovní pozice"
-    );
+                job.job_title ||
+                job.title ||
+                "Pracovní pozice"
+            );
 
     const city = cleanText(
-        job.city
-    );
+                job.city
+            );
 
     const housing = normalizeHousing(
-        job.housing ||
-        job.accommodation
-    );
+                job.housing ||
+                job.accommodation
+            );
 
     const salary =
-        formatMonthlyCzkSalary(
-            job.salary_czk_month,
-            job.monthly_salary_czk,
-            job.salary_month_czk,
-            job.salary_monthly_czk,
-            job.salary
-        );
+                formatMonthlyCzkSalary(
+                                job.salary_czk_month,
+                                job.monthly_salary_czk,
+                                job.salary_month_czk,
+                                job.salary_monthly_czk,
+                                job.salary
+                            );
 
     const titleTop =
-        120 * scaleY;
+                120 * scaleY;
 
     const titleHeight =
-        drawHeroBlock(ctx, {
-            text: jobTitle,
+                drawHeroBlock(ctx, {
+                                text: jobTitle,
 
-            centerX:
-                540 * scaleX,
+                                centerX:
+                                                    540 * scaleX,
 
-            topY:
-                titleTop,
+                                topY:
+                                                    titleTop,
 
-            maxWidth:
-                720 * scaleX,
+                                maxWidth:
+                                                    720 * scaleX,
 
-            startSize:
-                68 * fontScale,
+                                startSize:
+                                                    68 * fontScale,
 
-            minSize:
-                30 * fontScale,
+                                minSize:
+                                                    30 * fontScale,
 
-            maxLines: 2,
+                                maxLines: 2,
 
-            lineHeight: 1.02,
+                                lineHeight: 1.02,
 
-            outline: applyOutline
-        });
+                                outline: applyOutline
+                });
 
 if (city) {
-        drawHeroBlock(ctx, {
-        text: city,
+            drawHeroBlock(ctx, {
+                        text: city,
 
-        centerX:
-            540 * scaleX,
+                        centerX:
+                                        540 * scaleX,
 
-        topY:
-            titleTop +
-            titleHeight +
-            10 * scaleY,
+                        topY:
+                                        titleTop +
+                                        titleHeight +
+                                        10 * scaleY,
 
-        maxWidth:
-            560 * scaleX,
+                        maxWidth:
+                                        560 * scaleX,
 
-        startSize:
-            38 * fontScale,
+                        startSize:
+                                        38 * fontScale,
 
-        minSize:
-            23 * fontScale,
+                        minSize:
+                                        23 * fontScale,
 
-        maxLines: 1,
+                        maxLines: 1,
 
-        outline: applyOutline
-    });
-    }
+                        outline: applyOutline
+            });
+}
 
     const housingTop =
-        305 * scaleY;
+                305 * scaleY;
 
     let housingHeight = 0;
-    if (housing) {
-        housingHeight =
-        drawHeroBlock(ctx, {
-            text: housing,
+        if (housing) {
+                    housingHeight =
+                                drawHeroBlock(ctx, {
+                                                text: housing,
 
-            centerX:
-                810 * scaleX,
+                                                centerX:
+                                                                    810 * scaleX,
 
-            topY:
-                housingTop,
+                                                topY:
+                                                                    housingTop,
 
-            maxWidth:
-                430 * scaleX,
+                                                maxWidth:
+                                                                    430 * scaleX,
 
-            startSize:
-                48 * fontScale,
+                                                startSize:
+                                                                    48 * fontScale,
 
-            minSize:
-                27 * fontScale,
+                                                minSize:
+                                                                    27 * fontScale,
 
-            maxLines: 2,
+                                                maxLines: 2,
 
-            rotation: -0.16,
+                                                rotation: -0.16,
 
-            lineHeight: 1.02,
+                                                lineHeight: 1.02,
 
-            outline: applyOutline
-        });
-    }
+                                                outline: applyOutline
+                                });
+        }
 
 if (salary) {
-        drawHeroBlock(ctx, {
-        text: salary,
+            drawHeroBlock(ctx, {
+                        text: salary,
 
-        centerX:
-            805 * scaleX,
+                        centerX:
+                                        805 * scaleX,
 
-        topY:
-            housingTop +
-            housingHeight +
-            18 * scaleY,
+                        topY:
+                                        housingTop +
+                                        housingHeight +
+                                        18 * scaleY,
 
-        maxWidth:
-            440 * scaleX,
+                        maxWidth:
+                                        440 * scaleX,
 
-        startSize:
-            38 * fontScale,
+                        startSize:
+                                        38 * fontScale,
 
-        minSize:
-            23 * fontScale,
+                        minSize:
+                                        23 * fontScale,
 
-        maxLines: 2,
+                        maxLines: 2,
 
-        rotation: -0.04,
+                        rotation: -0.04,
 
-        outline: applyOutline
-    });
-    }
+                        outline: applyOutline
+            });
+}
 
     return canvas.toBuffer(
-        "image/png"
-    );
+                "image/png"
+            );
 }
 
 async function createReelImage(
-    reel,
-    templateFile
-) {
-    const fullPath = path.join(
-        TEMPLATE_FOLDER,
+        reel,
         templateFile
-    );
+    ) {
+        const fullPath = path.join(
+                    TEMPLATE_FOLDER,
+                    templateFile
+                );
 
     if (!fs.existsSync(fullPath)) {
-        throw new Error(
-            `Template not found: ${fullPath}`
-        );
+                throw new Error(
+                                `Template not found: ${fullPath}`
+                            );
     }
 
     const template =
-        await loadImage(fullPath);
+                await loadImage(fullPath);
 
     const canvas = createCanvas(
-        template.width,
-        template.height
-    );
+                template.width,
+                template.height
+            );
 
     const ctx =
-        canvas.getContext("2d");
+                canvas.getContext("2d");
 
     ctx.drawImage(
-        template,
-        0,
-        0
-    );
+                template,
+                0,
+                0
+            );
 
     const startX = 90;
-    const startY = 220;
+        const startY = 220;
 
     const maxWidth =
-        template.width -
-        startX * 2;
+                template.width -
+                startX * 2;
 
     const country =
-        getCountryCz(reel)
-            .toUpperCase();
+                getCountryCz(reel)
+                .toUpperCase();
 
     const jobTitle =
-        cleanText(
-            reel.job_title ||
-            reel.title ||
-            "Pracovní pozice"
-        ).toUpperCase();
+                cleanText(
+                                reel.job_title ||
+                                reel.title ||
+                                "Pracovní pozice"
+                            ).toUpperCase();
 
     const salary =
-        formatMonthlyCzkSalary(
-            reel.salary_czk_month,
-            reel.monthly_salary_czk,
-            reel.salary_month_czk,
-            reel.salary_monthly_czk,
-            reel.salary
-        ).toUpperCase();
+                formatMonthlyCzkSalary(
+                                reel.salary_czk_month,
+                                reel.monthly_salary_czk,
+                                reel.salary_month_czk,
+                                reel.salary_monthly_czk,
+                                reel.salary
+                            ).toUpperCase();
 
     const housing =
-        normalizeHousing(
-            reel.housing ||
-            reel.accommodation
-        ).toUpperCase();
+                normalizeHousing(
+                                reel.housing ||
+                                reel.accommodation
+                            ).toUpperCase();
 
     const language =
-        normalizeLanguage(
-            reel.language
-        ).toUpperCase();
+                normalizeLanguage(
+                                reel.language
+                            ).toUpperCase();
 
     const countrySize = 135;
 
     const countryHeight =
-        drawStrokeBlock(ctx, {
-            text: country,
+                drawStrokeBlock(ctx, {
+                                text: country,
 
-            x: startX,
-            y: startY,
+                                x: startX,
+                                y: startY,
 
-            maxWidth,
+                                maxWidth,
 
-            startSize:
-                countrySize,
+                                startSize:
+                                                    countrySize,
 
-            minSize: 90,
-            maxLines: 1,
-            lineWidth: 4
-        });
+                                minSize: 90,
+                                maxLines: 1,
+                                lineWidth: 4
+                });
 
     let currentY =
-        startY +
-        countryHeight +
-        115;
+                startY +
+                countryHeight +
+                115;
 
     currentY +=
-        drawStrokeBlock(ctx, {
-            text: jobTitle,
+                drawStrokeBlock(ctx, {
+                                text: jobTitle,
 
-            x: startX,
-            y: currentY,
+                                x: startX,
+                                y: currentY,
 
-            maxWidth,
+                                maxWidth,
 
-            startSize: 82,
-            minSize: 38,
-            maxLines: 3,
-            lineWidth: 3
-        }) + 30;
+                                startSize: 82,
+                                minSize: 38,
+                                maxLines: 3,
+                                lineWidth: 3
+                }) + 30;
 
 if (salary) {
-        currentY +=
-        drawStrokeBlock(ctx, {
-            text: salary,
+            currentY +=
+                        drawStrokeBlock(ctx, {
+                                        text: salary,
 
-            x: startX,
-            y: currentY,
+                                        x: startX,
+                                        y: currentY,
 
-            maxWidth,
+                                        maxWidth,
 
-            startSize: 68,
-            minSize: 38,
-            maxLines: 2,
-            lineWidth: 3
-        }) + 24;
-    }
+                                        startSize: 68,
+                                        minSize: 38,
+                                        maxLines: 2,
+                                        lineWidth: 3
+                        }) + 24;
+}
 
 if (housing) {
-        currentY +=
-        drawStrokeBlock(ctx, {
-            text: housing,
+            currentY +=
+                        drawStrokeBlock(ctx, {
+                                        text: housing,
 
-            x: startX,
-            y: currentY,
+                                        x: startX,
+                                        y: currentY,
 
-            maxWidth,
+                                        maxWidth,
 
-            startSize: 48,
-            minSize: 30,
-            maxLines: 2,
-            lineWidth: 2
-        }) + 12;
-    }
+                                        startSize: 48,
+                                        minSize: 30,
+                                        maxLines: 2,
+                                        lineWidth: 2
+                        }) + 12;
+}
 
 if (language) {
-        drawStrokeBlock(ctx, {
-        text: language,
+            drawStrokeBlock(ctx, {
+                        text: language,
 
-        x: startX,
-        y: currentY,
+                        x: startX,
+                        y: currentY,
 
-        maxWidth,
+                        maxWidth,
 
-        startSize: 48,
-        minSize: 30,
-        maxLines: 2,
-        lineWidth: 2
-    });
-    }
+                        startSize: 48,
+                        minSize: 30,
+                        maxLines: 2,
+                        lineWidth: 2
+            });
+}
 
     return canvas.toBuffer(
-        "image/png"
-    );
+                "image/png"
+            );
 }
 
 async function uploadBuffer(buffer) {
-    return await new Promise(
-        (resolve, reject) => {
-            const stream =
-                cloudinary.uploader
-                    .upload_stream(
-                        {
-                            folder:
-                                "PracovniTipyAI"
-                        },
-                        (err, result) => {
-                            if (err) {
-                                return reject(err);
-                            }
+        return await new Promise(
+                    (resolve, reject) => {
+                                    const stream =
+                                                        cloudinary.uploader
+                                            .upload_stream(
+                                                {
+                                                                                folder:
+                                                                                                                    "PracovniTipyAI"
+                                                },
+                                                                        (err, result) => {
+                                                                                                        if (err) {
+                                                                                                                                            return reject(err);
+                                                                                                            }
 
-                            resolve(
-                                result.secure_url
-                            );
-                        }
-                    );
+                                                                            resolve(
+                                                                                                                result.secure_url
+                                                                                                            );
+                                                                            }
+                                                                    );
 
-            stream.end(buffer);
-        }
-    );
+                        stream.end(buffer);
+                    }
+                );
 }
 
 async function createReel(imageBuffer) {
-    const id = Date.now();
+        const id = Date.now();
 
     const imagePath = path.join(
-        os.tmpdir(),
-        `${id}.png`
-    );
+                os.tmpdir(),
+                `${id}.png`
+            );
 
     const videoPath = path.join(
-        os.tmpdir(),
-        `${id}.mp4`
-    );
+                os.tmpdir(),
+                `${id}.mp4`
+            );
 
     fs.writeFileSync(
-        imagePath,
-        imageBuffer
-    );
+                imagePath,
+                imageBuffer
+            );
 
     await new Promise(
-        (resolve, reject) => {
-            ffmpeg()
-                .input(imagePath)
-                .inputOptions([
-                    "-loop",
-                    "1",
-                    "-framerate",
-                    "25"
-                ])
-                .videoCodec("libx264")
-                .outputOptions([
-                    "-t",
-                    "8",
+                (resolve, reject) => {
+                                ffmpeg()
+                                    .input(imagePath)
+                                    .inputOptions([
+                                                            "-loop",
+                                                            "1",
+                                                            "-framerate",
+                                                            "25"
+                                                        ])
+                                    .videoCodec("libx264")
+                                    .outputOptions([
+                                                            "-t",
+                                                            "8",
 
-                    "-vf",
-                    "scale=720:1280",
+                                                            "-vf",
+                                                            "scale=720:1280",
 
-                    "-pix_fmt",
-                    "yuv420p",
+                                                            "-pix_fmt",
+                                                            "yuv420p",
 
-                    "-preset",
-                    "ultrafast",
+                                                            "-preset",
+                                                            "ultrafast",
 
-                    "-threads",
-                    "1",
+                                                            "-threads",
+                                                            "1",
 
-                    "-movflags",
-                    "+faststart"
-                ])
-                .on(
-                    "error",
-                    reject
-                )
-                .on(
-                    "end",
-                    resolve
-                )
-                .save(videoPath);
-        }
-    );
+                                                            "-movflags",
+                                                            "+faststart"
+                                                        ])
+                                    .on(
+                                                            "error",
+                                                            reject
+                                                        )
+                                    .on(
+                                                            "end",
+                                                            resolve
+                                                        )
+                                    .save(videoPath);
+                }
+            );
 
     const result =
-        await cloudinary.uploader.upload(
-            videoPath,
-            {
-                resource_type:
-                    "video",
+                await cloudinary.uploader.upload(
+                                videoPath,
+                    {
+                                        resource_type:
+                                                                "video",
 
-                folder:
-                    "PracovniTipyAI/reels"
-            }
-        );
+                                        folder:
+                                                                "PracovniTipyAI/reels"
+                    }
+                            );
 
     if (
-        fs.existsSync(imagePath)
-    ) {
-        fs.unlinkSync(imagePath);
+                fs.existsSync(imagePath)
+            ) {
+                fs.unlinkSync(imagePath);
     }
 
     if (
-        fs.existsSync(videoPath)
-    ) {
-        fs.unlinkSync(videoPath);
+                fs.existsSync(videoPath)
+            ) {
+                fs.unlinkSync(videoPath);
     }
 
     return result.secure_url;
 }
 
 app.get("/", (req, res) => {
-    res.send(
-        "PracovniTipyAI běží"
-    );
+        res.send(
+                    "PracovniTipyAI běží"
+                );
 });
 
 app.post(
-    "/generate",
-    async (req, res) => {
-        const rawJobs =
-            Array.isArray(
-                req.body.jobs
-            )
-                ? req.body.jobs
-                : [];
+        "/generate",
+        async (req, res) => {
+                    const rawJobs =
+                                    Array.isArray(
+                                                        req.body.jobs
+                                                    )
+                            ? req.body.jobs
+                                        : [];
 
-        const rawReels =
-            Array.isArray(
-                req.body.reels
-            )
-                ? req.body.reels
-                : [];
+            const rawReels =
+                            Array.isArray(
+                                                req.body.reels
+                                            )
+                            ? req.body.reels
+                                : [];
 
-        if (
-            rawJobs.length === 0 &&
-            rawReels.length === 0
-        ) {
-            return res
-                .status(400)
-                .json({
-                    success: false,
+            if (
+                            rawJobs.length === 0 &&
+                            rawReels.length === 0
+                        ) {
+                            return res
+                                .status(400)
+                                .json({
+                                                        success: false,
 
-                    error:
-                        "Musí být předáno jobs nebo reels"
-                });
-        }
-
-        // Pojistka proti montážním/výrobním pozicím + tvrdý strop na počet
-        // příspěvků, které se skutečně publikují. AI umí vrátit až 15 jobs
-        // (má sloužit jako zásoba náhradních kandidátů), ale na HeroHero má
-        // jít jen finálních 5 a na Instagram jen 2 reels — dřív tenhle výběr
-        // nikde neproběhl a publikovalo by se všech až 15 najednou.
-        const HEROHERO_LIMIT = 5;
-        const INSTAGRAM_LIMIT = 2;
-
-        const jobs = rawJobs
-            .filter(job => !isBlockedAssemblyJob(job))
-            .slice(0, HEROHERO_LIMIT);
-
-        const reels = rawReels
-            .filter(reel => !isBlockedAssemblyJob(reel))
-            .slice(0, INSTAGRAM_LIMIT);
-
-        try {
-            const herohero = [];
-            const instagram = [];
-
-            for (const job of jobs) {
-                const template =
-                    heroTemplates[
-                        job.country_code
-                    ];
-
-                if (!template) {
-                    continue;
-                }
-
-                const imageBuffer =
-                    await createHeroImage(
-                        job,
-                        template
-                    );
-
-                const imageUrl =
-                    await uploadBuffer(
-                        imageBuffer
-                    );
-
-                herohero.push({
-                    ...job,
-
-                    postId:
-                        job.postId,
-
-                    categoryId:
-                        job.categoryId,
-
-                    title:
-                        job.job_title,
-
-                    text:
-                        job.description,
-
-                    textHtml:
-                        `<p>${
-                            (
-                                job.description ||
-                                ""
-                            ).replace(
-                                /\n/g,
-                                "</p><p>"
-                            )
-                        }</p>`,
-
-                    imageUrl,
-
-                    width: 1080,
-                    height: 1350,
-
-                    fileName:
-                        `${job.country} Herohero.png`,
-
-                    fileSize: 0,
-
-                    previewLevel:
-                        "FIRST_LINES",
-
-                    isAgeRestricted:
-                        false,
-
-                    isSponsored:
-                        false,
-
-                    isExcludedFromRss:
-                        false
-                });
+                                                        error:
+                                                                                    "Musí být předáno jobs nebo reels"
+                                });
             }
 
-            for (
-                const [
-                    reelIndex,
-                    reel
-                ] of reels.entries()
-            ) {
-                const template =
-                    reelTemplates[
-                        reel.country_code
-                    ];
+            // Pojistka proti montážním/výrobním pozicím + tvrdý strop na počet
+            // příspěvků, které se skutečně publikují. AI umí vrátit až 15 jobs
+            // (má sloužit jako zásoba náhradních kandidátů), ale na HeroHero má
+            // jít jen finálních 5 a na Instagram jen 2 reels — dřív tenhle výběr
+            // nikde neproběhl a publikovalo by se všech až 15 najednou.
+            const HEROHERO_LIMIT = 5;
+                    const INSTAGRAM_LIMIT = 2;
 
-                if (!template) {
-                    continue;
-                }
+            const jobs = rawJobs
+                        .filter(job => !isBlockedAssemblyJob(job))
+                        .slice(0, HEROHERO_LIMIT);
 
-                const matchingJob =
-                    jobs[reelIndex] ||
-                    {};
+            const reels = rawReels
+                        .filter(reel => !isBlockedAssemblyJob(reel))
+                        .slice(0, INSTAGRAM_LIMIT);
 
-                const reelForImage = {
-                    ...reel,
+            try {
+                            const herohero = [];
+                            const instagram = [];
 
-                    salary_czk_month:
-                        reel.salary_czk_month ||
-                        matchingJob
-                            .salary_czk_month ||
-                        matchingJob
-                            .monthly_salary_czk ||
-                        matchingJob
-                            .salary_month_czk ||
-                        matchingJob
-                            .salary_monthly_czk ||
-                        matchingJob
-                            .salary ||
-                        reel.salary,
+                        for (const job of jobs) {
+                                            const template =
+                                                                    heroTemplates[
+                                                                        job.country_code
+                                                                    ];
 
-                    housing:
-                        reel.housing ||
-                        reel.accommodation ||
-                        matchingJob.housing ||
-                        matchingJob
-                            .accommodation,
+                                if (!template) {
+                                                        continue;
+                                }
 
-                    language:
-                        reel.language ||
-                        matchingJob.language
-                };
+                                const imageBuffer =
+                                                        await createHeroImage(
+                                                                                    job,
+                                                                                    template
+                                                                                );
 
-                const imageBuffer =
-                    await createReelImage(
-                        reelForImage,
-                        template
-                    );
+                                const imageUrl =
+                                                        await uploadBuffer(
+                                                                                    imageBuffer
+                                                                                );
 
-                const videoUrl =
-                    await createReel(
-                        imageBuffer
-                    );
+                                herohero.push({
+                                                        ...job,
 
-                instagram.push({
-                    ...reel,
-                    caption:
-                        typeof reel.caption === "string" && reel.caption.trim()
-                            ? reel.caption
-                            : `${reel.herohero_title || reel.job_title || reel.title || "Nova pracovni nabidka ze zahranici"} \n\nPro vice praci ze zahranici napis do komentare "${reel.country || ""}".`,
-                    videoUrl,
-                });
+                                                        postId:
+                                                            job.postId,
+
+                                                        categoryId:
+                                                                                    job.categoryId,
+
+                                                        title:
+                                                                                    job.job_title,
+
+                                                        text:
+                                                                                    job.description,
+
+                                                        textHtml:
+                                                                                    `<p>${
+                                                                                                                    (
+                                                                                                                                                        job.description ||
+                                                                                                                                                        ""
+                                                                                                                                                    ).replace(
+                                                                                                                                                                                        /\n/g,
+                                                                                                                                                                                        "</p><p>"
+                                                                                                                                                                                    )
+                                                                                        }</p>`,
+
+                                                        imageUrl,
+
+                                                        width: 1080,
+                                                        height: 1350,
+
+                                                        fileName:
+                                                                                    `${job.country} Herohero.png`,
+
+                                                        fileSize: 0,
+
+                                                        previewLevel:
+                                                                                    "FIRST_LINES",
+
+                                                        isAgeRestricted:
+                                                                                    false,
+
+                                                        isSponsored:
+                                                                                    false,
+
+                                                        isExcludedFromRss:
+                                                                                    false
+                                });
+                        }
+
+                        for (
+                                            const [
+                                                                    reelIndex,
+                                                                    reel
+                                                                ] of reels.entries()
+                                        ) {
+                                            const template =
+                                                                    reelTemplates[
+                                                                        reel.country_code
+                                                                    ];
+
+                                if (!template) {
+                                                        continue;
+                                }
+
+                                const matchingJob =
+                                                        jobs[reelIndex] ||
+                                {};
+
+                                const reelForImage = {
+                                                        ...reel,
+
+                                                        salary_czk_month:
+                                                            reel.salary_czk_month ||
+                                                                                    matchingJob
+                                                                .salary_czk_month ||
+                                                                                    matchingJob
+                                                                .monthly_salary_czk ||
+                                                                                    matchingJob
+                                                                .salary_month_czk ||
+                                                                                    matchingJob
+                                                                .salary_monthly_czk ||
+                                                                                    matchingJob
+                                                                .salary ||
+                                                                                    reel.salary,
+
+                                                        housing:
+                                                                                    reel.housing ||
+                                                                                    reel.accommodation ||
+                                                                                    matchingJob.housing ||
+                                                                                    matchingJob
+                                                                .accommodation,
+
+                                                        language:
+                                                                                    reel.language ||
+                                                                                    matchingJob.language
+                                };
+
+                                const imageBuffer =
+                                                        await createReelImage(
+                                                                                    reelForImage,
+                                                                                    template
+                                                                                );
+
+                                const videoUrl =
+                                                        await createReel(
+                                                                                    imageBuffer
+                                                                                );
+
+                                instagram.push({
+                                                        ...reel,
+                                                        caption:
+                                                            typeof reel.caption === "string" && reel.caption.trim()
+                                                                ? reel.caption
+                                                                                        : `${reel.herohero_title || reel.job_title || reel.title || "Nova pracovni nabidka ze zahranici"} \n\nPro vice praci ze zahranici napis do komentare "${reel.country || ""}".`,
+                                                        videoUrl,
+                                });
+                        }
+
+                        res.json({
+                                            success: true,
+                                            herohero,
+                                            instagram
+                        });
+            } catch (err) {
+                            console.error("[/generate ERROR]", err.stack || err.message);
+
+                        res.status(500).json({
+                                            success: false,
+                                            error: err.message
+                        });
             }
-
-            res.json({
-                success: true,
-                herohero,
-                instagram
-            });
-        } catch (err) {
-            console.error("[/generate ERROR]", err.stack || err.message);
-
-            res.status(500).json({
-                success: false,
-                error: err.message
-            });
         }
-    }
-);
+    );
 
 app.post(
-    "/publishHeroHero",
-    async (req, res) => {
-        const publishHeroHero =
-            require(
-                "./publishHeroHero"
-            );
+        "/publishHeroHero",
+        async (req, res) => {
+                    const publishHeroHero =
+                                    require(
+                                                        "./publishHeroHero"
+                                                    );
 
-        try {
-            const result =
-                await publishHeroHero(
-                    req.body
-                );
+            try {
+                            const result =
+                                                await publishHeroHero(
+                                                                        req.body
+                                                                    );
 
-            res.json({
-                success: true,
-                result
-            });
-        } catch (e) {
-            console.error("[/publishHeroHero ERROR]", e.stack || e.message);
+                        res.json({
+                                            success: true,
+                                            result
+                        });
+            } catch (e) {
+                            console.error("[/publishHeroHero ERROR]", e.stack || e.message);
 
-            res.status(500).json({
-                success: false,
-                error: e.message
-            });
+                        res.status(500).json({
+                                            success: false,
+                                            error: e.message
+                        });
+            }
         }
-    }
-);
+    );
 
 app.post(
-    "/herohero/upload",
-    upload.single("image"),
-    async (req, res) => {
-        res.json({
-            success: true
-        });
-    }
-);
+        "/herohero/upload",
+        upload.single("image"),
+        async (req, res) => {
+                    res.json({
+                                    success: true
+                    });
+        }
+    );
 
 // ==================== Privacy Policy (required for Meta App Publish) ====================
 
 app.get("/privacy", (req, res) => {
-    res.type("html").send(`<!DOCTYPE html>
-<html lang="cs">
-<head>
-<meta charset="UTF-8">
-<title>Zásady ochrany osobních údajů — Pracovní Tipy</title>
-<style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{font-size:1.5em}</style>
-</head>
-<body>
-<h1>Zásady ochrany osobních údajů</h1>
-<p>Tato aplikace ("Pracovní Tipy Automation") slouží k automatickému odpovídání na komentáře a přímé zprávy (DM) na Instagram účtu @pracovni_tipy s odkazem na nabídky práce v zahraničí.</p>
-<p>Aplikace zpracovává pouze: ID a text komentářů/zpráv nutné k odeslání automatické odpovědi. Tyto údaje neukládáme trvale, nesdílíme s třetími stranami a nepoužíváme k žádnému jinému účelu.</p>
-<p>Pokud chcete své údaje smazat nebo máte dotaz, napište na e-mail provozovatele: dudypetr1@seznam.cz</p>
-<p>Poslední aktualizace: srpen 2026</p>
-</body>
-</html>`);
+        res.type("html").send(`<!DOCTYPE html>
+        <html lang="cs">
+        <head>
+        <meta charset="UTF-8">
+        <title>Zásady ochrany osobních údajů — Pracovní Tipy</title>
+        <style>body{font-family:Arial,sans-serif;max-width:700px;margin:40px auto;padding:0 20px;line-height:1.6;color:#222}h1{font-size:1.5em}</style>
+        </head>
+        <body>
+        <h1>Zásady ochrany osobních údajů</h1>
+        <p>Tato aplikace ("Pracovní Tipy Automation") slouží k automatickému odpovídání na komentáře a přímé zprávy (DM) na Instagram účtu @pracovni_tipy s odkazem na nabídky práce v zahraničí.</p>
+        <p>Aplikace zpracovává pouze: ID a text komentářů/zpráv nutné k odeslání automatické odpovědi. Tyto údaje neukládáme trvale, nesdílíme s třetími stranami a nepoužíváme k žádnému jinému účelu.</p>
+        <p>Pokud chcete své údaje smazat nebo máte dotaz, napište na e-mail provozovatele: dudypetr1@seznam.cz</p>
+        <p>Poslední aktualizace: srpen 2026</p>
+        </body>
+        </html>`);
 });
 
 // ==================== Instagram Webhook (DM + private reply automation) ====================
@@ -1232,105 +1232,192 @@ const IG_BUSINESS_ID = process.env.IG_BUSINESS_ID;
 const HEROHERO_LINK = "https://herohero.co/devotedzxfepftuubeim";
 
 const DM_WELCOME_MESSAGE =
-    "Ahoj! 👋😊 Díky za zprávu!\n\n" +
-    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
-    "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
+        "Ahoj! 👋😊 Díky za zprávu!\n\n" +
+        "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
+        "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
+        "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
 
 const COMMENT_PRIVATE_REPLY_MESSAGE =
-    "Ahoj! 👋😊 Díky za komentář!\n\n" +
-    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
-    "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
+        "Ahoj! 👋😊 Díky za komentář!\n\n" +
+        "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
+        "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
+        "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
+
+// Veřejná odpověď do komentáře, když se soukromou zprávu podařilo odeslat.
+const COMMENT_REPLY_SUCCESS_MESSAGE =
+        "Poslal(a) jsem ti zprávu do DM! 📩 Mrkni tam 👀";
+
+// Veřejné odpovědi do komentáře, když se soukromou zprávu odeslat NEpodařilo —
+// podle důvodu z Graph API dostane uživatel jiný text, aby věděl, proč mu
+// zpráva nepřišla.
+const COMMENT_REPLY_FAILURE_PRIVACY =
+        "Nepodařilo se mi ti poslat zprávu 😕 Nejspíš kvůli nastavení soukromí (zprávy od firem, které nesleduješ). Napiš mi prosím DM sám a hned ti pošlu nabídky práce 🙌";
+
+const COMMENT_REPLY_FAILURE_TOO_OLD =
+        "Nepodařilo se mi ti poslat zprávu 😕 Automatická odpověď už bohužel vypršela. Napiš mi prosím DM sám a pošlu ti nabídky práce 🙌";
+
+const COMMENT_REPLY_FAILURE_GENERIC =
+        "Nepodařilo se mi ti poslat zprávu 😕 Napiš mi prosím DM sám a pošlu ti nabídky práce 🙌";
 
 async function sendInstagramMessage(recipient, messageText) {
-    if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
-        console.error("IG_ACCESS_TOKEN or IG_BUSINESS_ID missing, cannot send message");
-        return;
-    }
+        if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
+                    console.error("IG_ACCESS_TOKEN or IG_BUSINESS_ID missing, cannot send message");
+                    return { success: false, error: { message: "missing_credentials" } };
+        }
 
     const url = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${IG_BUSINESS_ID}/messages`;
 
     try {
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${IG_ACCESS_TOKEN}`
-            },
-            body: JSON.stringify({
-                recipient,
-                message: { text: messageText }
-            })
-        });
+                const response = await fetch(url, {
+                                method: "POST",
+                                headers: {
+                                                    "Content-Type": "application/json",
+                                                    Authorization: `Bearer ${IG_ACCESS_TOKEN}`
+                                },
+                                body: JSON.stringify({
+                                                    recipient,
+                                                    message: { text: messageText }
+                                })
+                });
 
-        const data = await response.json();
+            const data = await response.json();
 
-        if (!response.ok) {
-            console.error("Instagram send message error:", data);
-        } else {
+            if (!response.ok) {
+                            console.error("Instagram send message error:", data);
+                            return { success: false, error: (data && data.error) || data };
+            }
+
             console.log("Instagram message sent:", data);
-        }
+                return { success: true, data };
     } catch (err) {
-        console.error("Instagram send message failed:", err.message);
+                console.error("Instagram send message failed:", err.message);
+                return { success: false, error: { message: err.message } };
     }
 }
 
-app.get("/webhook/instagram", (req, res) => {
-    const mode = req.query["hub.mode"];
-    const token = req.query["hub.verify_token"];
-    const challenge = req.query["hub.challenge"];
+// Veřejná odpověď do komentáře (ne DM) — použije se jak pro potvrzení
+// "poslal jsem ti zprávu", tak pro omluvu, když se to nepovede.
+async function sendInstagramCommentReply(commentId, messageText) {
+        if (!IG_ACCESS_TOKEN) {
+                    console.error("IG_ACCESS_TOKEN missing, cannot reply to comment");
+                    return { success: false, error: { message: "missing_credentials" } };
+        }
 
-    if (mode === "subscribe" && token === IG_VERIFY_TOKEN) {
-        res.status(200).send(challenge);
-    } else {
-        res.sendStatus(403);
+    const url = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${commentId}/replies`;
+
+    try {
+                const response = await fetch(url, {
+                                method: "POST",
+                                headers: {
+                                                    "Content-Type": "application/json",
+                                                    Authorization: `Bearer ${IG_ACCESS_TOKEN}`
+                                },
+                                body: JSON.stringify({ message: messageText })
+                });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                            console.error("Instagram comment reply error:", data);
+                            return { success: false, error: (data && data.error) || data };
+            }
+
+            console.log("Instagram comment reply sent:", data);
+                return { success: true, data };
+    } catch (err) {
+                console.error("Instagram comment reply failed:", err.message);
+                return { success: false, error: { message: err.message } };
     }
+}
+
+// Podle chybového kódu z Graph API pozná, proč se nepovedlo poslat soukromou
+// zprávu na komentář, a vybere odpovídající veřejnou omluvu do komentáře.
+// Nejčastější důvody: 551 = příjemce nedostupný (typicky nastavení soukromí
+// / nejsou propojení), 10 = vypršelo časové okno pro automatickou odpověď.
+function describePrivateReplyFailure(error) {
+        const code = error && (error.code || error.error_code);
+
+    if (code === 551) {
+                return COMMENT_REPLY_FAILURE_PRIVACY;
+    }
+
+    if (code === 10) {
+                return COMMENT_REPLY_FAILURE_TOO_OLD;
+    }
+
+    return COMMENT_REPLY_FAILURE_GENERIC;
+}
+
+app.get("/webhook/instagram", (req, res) => {
+        const mode = req.query["hub.mode"];
+        const token = req.query["hub.verify_token"];
+        const challenge = req.query["hub.challenge"];
+
+            if (mode === "subscribe" && token === IG_VERIFY_TOKEN) {
+                        res.status(200).send(challenge);
+            } else {
+                        res.sendStatus(403);
+            }
 });
 
 app.post("/webhook/instagram", async (req, res) => {
-    // Meta expects a fast 200, respond immediately and process after
-    res.sendStatus(200);
+        // Meta expects a fast 200, respond immediately and process after
+             res.sendStatus(200);
 
-    try {
-        const body = req.body;
+             try {
+                         const body = req.body;
 
-        if (body.object !== "instagram") return;
+            if (body.object !== "instagram") return;
 
-        for (const entry of body.entry || []) {
-            // Direct messages -> universal auto-reply
-            for (const messagingEvent of entry.messaging || []) {
-                if (messagingEvent.message && !messagingEvent.message.is_echo) {
-                    const senderId = messagingEvent.sender && messagingEvent.sender.id;
+            for (const entry of body.entry || []) {
+                            // Direct messages -> universal auto-reply
+                             for (const messagingEvent of entry.messaging || []) {
+                                                 if (messagingEvent.message && !messagingEvent.message.is_echo) {
+                                                                         const senderId = messagingEvent.sender && messagingEvent.sender.id;
 
-                    if (senderId && senderId !== IG_BUSINESS_ID) {
-                        await sendInstagramMessage(
-                            { id: senderId },
-                            DM_WELCOME_MESSAGE
-                        );
-                    }
-                }
+                                                     if (senderId && senderId !== IG_BUSINESS_ID) {
+                                                                                 await sendInstagramMessage(
+                                                                                     { id: senderId },
+                                                                                                                 DM_WELCOME_MESSAGE
+                                                                                                             );
+                                                     }
+                                                 }
+                             }
+
+                             // Comments -> soukromá zpráva (private reply) + veřejné potvrzení
+                             // v komentáři. Pokud se soukromou zprávu nepodaří odeslat, AI to
+                             // pozná podle chyby z Graph API a místo potvrzení napíše do
+                             // komentáře veřejně důvod, proč zpráva nedorazila.
+                             for (const change of entry.changes || []) {
+                                                 if (change.field === "comments") {
+                                                                         const comment = change.value || {};
+                                                                         const commentFromId = comment.from && comment.from.id;
+                                                                         const commentId = comment.id;
+
+                                                     if (commentId && commentFromId && commentFromId !== IG_BUSINESS_ID) {
+                                                                                 const result = await sendInstagramMessage(
+                                                                                     { comment_id: commentId },
+                                                                                                                 COMMENT_PRIVATE_REPLY_MESSAGE
+                                                                                                             );
+
+                                                                             if (result.success) {
+                                                                                                             await sendInstagramCommentReply(
+                                                                                                                                                 commentId,
+                                                                                                                                                 COMMENT_REPLY_SUCCESS_MESSAGE
+                                                                                                                                             );
+                                                                                 } else {
+                                                                                                             await sendInstagramCommentReply(
+                                                                                                                                                 commentId,
+                                                                                                                                                 describePrivateReplyFailure(result.error)
+                                                                                                                                             );
+                                                                                 }
+                                                     }
+                                                 }
+                             }
             }
-
-            // Comments -> private reply DM
-            for (const change of entry.changes || []) {
-                if (change.field === "comments") {
-                    const comment = change.value || {};
-                    const commentFromId = comment.from && comment.from.id;
-                    const commentId = comment.id;
-
-                    if (commentId && commentFromId && commentFromId !== IG_BUSINESS_ID) {
-                        await sendInstagramMessage(
-                            { comment_id: commentId },
-                            COMMENT_PRIVATE_REPLY_MESSAGE
-                        );
-                    }
-                }
-            }
-        }
-    } catch (err) {
-        console.error("Instagram webhook processing error:", err.message);
-    }
+             } catch (err) {
+                         console.error("Instagram webhook processing error:", err.message);
+             }
 });
 
 // ==================== End Instagram Webhook ====================
