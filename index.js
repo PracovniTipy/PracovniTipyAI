@@ -731,17 +731,27 @@ async function createReelImage(
                                 reel.salary_month_czk,
                                 reel.salary_monthly_czk,
                                 reel.salary
-                            ).toUpperCase();
+                            )
+                            .replace(/^cca\s+/i, "")
+                            .replace(/\s*\/\s*měsíc\s*$/i, "")
+                            .toUpperCase();
+
+    const addPeriod = (value) =>
+                value && !/[.!?]$/.test(value) ? `${value}.` : value;
 
     const housing =
-                normalizeHousing(
-                                reel.housing ||
-                                reel.accommodation
+                addPeriod(
+                                normalizeHousing(
+                                                reel.housing ||
+                                                reel.accommodation
+                                            )
                             ).toUpperCase();
 
     const language =
-                normalizeLanguage(
-                                reel.language
+                addPeriod(
+                                normalizeLanguage(
+                                                reel.language
+                                            )
                             ).toUpperCase();
 
     const countrySize = 135;
