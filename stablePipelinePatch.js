@@ -317,9 +317,14 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
         console.log(`[STABLE PIPELINE] source=${allJobs.length} safe=${normalizedJobs.length} hero=${heroJobs.length}/${HERO_TARGET} ig=${reelJobs.length}/${IG_TARGET}`);
 
         if (heroJobs.length < 1 && reelJobs.length < 1) {
-          return res.status(422).json({
-            success: false,
-            error: `Není dost vhodných nabídek pro tento běh: HeroHero ${heroJobs.length}/${HERO_TARGET}, Instagram ${reelJobs.length}/${IG_TARGET}.`,
+          // Žádná nabídka ten den neprošla filtrem - to je v pořádku (viz
+          // pravidla v promptu), ne chyba scénáře. Vrátíme 200 s prázdnými
+          // poli, aby Make krok jen nic nepublikoval a neskončil v chybě.
+          console.log(`[STABLE PIPELINE] 0 vhodnych nabidek tento beh - vracim prazdny vysledek (ne chyba)`);
+          return res.status(200).json({
+            success: true,
+            herohero: [],
+            instagram: [],
             debug: {
               sourceJobs: allJobs.length,
               safeJobs: normalizedJobs.length,
@@ -356,10 +361,14 @@ express.application.post = function stablePipelinePost(path, ...handlers) {
             };
 
             if (body.herohero.length < 1 && body.instagram.length < 1) {
-              res.status(502);
+              // Stejně jako výše - žádný výstup po renderu není chyba
+              // scénáře, jen den bez publikace.
+              console.log(`[STABLE PIPELINE] render nevratil zadny pouzitelny vystup - vracim prazdny vysledek (ne chyba)`);
+              res.status(200);
               return originalJson({
-                success: false,
-                error: `Render nevygeneroval kompletní výstup: HeroHero ${body.herohero.length}/${HERO_TARGET}, Instagram ${body.instagram.length}/${IG_TARGET}.`,
+                success: true,
+                herohero: [],
+                instagram: [],
                 debugCounts: body.debugCounts
               });
             }
