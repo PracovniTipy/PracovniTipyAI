@@ -856,6 +856,34 @@ async function uploadBuffer(buffer) {
     );
 }
 
+// Vytvoří WAV buffer s tichem dané délky. Řešení bez závislosti na ffmpeg
+// filtru "lavfi" (anullsrc) — ten na Railway produkčním ffmpeg-static
+// buildu není dostupný ("Input format lavfi is not available"), proto se
+// ticho generuje přímo jako běžný WAV soubor, který ffmpeg umí načíst
+// jako normální druhý vstup bez speciálních filtrů.
+function createSilentWavBuffer(durationSeconds, sampleRate, channels) {
+    const bytesPerSample = 2;
+    const numSamples = Math.ceil(durationSeconds * sampleRate);
+    const dataSize = numSamples * channels * bytesPerSample;
+    const buffer = Buffer.alloc(44 + dataSize);
+
+    buffer.write("RIFF", 0);
+    buffer.writeUInt32LE(36 + dataSize, 4);
+    buffer.write("WAVE", 8);
+    buffer.write("fmt ", 12);
+    buffer.writeUInt32LE(16, 16);
+    buffer.writeUInt16LE(1, 20);
+    buffer.writeUInt16LE(channels, 22);
+    buffer.writeUInt32LE(sampleRate, 24);
+    buffer.writeUInt32LE(sampleRate * channels * bytesPerSample, 28);
+    buffer.writeUInt16LE(channels * bytesPerSample, 32);
+    buffer.writeUInt16LE(16, 34);
+    buffer.write("data", 36);
+    buffer.writeUInt32LE(dataSize, 40);
+
+    return buffer;
+}
+
 async function createReel(imageBuffer) {
     const id = Date.now();
 
@@ -869,9 +897,19 @@ async function createReel(imageBuffer) {
         `${id}.mp4`
     );
 
+    const silentAudioPath = path.join(
+        os.tmpdir(),
+        `${id}-silence.wav`
+    );
+
     fs.writeFileSync(
         imagePath,
         imageBuffer
+    );
+
+    fs.writeFileSync(
+        silentAudioPath,
+        createSilentWavBuffer(8, 44100, 2)
     );
 
     await new Promise(
@@ -884,11 +922,7 @@ async function createReel(imageBuffer) {
                     "-framerate",
                     "25"
                 ])
-                .input("anullsrc=channel_layout=stereo:sample_rate=44100")
-                .inputOptions([
-                    "-f",
-                    "lavfi"
-                ])
+                .input(silentAudioPath)
                 .videoCodec("libx264")
                 .audioCodec("aac")
                 .outputOptions([
@@ -952,6 +986,12 @@ async function createReel(imageBuffer) {
         fs.existsSync(videoPath)
     ) {
         fs.unlinkSync(videoPath);
+    }
+
+    if (
+        fs.existsSync(silentAudioPath)
+    ) {
+        fs.unlinkSync(silentAudioPath);
     }
 
     return result.secure_url;
