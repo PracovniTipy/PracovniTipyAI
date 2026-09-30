@@ -450,12 +450,14 @@ function drawHeroBlock(ctx, options) {
     ctx.font =
         `bold ${fitted.size}px serif`;
 
-    ctx.fillStyle = "#000000";
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
 
+    const boldOffset = Math.max(0.5, fitted.size * 0.01);
+
     actualLines.forEach((line, index) => {
         const lineY = index * fitted.size * lineHeight;
+
         if (outline) {
             ctx.lineJoin = "round";
             ctx.miterLimit = 2;
@@ -463,7 +465,24 @@ function drawHeroBlock(ctx, options) {
             ctx.lineWidth = Math.max(0.6, fitted.size * 0.02);
             ctx.strokeText(line, 0, lineY);
         }
+
+        // Světlý stín (halo) pod textem kvůli čitelnosti na fotografickém
+        // pozadí šablony — stejný princip jako u reels, jen v odstínu, co
+        // sedí k černému písmu HeroHero karet.
+        ctx.shadowColor = "rgba(255, 255, 255, 0.85)";
+        ctx.shadowBlur = Math.max(5, fitted.size * 0.07);
+        ctx.shadowOffsetX = 0;
+        ctx.shadowOffsetY = Math.max(2, fitted.size * 0.03);
+        ctx.fillStyle = "#000000";
         ctx.fillText(line, 0, lineY);
+
+        // Tučnější dojem — druhý/třetí průchod bez stínu, ať se nekumuluje.
+        ctx.shadowColor = "transparent";
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.fillText(line, boldOffset, lineY);
+        ctx.fillText(line, -boldOffset, lineY);
+        ctx.fillText(line, 0, lineY + boldOffset);
     });
 
     ctx.restore();
