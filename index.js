@@ -1430,6 +1430,39 @@ async function findLatestComment() {
     return latestComment;
 }
 
+app.get("/admin/debug-ig-comments", async (req, res) => {
+    try {
+        if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
+            return res.status(500).json({ success: false, error: "IG_ACCESS_TOKEN nebo IG_BUSINESS_ID chybí" });
+        }
+        const authHeaders = { Authorization: `Bearer ${IG_ACCESS_TOKEN}` };
+        const mediaUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${IG_BUSINESS_ID}/media?fields=id,caption,timestamp,media_type,comments_count&limit=10`;
+        const mediaRes = await fetch(mediaUrl, { headers: authHeaders });
+        const mediaData = await mediaRes.json();
+        if (!mediaRes.ok) {
+            return res.status(mediaRes.status).json({ success: false, step: "media", error: mediaData });
+        }
+        const mediaItems = Array.isArray(mediaData.data) ? mediaData.data : [];
+        const debug = [];
+        for (const media of mediaItems) {
+            const commentsUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${media.id}/comments?fields=id,text,timestamp,username,from&limit=50`;
+            const commentsRes = await fetch(commentsUrl, { headers: authHeaders });
+            const commentsData = await commentsRes.json();
+            debug.push({
+                mediaId: media.id,
+                timestamp: media.timestamp,
+                comments_count: media.comments_count,
+                commentsStatus: commentsRes.status,
+                commentsOk: commentsRes.ok,
+                commentsBody: commentsData
+            });
+        }
+        res.json({ success: true, mediaCount: mediaItems.length, debug });
+    } catch (err) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 app.post("/admin/dm-latest-commenter", async (req, res) => {
     try {
         const comment = await findLatestComment();
