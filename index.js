@@ -1325,6 +1325,39 @@ const COMMENT_PRIVATE_REPLY_MESSAGE =
     "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
     "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK;
 
+const COMMENT_PUBLIC_REPLY_MESSAGE =
+    "Díky za komentář! 😊 Poslali jsme ti víc informací do DM 📩";
+
+async function postPublicCommentReply(commentId, replyText) {
+    if (!IG_ACCESS_TOKEN) {
+        console.error("IG_ACCESS_TOKEN missing, cannot post public comment reply");
+        return;
+    }
+
+    const url = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${commentId}/replies`;
+
+    try {
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${IG_ACCESS_TOKEN}`
+            },
+            body: JSON.stringify({ message: replyText })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+            console.error("Instagram public comment reply error:", data);
+        } else {
+            console.log("Instagram public comment reply sent:", data);
+        }
+    } catch (err) {
+        console.error("Instagram public comment reply failed:", err.message);
+    }
+}
+
 async function sendInstagramMessage(recipient, messageText) {
     if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
         console.error("IG_ACCESS_TOKEN or IG_BUSINESS_ID missing, cannot send message");
@@ -1357,6 +1390,81 @@ async function sendInstagramMessage(recipient, messageText) {
         console.error("Instagram send message failed:", err.message);
     }
 }
+
+async function findLatestComment() {
+    if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
+        throw new Error("IG_ACCESS_TOKEN nebo IG_BUSINESS_ID chybí");
+    }
+
+    const authHeaders = { Authorization: `Bearer ${IG_ACCESS_TOKEN}` };
+
+    const mediaUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${IG_BUSINESS_ID}/media?fields=id,caption,timestamp,media_type&limit=10`;
+    const mediaRes = await fetch(mediaUrl, { headers: authHeaders });
+    const mediaData = await mediaRes.json();
+
+    if (!mediaRes.ok) {
+        throw new Error(`Načtení médií selhalo: ${JSON.stringify(mediaData)}`);
+    }
+
+    const mediaItems = Array.isArray(mediaData.data) ? mediaData.data : [];
+    let latestComment = null;
+
+    for (const media of mediaItems) {
+        const commentsUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${media.id}/comments?fields=id,text,timestamp,username,from&limit=50`;
+        const commentsRes = await fetch(commentsUrl, { headers: authHeaders });
+        const commentsData = await commentsRes.json();
+
+        if (!commentsRes.ok) {
+            continue;
+        }
+
+        const comments = Array.isArray(commentsData.data) ? commentsData.data : [];
+
+        for (const comment of comments) {
+            if (!latestComment || new Date(comment.timestamp) > new Date(latestComment.timestamp)) {
+                latestComment = { ...comment, mediaId: media.id };
+            }
+        }
+    }
+
+    return latestComment;
+}
+
+app.post("/admin/dm-latest-commenter", async (req, res) => {
+    try {
+        const comment = await findLatestComment();
+
+        if (!comment) {
+            return res.status(404).json({ success: false, error: "Žádný komentář nenalezen" });
+        }
+
+        const commentFromId = comment.from && comment.from.id;
+
+        if (!commentFromId) {
+            return res.status(422).json({
+                success: false,
+                error: "Komentář nemá from.id (chybí oprávnění instagram_business_manage_comments?), nelze poslat DM",
+                comment
+            });
+        }
+
+        if (commentFromId === IG_BUSINESS_ID) {
+            return res.status(422).json({
+                success: false,
+                error: "Poslední komentář je od vlastního účtu, přeskakuji",
+                comment
+            });
+        }
+
+        await postPublicCommentReply(comment.id, COMMENT_PUBLIC_REPLY_MESSAGE);
+        await sendInstagramMessage({ comment_id: comment.id }, COMMENT_PRIVATE_REPLY_MESSAGE);
+
+        res.json({ success: true, comment });
+    } catch (err) {
+        console.error("[/admin/dm-latest-commenter ERROR]", err.message);
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
 
 app.get("/webhook/instagram", (req, res) => {
     const mode = req.query["hub.mode"];
@@ -1402,6 +1510,10 @@ app.post("/webhook/instagram", async (req, res) => {
                     const commentId = comment.id;
 
                     if (commentId && commentFromId && commentFromId !== IG_BUSINESS_ID) {
+                        await postPublicCommentReply(
+                            commentId,
+                            COMMENT_PUBLIC_REPLY_MESSAGE
+                        );
                         await sendInstagramMessage(
                             { comment_id: commentId },
                             COMMENT_PRIVATE_REPLY_MESSAGE
