@@ -112,8 +112,19 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
   // HeroHero nově otevírá nad přihlášením i prázdný "OK" dialog. Původní
   // getByRole("dialog").last() pak vzal ten prázdný dialog a login padal na
   // "Email input se nepodařilo najít". Bereme jen dialog s e-mailem / heslem.
+  // Prázdný dialog navíc zneviditelní přihlašovací dialog pro accessibility
+  // strom (aria-hidden), takže getByRole ho vůbec nenajde. Nejdřív proto
+  // prázdný "OK" dialog zavřeme a dialog hledáme přes CSS [role="dialog"].
+  const oldLoginStart = 'logStep("Zahajuji proces přihlášení.");';
+  const newLoginStart = 'logStep("Zahajuji proces přihlášení.");\n    try {\n      const okButtons = page.locator(\'[role="dialog"] button\').filter({ hasText: /^\\s*OK\\s*$/ });\n      const okCount = await okButtons.count().catch(() => 0);\n      for (let i = okCount - 1; i >= 0; i--) {\n        await okButtons.nth(i).click({ force: true, timeout: 3000 }).catch(() => {});\n      }\n      if (okCount > 0) {\n        logStep(`Zavřen prázdný OK dialog (${okCount}x).`);\n        await page.waitForTimeout(1000);\n      }\n    } catch (e) {\n      logStep(`Zavření OK dialogu přeskočeno: ${e.message}`);\n    }';
+  if (source.includes(oldLoginStart)) {
+    source = source.replace(oldLoginStart, newLoginStart);
+  } else {
+    console.warn("[CATEGORY PATCH] Login start pattern nebyl nalezen.");
+  }
+
   const oldEmailDialog = 'const emailDialog = page.getByRole("dialog").last();';
-  const newEmailDialog = 'const emailDialog = page.getByRole("dialog").filter({ has: page.locator(\'input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]\') }).last();';
+  const newEmailDialog = 'const emailDialog = page.locator(\'[role="dialog"]\').filter({ has: page.locator(\'input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]\') }).last();';
   if (source.includes(oldEmailDialog)) {
     source = source.replace(oldEmailDialog, newEmailDialog);
   } else {
@@ -121,7 +132,7 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
   }
 
   const oldPasswordDialog = 'const passwordDialog = page.getByRole("dialog").last();';
-  const newPasswordDialog = 'const passwordDialog = page.getByRole("dialog").filter({ has: page.locator(\'input[type="password"]\') }).last();';
+  const newPasswordDialog = 'const passwordDialog = page.locator(\'[role="dialog"]\').filter({ has: page.locator(\'input[type="password"]\') }).last();';
   if (source.includes(oldPasswordDialog)) {
     source = source.replace(oldPasswordDialog, newPasswordDialog);
   } else {
