@@ -220,11 +220,23 @@ function normalizeLanguage(value) {
         .replace(/\bor\b/gi, "nebo");
 }
 
+// Vrátí true, pokud text obsahuje jen nuly jako číselnou hodnotu platu
+// (např. zdroj dat plat schválně skryl a poslal "000 Kč" nebo "0 Kč" jako
+// placeholder). Takový "plat" se nesmí nikdy vytisknout do šablony.
+function isZeroPlaceholderSalary(value) {
+    const digits = String(value ?? "").replace(/[^\d]/g, "");
+    return digits.length > 0 && /^0+$/.test(digits);
+}
+
 function formatMonthlyCzkSalary(...values) {
     const candidates = values.map(cleanText).filter(Boolean);
 
     for (const candidate of candidates) {
         if (/neuved|not specified|unknown|n\/a/i.test(candidate)) {
+            continue;
+        }
+
+        if (isZeroPlaceholderSalary(candidate)) {
             continue;
         }
 
@@ -248,6 +260,10 @@ function formatMonthlyCzkSalary(...values) {
         }
 
         if (!/(?:Kč|CZK)/i.test(salary)) {
+            continue;
+        }
+
+        if (isZeroPlaceholderSalary(salary)) {
             continue;
         }
 
@@ -1112,8 +1128,9 @@ app.post(
                     textHtml:
                         `<p>${
                             (
-                                job.description ||
-                                ""
+                                Array.isArray(job.description)
+                                    ? job.description.join("\n")
+                                    : (job.description || "")
                             ).replace(
                                 /\n/g,
                                 "</p><p>"
