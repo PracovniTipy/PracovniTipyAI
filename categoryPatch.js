@@ -109,6 +109,25 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
     console.warn("[CATEGORY PATCH] Work-category picker source pattern nebyl nalezen.");
   }
 
+  // HeroHero nově otevírá nad přihlášením i prázdný "OK" dialog. Původní
+  // getByRole("dialog").last() pak vzal ten prázdný dialog a login padal na
+  // "Email input se nepodařilo najít". Bereme jen dialog s e-mailem / heslem.
+  const oldEmailDialog = 'const emailDialog = page.getByRole("dialog").last();';
+  const newEmailDialog = 'const emailDialog = page.getByRole("dialog").filter({ has: page.locator(\'input[type="email"], input[placeholder*="E-mail" i], input[placeholder*="email" i]\') }).last();';
+  if (source.includes(oldEmailDialog)) {
+    source = source.replace(oldEmailDialog, newEmailDialog);
+  } else {
+    console.warn("[CATEGORY PATCH] Email dialog pattern nebyl nalezen.");
+  }
+
+  const oldPasswordDialog = 'const passwordDialog = page.getByRole("dialog").last();';
+  const newPasswordDialog = 'const passwordDialog = page.getByRole("dialog").filter({ has: page.locator(\'input[type="password"]\') }).last();';
+  if (source.includes(oldPasswordDialog)) {
+    source = source.replace(oldPasswordDialog, newPasswordDialog);
+  } else {
+    console.warn("[CATEGORY PATCH] Password dialog pattern nebyl nalezen.");
+  }
+
   const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
   const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  logStep(\`HeroHero kategorie (nepovinné): země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);`;
 
