@@ -131,12 +131,38 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
     console.warn("[CATEGORY PATCH] Email dialog pattern nebyl nalezen.");
   }
 
+  // Krok s heslem: hledáme pole s heslem na celé stránce (ne v konkrétním
+  // dialogu) a formuláře odesíláme klávesou Enter. Nezávisí to na tom, jak
+  // HeroHero zrovna poskládá dialogy / překryvy.
+  const oldNextClick = 'await nextBtn.click({ timeout: 10000, force: true });';
+  const newNextClick = 'await emailInput.press("Enter").catch(() => {});\n        await page.waitForTimeout(2500);\n        if (!(await page.locator(\'input[type="password"]\').first().isVisible().catch(() => false))) {\n          logStep("Heslo se po Enter neukázalo, klikám na Pokračovat.");\n          await nextBtn.click({ timeout: 10000, force: true }).catch(() => {});\n        }';
+  if (source.includes(oldNextClick)) {
+    source = source.replace(oldNextClick, newNextClick);
+  } else {
+    console.warn("[CATEGORY PATCH] Email next-click pattern nebyl nalezen.");
+  }
+
   const oldPasswordDialog = 'const passwordDialog = page.getByRole("dialog").last();';
-  const newPasswordDialog = 'const passwordDialog = page.locator(\'[role="dialog"]\').filter({ has: page.locator(\'input[type="password"]\') }).last();';
+  const newPasswordDialog = 'const passwordDialog = page.locator("body");';
   if (source.includes(oldPasswordDialog)) {
     source = source.replace(oldPasswordDialog, newPasswordDialog);
   } else {
     console.warn("[CATEGORY PATCH] Password dialog pattern nebyl nalezen.");
+  }
+
+  const submitPattern = /const submitBtn = passwordDialog\.locator\([^\n]*\)\.first\(\);/;
+  if (submitPattern.test(source)) {
+    source = source.replace(submitPattern, "const submitBtn = passwordInput;");
+  } else {
+    console.warn("[CATEGORY PATCH] Submit button pattern nebyl nalezen.");
+  }
+
+  const oldSubmitClick = 'await submitBtn.click({ timeout: 10000, force: true });';
+  const newSubmitClick = 'await passwordInput.press("Enter");';
+  if (source.includes(oldSubmitClick)) {
+    source = source.replace(oldSubmitClick, newSubmitClick);
+  } else {
+    console.warn("[CATEGORY PATCH] Submit click pattern nebyl nalezen.");
   }
 
   const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
