@@ -1499,6 +1499,18 @@ app.post("/admin/dm-latest-commenter", async (req, res) => {
     }
 });
 
+// Volá Make scénář 6907755 po veřejné odpovědi na komentář. Token zůstává
+// jen v Railway proměnné IG_ACCESS_TOKEN (ne natvrdo v Make). Meta stejně
+// povolí private reply jen na komentáře pod vlastními příspěvky, max 1×.
+app.post("/ig/private-reply", async (req, res) => {
+    const commentId = String((req.body && req.body.comment_id) || "").trim();
+    if (!/^\d+$/.test(commentId)) {
+        return res.status(400).json({ success: false, error: "Chybí comment_id" });
+    }
+    await sendInstagramMessage({ comment_id: commentId }, COMMENT_PRIVATE_REPLY_MESSAGE);
+    res.json({ success: true });
+});
+
 app.get("/webhook/instagram", (req, res) => {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
@@ -1535,23 +1547,13 @@ app.post("/webhook/instagram", async (req, res) => {
                 }
             }
 
-            // Comments -> private reply DM
+            // Komentáře tady záměrně NEŘEŠÍME: veřejnou odpověď (s ochranou
+            // proti opakování u stejného člověka) dělá Make scénář 6907755
+            // a ten pak volá POST /ig/private-reply pro DM. Kdyby odpovídal
+            // i tento webhook, lidé by dostali dvě odpovědi a dvě DM.
             for (const change of entry.changes || []) {
                 if (change.field === "comments") {
-                    const comment = change.value || {};
-                    const commentFromId = comment.from && comment.from.id;
-                    const commentId = comment.id;
-
-                    if (commentId && commentFromId && commentFromId !== IG_BUSINESS_ID) {
-                        await postPublicCommentReply(
-                            commentId,
-                            COMMENT_PUBLIC_REPLY_MESSAGE
-                        );
-                        await sendInstagramMessage(
-                            { comment_id: commentId },
-                            COMMENT_PRIVATE_REPLY_MESSAGE
-                        );
-                    }
+                    console.log("[IG WEBHOOK] komentář přijat (odpověď řeší Make):", change.value && change.value.id);
                 }
             }
         }
