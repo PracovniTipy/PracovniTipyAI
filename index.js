@@ -185,7 +185,18 @@ function normalizeHousing(value) {
         return "Příspěvek na ubytování";
     }
 
-    if (/provided|available|arranged|zajiště|poskyt/.test(lower)) {
+    // "help / assistance" = zaměstnavatel jen pomůže najít bydlení,
+    // "available" = bydlení k dispozici (často placené). Nesmí se to tvářit
+    // jako "zajištěno", to by sliboval víc, než inzerát říká.
+    if (/help|assist|pomoc|pomůže|search|sourcing/.test(lower)) {
+        return "Pomoc s ubytováním";
+    }
+
+    if (/available|k dispozici|shared|sdílen|affordable|rent|nájem/.test(lower)) {
+        return "Ubytování k dispozici";
+    }
+
+    if (/provided|arranged|zajiště|poskyt/.test(lower)) {
         return "Ubytování zajištěno";
     }
 
@@ -1113,6 +1124,12 @@ app.post(
                 herohero.push({
                     ...job,
 
+                    // Do textu HeroHero příspěvku jde vždy česká krátká
+                    // verze ubytování (stejná jako na obrázku).
+                    accommodation:
+                        normalizeHousing(job.housing || job.accommodation) ||
+                        "",
+
                     postId:
                         job.postId,
 
@@ -1390,114 +1407,6 @@ async function sendInstagramMessage(recipient, messageText) {
         console.error("Instagram send message failed:", err.message);
     }
 }
-
-async function findLatestComment() {
-    if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
-        throw new Error("IG_ACCESS_TOKEN nebo IG_BUSINESS_ID chybí");
-    }
-
-    const authHeaders = { Authorization: `Bearer ${IG_ACCESS_TOKEN}` };
-
-    const mediaUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${IG_BUSINESS_ID}/media?fields=id,caption,timestamp,media_type&limit=10`;
-    const mediaRes = await fetch(mediaUrl, { headers: authHeaders });
-    const mediaData = await mediaRes.json();
-
-    if (!mediaRes.ok) {
-        throw new Error(`Načtení médií selhalo: ${JSON.stringify(mediaData)}`);
-    }
-
-    const mediaItems = Array.isArray(mediaData.data) ? mediaData.data : [];
-    let latestComment = null;
-
-    for (const media of mediaItems) {
-        const commentsUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${media.id}/comments?fields=id,text,timestamp,username,from&limit=50`;
-        const commentsRes = await fetch(commentsUrl, { headers: authHeaders });
-        const commentsData = await commentsRes.json();
-
-        if (!commentsRes.ok) {
-            continue;
-        }
-
-        const comments = Array.isArray(commentsData.data) ? commentsData.data : [];
-
-        for (const comment of comments) {
-            if (!latestComment || new Date(comment.timestamp) > new Date(latestComment.timestamp)) {
-                latestComment = { ...comment, mediaId: media.id };
-            }
-        }
-    }
-
-    return latestComment;
-}
-
-app.get("/admin/debug-ig-comments", async (req, res) => {
-    try {
-        if (!IG_ACCESS_TOKEN || !IG_BUSINESS_ID) {
-            return res.status(500).json({ success: false, error: "IG_ACCESS_TOKEN nebo IG_BUSINESS_ID chybí" });
-        }
-        const authHeaders = { Authorization: `Bearer ${IG_ACCESS_TOKEN}` };
-        const mediaUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${IG_BUSINESS_ID}/media?fields=id,caption,timestamp,media_type,comments_count&limit=10`;
-        const mediaRes = await fetch(mediaUrl, { headers: authHeaders });
-        const mediaData = await mediaRes.json();
-        if (!mediaRes.ok) {
-            return res.status(mediaRes.status).json({ success: false, step: "media", error: mediaData });
-        }
-        const mediaItems = Array.isArray(mediaData.data) ? mediaData.data : [];
-        const debug = [];
-        for (const media of mediaItems) {
-            const commentsUrl = `https://graph.instagram.com/${IG_GRAPH_VERSION}/${media.id}/comments?fields=id,text,timestamp,username,from&limit=50`;
-            const commentsRes = await fetch(commentsUrl, { headers: authHeaders });
-            const commentsData = await commentsRes.json();
-            debug.push({
-                mediaId: media.id,
-                timestamp: media.timestamp,
-                comments_count: media.comments_count,
-                commentsStatus: commentsRes.status,
-                commentsOk: commentsRes.ok,
-                commentsBody: commentsData
-            });
-        }
-        res.json({ success: true, mediaCount: mediaItems.length, debug });
-    } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
-
-app.post("/admin/dm-latest-commenter", async (req, res) => {
-    try {
-        const comment = await findLatestComment();
-
-        if (!comment) {
-            return res.status(404).json({ success: false, error: "Žádný komentář nenalezen" });
-        }
-
-        const commentFromId = comment.from && comment.from.id;
-
-        if (!commentFromId) {
-            return res.status(422).json({
-                success: false,
-                error: "Komentář nemá from.id (chybí oprávnění instagram_business_manage_comments?), nelze poslat DM",
-                comment
-            });
-        }
-
-        if (commentFromId === IG_BUSINESS_ID) {
-            return res.status(422).json({
-                success: false,
-                error: "Poslední komentář je od vlastního účtu, přeskakuji",
-                comment
-            });
-        }
-
-        await postPublicCommentReply(comment.id, COMMENT_PUBLIC_REPLY_MESSAGE);
-        await sendInstagramMessage({ comment_id: comment.id }, COMMENT_PRIVATE_REPLY_MESSAGE);
-
-        res.json({ success: true, comment });
-    } catch (err) {
-        console.error("[/admin/dm-latest-commenter ERROR]", err.message);
-        res.status(500).json({ success: false, error: err.message });
-    }
-});
 
 // Volá Make scénář 6907755 po veřejné odpovědi na komentář. Token zůstává
 // jen v Railway proměnné IG_ACCESS_TOKEN (ne natvrdo v Make). Meta stejně
