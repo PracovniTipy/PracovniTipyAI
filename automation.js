@@ -252,17 +252,8 @@ async function sourceCandidates(usedLinks) {
 
 async function enrichWithAI(candidates) {
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-    const batch = candidates.slice(0, 16).map((job, id) => ({
-        id,
-        title: job.title,
-        workplace: job.workplace,
-        languages: job.languages,
-        salary: `${job.salaryPeriod} ${job.salaryText}`.trim(),
-        text: job.body
-    }));
-
     const system = `Jsi editor účtu "Pracovní tipy" (nabídky práce v zahraničí pro Čechy bez vysoké školy).
-Pro každou nabídku vrať objekt. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
+Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
 eligible=false pokud: vyžaduje jiný jazyk než angličtinu, vysokou školu, odbornou licenci/certifikát, nebo nepatří do kategorií: ${CATEGORIES.join(", ")}.
 title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy.
 city: město/region z inzerátu (nebo "").
@@ -271,44 +262,61 @@ no_experience: true jen když inzerát výslovně říká, že praxe není nutn�
 description_cz: přesně 3 krátké věty (náplň práce; požadavky; benefity/podmínky).
 hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false}. Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JSON: {"jobs":[{"id":0,"eligible":true,"category":"...","title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{...}}]}`;
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"eligible":true,"category":"...","title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
 
-    // Volání přes vestavěný fetch (Node 20). Knihovna openai v4 tu na Railway
-    // padala na "Premature close", proto ji nepoužíváme. Max 3 pokusy.
-    let response = null;
-    let lastError = null;
-    for (let attempt = 1; attempt <= 3 && !response; attempt++) {
-        try {
-            const res = await fetch("https://api.openai.com/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                    "Accept-Encoding": "identity",
-                    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
-                },
-                body: JSON.stringify({
-                    model,
-                    temperature: 0.2,
-                    response_format: { type: "json_object" },
-                    messages: [
-                        { role: "system", content: system },
-                        { role: "user", content: JSON.stringify(batch) }
-                    ]
-                })
-            });
-            const raw = await res.text();
-            if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${raw.slice(0, 300)}`);
-            response = JSON.parse(raw);
-        } catch (err) {
-            lastError = err;
-            logError(`OpenAI pokus ${attempt}/3 selhal:`, err.message);
-            await sleep(5000 * attempt);
+    // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
+    // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
+    async function analyze(job) {
+        for (let attempt = 1; attempt <= 2; attempt++) {
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), 60000);
+            try {
+                const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                    method: "POST",
+                    signal: controller.signal,
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+                    },
+                    body: JSON.stringify({
+                        model,
+                        temperature: 0.2,
+                        max_tokens: 700,
+                        response_format: { type: "json_object" },
+                        messages: [
+                            { role: "system", content: system },
+                            {
+                                role: "user",
+                                content: JSON.stringify({
+                                    title: job.title,
+                                    workplace: job.workplace,
+                                    languages: job.languages,
+                                    salary: `${job.salaryPeriod} ${job.salaryText}`.trim(),
+                                    text: job.body.slice(0, 2500)
+                                })
+                            }
+                        ]
+                    })
+                });
+                const raw = await res.text();
+                if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${raw.slice(0, 200)}`);
+                const data = JSON.parse(raw);
+                return JSON.parse(data.choices[0].message.content);
+            } catch (err) {
+                logError(`AI pro "${job.title}" pokus ${attempt}/2 selhal:`, err.message);
+                await sleep(3000);
+            } finally {
+                clearTimeout(timer);
+            }
         }
+        return null;
     }
-    if (!response) throw lastError || new Error("OpenAI neodpověděl.");
-    const parsed = JSON.parse(response.choices[0].message.content || "{}");
-    const byId = new Map((parsed.jobs || []).map(item => [item.id, item]));
-    return candidates.slice(0, 16).map((job, id) => ({ job, ai: byId.get(id) })).filter(x => x.ai);
+
+    const list = candidates.slice(0, 16);
+    const results = await mapLimit(list, 4, analyze);
+    const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai);
+    log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
+    return out;
 }
 
 async function czkRates() {
