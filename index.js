@@ -1408,16 +1408,15 @@ async function sendInstagramMessage(recipient, messageText) {
     }
 }
 
-// Volá Make scénář 6907755 po veřejné odpovědi na komentář. Token zůstává
-// jen v Railway proměnné IG_ACCESS_TOKEN (ne natvrdo v Make). Meta stejně
-// povolí private reply jen na komentáře pod vlastními příspěvky, max 1×.
-app.post("/ig/private-reply", async (req, res) => {
-    const commentId = String((req.body && req.body.comment_id) || "").trim();
-    if (!/^\d+$/.test(commentId)) {
-        return res.status(400).json({ success: false, error: "Chybí comment_id" });
-    }
-    await sendInstagramMessage({ comment_id: commentId }, COMMENT_PRIVATE_REPLY_MESSAGE);
-    res.json({ success: true });
+// Denní automat (/daily-run + vlastní plánovač) a odpovídání na komentáře/DM.
+const automation = require("./automation")(app, {
+    cloudinary,
+    PORT,
+    IG_BUSINESS_ID,
+    postPublicCommentReply,
+    sendInstagramMessage,
+    COMMENT_PRIVATE_REPLY_MESSAGE,
+    DM_WELCOME_MESSAGE
 });
 
 app.get("/webhook/instagram", (req, res) => {
@@ -1437,35 +1436,9 @@ app.post("/webhook/instagram", async (req, res) => {
     res.sendStatus(200);
 
     try {
-        const body = req.body;
-
-        if (body.object !== "instagram") return;
-
-        for (const entry of body.entry || []) {
-            // Direct messages -> universal auto-reply
-            for (const messagingEvent of entry.messaging || []) {
-                if (messagingEvent.message && !messagingEvent.message.is_echo) {
-                    const senderId = messagingEvent.sender && messagingEvent.sender.id;
-
-                    if (senderId && senderId !== IG_BUSINESS_ID) {
-                        await sendInstagramMessage(
-                            { id: senderId },
-                            DM_WELCOME_MESSAGE
-                        );
-                    }
-                }
-            }
-
-            // Komentáře tady záměrně NEŘEŠÍME: veřejnou odpověď (s ochranou
-            // proti opakování u stejného člověka) dělá Make scénář 6907755
-            // a ten pak volá POST /ig/private-reply pro DM. Kdyby odpovídal
-            // i tento webhook, lidé by dostali dvě odpovědi a dvě DM.
-            for (const change of entry.changes || []) {
-                if (change.field === "comments") {
-                    console.log("[IG WEBHOOK] komentář přijat (odpověď řeší Make):", change.value && change.value.id);
-                }
-            }
-        }
+        // Komentáře (veřejná odpověď + DM, max 1× na člověka a příspěvek)
+        // i DM zprávy řeší automation.js. Vše se loguje s prefixem [AUTOMATION].
+        automation.handleWebhook(req.body);
     } catch (err) {
         console.error("Instagram webhook processing error:", err.message);
     }
