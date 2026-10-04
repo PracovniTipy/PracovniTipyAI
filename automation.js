@@ -16,7 +16,6 @@
 // jako JSON soubor na Cloudinary, takže přežije restart i nový deploy.
 // ============================================================================
 
-const OpenAI = require("openai");
 
 const SUPPORTED = {
     Austria: "Rakousko", Belgium: "Belgie", Cyprus: "Kypr", Denmark: "Dánsko",
@@ -241,7 +240,7 @@ async function sourceCandidates(usedLinks) {
     const links = [...new Set(lists.filter(Boolean).flat())].filter(link => !used.has(link));
     log(`Nalezeno ${links.length} nových odkazů na nabídky.`);
 
-    const pages = await mapLimit(links.slice(0, 60), 5, async link => parseJobPage(link, await fetchText(link)));
+    const pages = await mapLimit(links.slice(0, 120), 6, async link => parseJobPage(link, await fetchText(link)));
     const eligible = pages.filter(isPreEligible);
     log(`Po předfiltru (země, jen angličtina, kategorie, platnost): ${eligible.length}.`);
     return eligible;
@@ -252,7 +251,6 @@ async function sourceCandidates(usedLinks) {
 // ---------------------------------------------------------------------------
 
 async function enrichWithAI(candidates) {
-    const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
     const batch = candidates.slice(0, 16).map((job, id) => ({
         id,
@@ -275,15 +273,39 @@ hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdar
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false}. Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
 Odpověz JSON: {"jobs":[{"id":0,"eligible":true,"category":"...","title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{...}}]}`;
 
-    const response = await client.chat.completions.create({
-        model,
-        temperature: 0.2,
-        response_format: { type: "json_object" },
-        messages: [
-            { role: "system", content: system },
-            { role: "user", content: JSON.stringify(batch) }
-        ]
-    });
+    // Volání přes vestavěný fetch (Node 20). Knihovna openai v4 tu na Railway
+    // padala na "Premature close", proto ji nepoužíváme. Max 3 pokusy.
+    let response = null;
+    let lastError = null;
+    for (let attempt = 1; attempt <= 3 && !response; attempt++) {
+        try {
+            const res = await fetch("https://api.openai.com/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Accept-Encoding": "identity",
+                    Authorization: `Bearer ${process.env.OPENAI_API_KEY}`
+                },
+                body: JSON.stringify({
+                    model,
+                    temperature: 0.2,
+                    response_format: { type: "json_object" },
+                    messages: [
+                        { role: "system", content: system },
+                        { role: "user", content: JSON.stringify(batch) }
+                    ]
+                })
+            });
+            const raw = await res.text();
+            if (!res.ok) throw new Error(`OpenAI HTTP ${res.status}: ${raw.slice(0, 300)}`);
+            response = JSON.parse(raw);
+        } catch (err) {
+            lastError = err;
+            logError(`OpenAI pokus ${attempt}/3 selhal:`, err.message);
+            await sleep(5000 * attempt);
+        }
+    }
+    if (!response) throw lastError || new Error("OpenAI neodpověděl.");
     const parsed = JSON.parse(response.choices[0].message.content || "{}");
     const byId = new Map((parsed.jobs || []).map(item => [item.id, item]));
     return candidates.slice(0, 16).map((job, id) => ({ job, ai: byId.get(id) })).filter(x => x.ai);
