@@ -396,7 +396,11 @@ function buildJobs(enriched, rates) {
             const salary = monthlyCzk(ai.salary, rates);
             const accommodation = ACCOMMODATION_VALUES.includes(ai.accommodation) ? ai.accommodation : "";
             const title = String(ai.title_cz || "").trim().slice(0, 40);
-            const description = (Array.isArray(ai.description_cz) ? ai.description_cz : []).map(String).filter(Boolean).slice(0, 3);
+            // Pojistka proti nepravdě: "bez praxe" jen když to inzerát opravdu říká.
+            const noExpRe = /,?\s*(i\s+)?bez (praxe|zkušeností|předchozích zkušeností)!?/gi;
+            const clean = s => (ai.no_experience ? String(s) : String(s).replace(noExpRe, "")).trim();
+            ai.hook_cz = clean(ai.hook_cz || "");
+            const description = (Array.isArray(ai.description_cz) ? ai.description_cz : []).map(clean).filter(Boolean).slice(0, 3);
             const emoji = { "Práce s ovocem/zeleninou": "🍓", "Práce na farmách": "🚜", "Úklid": "🧹", "Gastronomie": "👨‍🍳", "Hotelové práce": "🏨", "Sklady": "📦", "Továrny": "🏭" }[ai.category] || "💼";
             const caption = [
                 `${emoji} ${title} – ${countryCz}${salary ? ` – cca ${salary} / měsíc` : ""}`,
