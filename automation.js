@@ -350,7 +350,12 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_langua
         // AI jen hlídá jazyk a požadavek na VŠ/licenci.
         const category = categoryOf(job);
         ai.category = category;
-        ai.eligible = !!category && !ai.requires_other_language && !ai.requires_degree_or_license;
+        const yes = v => v === true || String(v).toLowerCase() === "true";
+        ai.blockLang = yes(ai.requires_other_language);
+        ai.blockLicense = yes(ai.requires_degree_or_license);
+        ai.no_experience = yes(ai.no_experience);
+        // Jazyk už hlídá předfiltr (pole "Language skills" = jen angličtina).
+        ai.eligible = !!category && !ai.blockLicense;
         return { job, ai };
     });
     log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
@@ -501,7 +506,8 @@ function setupAutomation(app, deps) {
         if (candidates.length === 0) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
         const enriched = await enrichWithAI(candidates);
         const review = enriched.map(({ job, ai }) => ({
-            title: job.title, country: job.country, eligible: !!ai.eligible, category: ai.category, title_cz: ai.title_cz
+            title: job.title, country: job.country, eligible: !!ai.eligible, category: ai.category, title_cz: ai.title_cz,
+            lang: ai.requires_other_language, lic: ai.requires_degree_or_license
         }));
         log("AI posouzení:", JSON.stringify(review));
         const jobs = buildJobs(enriched, await czkRates());
