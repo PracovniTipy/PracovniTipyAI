@@ -218,6 +218,24 @@ function parseJobPage(link, html) {
     };
 }
 
+function categoryOf(job) {
+    const title = String(job.title || "").toLowerCase();
+    const text = `${title} ${String(job.body || "").slice(0, 1500).toLowerCase()}`;
+    const rules = [
+        ["Práce s ovocem/zeleninou", /(pick|harvest|fruit|vegetable|berr|strawberr|apple|grape)/],
+        ["Práce na farmách", /(farm|greenhouse|agricult|horticult|nursery)/],
+        ["Úklid", /(clean|housekeep|room attendant|maid)/],
+        ["Gastronomie", /(chef|cook|kitchen|dishwash|waiter|waitress|waitstaff|bartender|barman|barista|restaurant|pizza|food service|server)/],
+        ["Hotelové práce", /(hotel|reception|hospitality|resort)/],
+        ["Sklady", /(warehouse|forklift|logistic|order pick|packing|packer)/],
+        ["Továrny", /(factory|production|operator|machine|extrusion|cnc|meat|fish|bakery|butcher|slaughter|manufactur)/]
+    ];
+    // Nejdřív podle názvu pozice, pak podle celého textu.
+    for (const [cat, re] of rules) if (re.test(title)) return cat;
+    for (const [cat, re] of rules) if (re.test(text)) return cat;
+    return "";
+}
+
 function isPreEligible(job) {
     if (!job || !job.title || !job.country || job.expired) return false;
     if (job.expiry) {
@@ -266,7 +284,8 @@ async function enrichWithAI(candidates) {
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
     const system = `Jsi editor účtu "Pracovní tipy" (nabídky práce v zahraničí pro Čechy bez vysoké školy).
 Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
-eligible=false pokud: vyžaduje jiný jazyk než angličtinu, vysokou školu, odbornou licenci/certifikát, nebo nepatří do kategorií: ${CATEGORIES.join(", ")}.
+requires_other_language: true jen když inzerát výslovně vyžaduje i jiný jazyk než angličtinu.
+requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
 title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy.
 city: město/region z inzerátu (nebo "").
 accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} podle inzerátu ("" když se o bydlení nepíše; "Ubytování zajištěno" jen když ho zaměstnavatel opravdu zajišťuje).
@@ -274,7 +293,7 @@ no_experience: true jen když inzerát výslovně říká, že praxe není nutn�
 description_cz: přesně 3 krátké věty (náplň práce; požadavky; benefity/podmínky).
 hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false}. Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JEN tímto JSON objektem (žádný jiný text): {"eligible":true,"category":"...","title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_language":false,"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
 
     // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
     // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
@@ -326,7 +345,14 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"eligible":true,"categ
 
     const list = candidates.slice(0, 16);
     const results = await mapLimit(list, 4, analyze);
-    const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai);
+    const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai).map(({ job, ai }) => {
+        // Kategorii určujeme sami podle klíčových slov (spolehlivější než AI),
+        // AI jen hlídá jazyk a požadavek na VŠ/licenci.
+        const category = categoryOf(job);
+        ai.category = category;
+        ai.eligible = !!category && !ai.requires_other_language && !ai.requires_degree_or_license;
+        return { job, ai };
+    });
     log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
     return out;
 }
