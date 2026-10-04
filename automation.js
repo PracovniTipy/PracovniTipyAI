@@ -230,14 +230,26 @@ function isPreEligible(job) {
     return true;
 }
 
+// Stejná nabídka bývá na webu pod více adresami (".../nazev" i ".../nazev-0").
+function linkKey(link) {
+    return String(link || "").trim().toLowerCase().replace(/\/+$/, "").replace(/-\d+$/, "");
+}
+
 async function sourceCandidates(usedLinks) {
-    const used = new Set(usedLinks);
+    const usedKeys = new Set(usedLinks.map(linkKey));
+    const used = { has: link => usedKeys.has(linkKey(link)) };
     const lists = await mapLimit(KEYWORDS, 4, async keyword => {
         const url = `https://europeanjobdays.eu/en/jobs?field_job_status_value=Active&keywords=${encodeURIComponent(keyword)}`;
         const html = await fetchText(url);
         return [...html.matchAll(/href="(https:\/\/europeanjobdays\.eu\/en\/job\/[^"?#]+)"/g)].map(m => m[1]);
     });
-    const links = [...new Set(lists.filter(Boolean).flat())].filter(link => !used.has(link));
+    const seenKeys = new Set();
+    const links = [...new Set(lists.filter(Boolean).flat())].filter(link => {
+        const key = linkKey(link);
+        if (used.has(link) || seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
+    });
     log(`Nalezeno ${links.length} nových odkazů na nabídky.`);
 
     const pages = await mapLimit(links.slice(0, 120), 6, async link => parseJobPage(link, await fetchText(link)));
@@ -462,6 +474,10 @@ function setupAutomation(app, deps) {
         const candidates = await sourceCandidates(state.usedLinks);
         if (candidates.length === 0) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
         const enriched = await enrichWithAI(candidates);
+        const review = enriched.map(({ job, ai }) => ({
+            title: job.title, country: job.country, eligible: !!ai.eligible, category: ai.category, title_cz: ai.title_cz
+        }));
+        log("AI posouzení:", JSON.stringify(review));
         const jobs = buildJobs(enriched, await czkRates());
         log(`Vybráno ${jobs.length} nabídek:`, jobs.map(j => `${j.job_title} (${j.country})`).join(" | "));
         if (jobs.length === 0) throw new Error("AI nevyhodnotila žádnou nabídku jako vhodnou.");
@@ -478,6 +494,8 @@ function setupAutomation(app, deps) {
             for (const job of jobs) if (!s.usedLinks.includes(job.link)) s.usedLinks.push(job.link);
             s.runs[date] = {
                 startedAt: new Date().toISOString(),
+                candidates: candidates.length,
+                review,
                 selected: jobs.map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link })),
                 heroheroQueued: herohero.length,
                 instagram
@@ -533,6 +551,8 @@ function setupAutomation(app, deps) {
             usedLinks: state.usedLinks.length,
             repliedComments: state.repliedComments.length,
             runs: Object.fromEntries(dates.map(d => [d, {
+                candidates: state.runs[d].candidates,
+                review: state.runs[d].review,
                 selected: state.runs[d].selected,
                 instagram: (state.runs[d].instagram || []).map(r => r.title || r.link),
                 herohero: state.runs[d].herohero,
