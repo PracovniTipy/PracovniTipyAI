@@ -124,7 +124,9 @@ function setupCv(app, { cloudinary }) {
     async function uploadPdf(buffer, name) {
         return await new Promise((resolve, reject) => {
             const stream = cloudinary.uploader.upload_stream(
-                { resource_type: "raw", folder: "PracovniTipyAI/cv", public_id: `${name}.pdf` },
+                // Cloudinary (free) blokuje doručení souborů .pdf, proto ukládáme
+                // pod neutrální příponou a PDF posíláme přes vlastní /cv/pdf/...
+                { resource_type: "raw", folder: "PracovniTipyAI/cv", public_id: `${name}.cvdata`, overwrite: true },
                 (err, result) => (err ? reject(err) : resolve(result.secure_url))
             );
             stream.end(buffer);
@@ -164,6 +166,23 @@ function setupCv(app, { cloudinary }) {
 
     app.get("/cv", (req, res) => res.type("html").send(PAGE_HTML));
 
+    app.get("/cv/pdf/:name", async (req, res) => {
+        const name = String(req.params.name || "");
+        if (!/^[a-z0-9-]{3,120}-(CZ|EN)$/i.test(name)) return res.status(404).send("Nenalezeno");
+        try {
+            const cloud = cloudinary.config().cloud_name;
+            const r = await fetch(`https://res.cloudinary.com/${cloud}/raw/upload/PracovniTipyAI/cv/${name}.cvdata`);
+            if (!r.ok) return res.status(404).send("Životopis nebyl nalezen.");
+            const buf = Buffer.from(await r.arrayBuffer());
+            res.set("Content-Type", "application/pdf");
+            res.set("Content-Disposition", `inline; filename="zivotopis-${name}.pdf"`);
+            res.send(buf);
+        } catch (err) {
+            logError("Stažení PDF selhalo:", err.message);
+            res.status(500).send("Chyba při stahování.");
+        }
+    });
+
     app.post("/cv/lead", async (req, res) => {
         if (rateLimited(req, 20)) return res.status(429).json({ error: "Příliš mnoho pokusů, zkus to za chvíli." });
         const b = req.body || {};
@@ -194,7 +213,8 @@ function setupCv(app, { cloudinary }) {
         const system = `Jsi přátelský asistent "Pracovní tipy", který pomáhá Čechům sestavit životopis pro práci v zahraničí.
 Uživatel: ${session.lead.name}, věk ${session.lead.age} let, aktuální rok ${year}.
 Tvůj úkol: krátce se doptat na pracovní zkušenosti, vzdělání, jazyky a dovednosti. Pokládej VŽDY jen 1 krátkou otázku najednou, česky, tykej.
-Když člověk neví, kdy pracoval, pomoz mu to odhadnout: zeptej se, kolik mu tehdy bylo let, a rok dopočítej (rok ≈ ${year} − (${session.lead.age} − tehdejší věk)). Odhad mu napiš, ať ho potvrdí (např. "To bylo tedy zhruba v roce 2019, sedí to?").
+Když člověk neví, kdy pracoval, pomoz mu to odhadnout: zeptej se, kolik mu tehdy bylo let, a rok vezmi z této tabulky (věk → rok): ${Array.from({ length: Math.max(0, session.lead.age - 14) }, (_, i) => `${15 + i}→${year - (session.lead.age - 15 - i)}`).join(", ")}.
+Když řekne, že tam byl např. rok nebo do loňska, dopočítej i konec. Neptej se znovu na to, co už řekl. Odhad mu napiš, ať ho potvrdí (např. "To bylo tedy zhruba v roce 2019, sedí to?").
 U každé práce zjisti: pozici, kde (firma nebo aspoň typ podniku a město/země), přibližně od kdy do kdy a co tam dělal. Pak vzdělání, jazyky (a úroveň), řidičák, další dovednosti.
 Nic si nevymýšlej. Až budeš mít dost informací (nebo po ~8 otázkách), napiš, že může kliknout na "Vytvořit životopis".`;
         try {
@@ -222,9 +242,12 @@ Vrať JSON: {"cz": CV, "en": CV} kde CV = {"headline":"krátký titulek","summar
             const raw = await openai([{ role: "system", content: system }, { role: "user", content: transcript }], { maxTokens: 1800, json: true });
             const data = JSON.parse(raw);
             const base = { name: lead.name, age: lead.age, phone: lead.phone, email: lead.email };
-            const slug = `${lead.name.normalize("NFD").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${lead.id.slice(0, 8)}`;
+            const slug = `${lead.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${lead.id.slice(0, 8)}`;
             const [czPdf, enPdf] = [await htmlToPdf(cvHtml({ ...base, ...data.cz }, "cz")), await htmlToPdf(cvHtml({ ...base, ...data.en }, "en"))];
-            const [cvCz, cvEn] = await Promise.all([uploadPdf(czPdf, `${slug}-CZ`), uploadPdf(enPdf, `${slug}-EN`)]);
+            await Promise.all([uploadPdf(czPdf, `${slug}-CZ`), uploadPdf(enPdf, `${slug}-EN`)]);
+            const base_url = `https://${req.get("host")}/cv/pdf/`;
+            const cvCz = `${base_url}${slug}-CZ`;
+            const cvEn = `${base_url}${slug}-EN`;
             log(`CV vytvořeno pro ${lead.id}.`);
             const entry = { ...lead, cvCz, cvEn, cvCreatedAt: new Date().toISOString() };
             backupLead(entry);
