@@ -16,6 +16,7 @@
 // ============================================================================
 
 const crypto = require("crypto");
+const { TEMPLATES, renderCv, SAMPLE } = require("./cvTemplates");
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const HEROHERO_LINK = "https://herohero.co/devotedzxfepftuubeim";
@@ -101,7 +102,8 @@ async function htmlToPdf(html) {
     const browser = await chromium.launch({ args: ["--no-sandbox"] });
     try {
         const page = await browser.newPage();
-        await page.setContent(html, { waitUntil: "load" });
+        await page.setContent(html, { waitUntil: "networkidle", timeout: 30000 }).catch(() => {});
+        await page.evaluate(() => document.fonts && document.fonts.ready).catch(() => {});
         return await page.pdf({ format: "A4", printBackground: true });
     } finally {
         await browser.close();
@@ -168,6 +170,12 @@ function setupCv(app, { cloudinary }) {
 
     app.get("/cv", (req, res) => res.type("html").send(PAGE_HTML));
 
+    // Náhled šablony s ukázkovými daty (pro výběr šablony na stránce).
+    app.get("/cv/template/:id", (req, res) => {
+        if (!TEMPLATES.some(t => t.id === req.params.id)) return res.status(404).send("Nenalezeno");
+        res.type("html").send(renderCv(SAMPLE, req.query.lang === "en" ? "en" : "cz", req.params.id));
+    });
+
     app.get("/cv/pdf/:name", async (req, res) => {
         const name = String(req.params.name || "");
         if (!/^[a-z0-9-]{3,120}-(CZ|EN)$/i.test(name)) return res.status(404).send("Nenalezeno");
@@ -196,7 +204,8 @@ function setupCv(app, { cloudinary }) {
             return res.status(400).json({ error: "Vyplň prosím správně všechna pole a potvrď souhlas." });
         }
         const id = crypto.randomUUID();
-        const lead = { id, name, age, phone, email, source: String(b.source || "").slice(0, 50), createdAt: new Date().toISOString() };
+        const template = TEMPLATES.some(t => t.id === b.template) ? b.template : "executive";
+        const lead = { id, name, age, phone, email, template, source: String(b.source || "").slice(0, 50), createdAt: new Date().toISOString() };
         sessions.set(id, { lead, createdAt: Date.now() });
         log(`Nový kontakt ${id} (${email}).`);
         backupLead(lead);
@@ -245,7 +254,7 @@ Vrať JSON: {"cz": CV, "en": CV} kde CV = {"headline":"krátký titulek","summar
             const data = JSON.parse(raw);
             const base = { name: lead.name, age: lead.age, phone: lead.phone, email: lead.email };
             const slug = `${lead.name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^\w]+/g, "-").replace(/^-|-$/g, "").toLowerCase()}-${lead.id.slice(0, 8)}`;
-            const [czPdf, enPdf] = [await htmlToPdf(cvHtml({ ...base, ...data.cz }, "cz")), await htmlToPdf(cvHtml({ ...base, ...data.en }, "en"))];
+            const [czPdf, enPdf] = [await htmlToPdf(renderCv({ ...base, ...data.cz }, "cz", lead.template)), await htmlToPdf(renderCv({ ...base, ...data.en }, "en", lead.template))];
             await Promise.all([uploadPdf(czPdf, `${slug}-CZ`), uploadPdf(enPdf, `${slug}-EN`)]);
             const base_url = `https://${req.get("host")}/cv/pdf/`;
             const cvCz = `${base_url}${slug}-CZ`;
@@ -289,12 +298,25 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 .row{display:flex;gap:8px;margin-top:10px}.row textarea{height:52px;resize:none}.row button{width:auto;margin:0;padding:0 18px}
 .err{color:#c62828;font-size:14px;margin-top:8px}.hidden{display:none}
 .done a{display:block;text-align:center;margin-top:12px;padding:14px;border-radius:12px;background:#1f6feb;color:#fff;text-decoration:none;font-weight:700}
+.tpls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.tpl{border:2px solid #e3e7ee;border-radius:12px;padding:8px;cursor:pointer;text-align:center;background:#fff}
+.tpl.sel{border-color:#1f6feb;box-shadow:0 0 0 3px rgba(31,111,235,.15)}
+.tpl b{display:block;margin-top:6px;font-size:14px}.tpl span{display:block;font-size:12px;color:#667}
+.thumb{position:relative;width:100%;aspect-ratio:210/297;overflow:hidden;border-radius:6px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.thumb iframe{position:absolute;left:0;top:0;width:794px;height:1123px;border:0;transform-origin:0 0;pointer-events:none}
 .done a.hh{background:#ff5a5f}.small{font-size:12px;color:#667;text-align:center;margin-top:14px}
 </style></head><body><div class="wrap">
 <div class="hero"><div style="font-size:34px">📄✨</div><h1>Životopis v češtině i angličtině zdarma</h1>
 <p>Stačí napsat, kde jsi pracoval/a – i když si nepamatuješ přesná data. AI to dopočítá a připraví ti CV pro práci v zahraničí.</p></div>
 
-<div class="card" id="step1">
+<div class="card" id="step0">
+  <h2 style="margin:0 0 4px;font-size:18px">1. Vyber si vzhled životopisu</h2>
+  <p style="margin:0 0 10px;color:#566;font-size:14px">Obsah doplní AI podle toho, co jí napíšeš.</p>
+  <div class="tpls">${TEMPLATES.map(t => `<div class="tpl" data-id="${t.id}"><div class="thumb"><iframe src="/cv/template/${t.id}" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><b>${t.name}</b><span>${t.desc}</span></div>`).join("")}</div>
+  <button id="pick">Pokračovat ➜</button><div class="err" id="err0"></div>
+</div>
+
+<div class="card hidden" id="step1">
   <label>Jméno a příjmení</label><input id="name" type="text" autocomplete="name">
   <label>Věk</label><input id="age" type="number" min="15" max="80" inputmode="numeric">
   <label>Telefon</label><input id="phone" type="tel" placeholder="+420 ..." autocomplete="tel">
@@ -319,12 +341,16 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 <p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme ověřené nabídky</p>
 </div>
 <script>
-const $=id=>document.getElementById(id);let sid=null;const history=[];
+const $=id=>document.getElementById(id);let sid=null;const history=[];let tpl=null;
+function fitThumbs(){document.querySelectorAll('.thumb').forEach(t=>{const f=t.querySelector('iframe');f.style.transform='scale('+(t.clientWidth/794)+')'})}
+window.addEventListener('resize',fitThumbs);setTimeout(fitThumbs,50);
+document.querySelectorAll('.tpl').forEach(el=>el.onclick=()=>{document.querySelectorAll('.tpl').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');tpl=el.dataset.id;$('err0').textContent=''});
+$('pick').onclick=()=>{if(!tpl){$('err0').textContent='Vyber si prosím jednu šablonu 🙂';return}$('step0').classList.add('hidden');$('step1').classList.remove('hidden');window.scrollTo(0,0)};
 function add(role,text){history.push({role,content:text});const d=document.createElement('div');d.className='msg '+(role==='assistant'?'ai':'me');d.textContent=text;$('msgs').appendChild(d);$('msgs').scrollTop=1e9;}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Chyba, zkus to znovu.');return j;}
 $('start').onclick=async()=>{$('err1').textContent='';$('start').disabled=true;
  try{const src=new URLSearchParams(location.search).get('src')||'';
-  const j=await post('/cv/lead',{name:$('name').value,age:$('age').value,phone:$('phone').value,email:$('email').value,consent:$('consent').checked,source:src});
+  const j=await post('/cv/lead',{name:$('name').value,age:$('age').value,phone:$('phone').value,email:$('email').value,consent:$('consent').checked,source:src,template:tpl});
   sid=j.sessionId;$('step1').classList.add('hidden');$('step2').classList.remove('hidden');
   add('assistant','Ahoj '+$('name').value.split(' ')[0]+'! 👋 Napiš mi, kde a jako co jsi pracoval/a. Klidně přibližně – třeba „dělal jsem barmana, nepamatuju si kdy, ale chodil jsem tam rok“. Data spolu dopočítáme. 🙂');
  }catch(e){$('err1').textContent=e.message}$('start').disabled=false;};
