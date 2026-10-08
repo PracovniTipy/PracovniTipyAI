@@ -34,7 +34,8 @@ const KEYWORDS = [
 ];
 
 const CATEGORY_HINT = /(pick|harvest|farm|fruit|vegetable|berr|greenhouse|agricult|clean|housekeep|room attendant|maid|kitchen|chef|cook|dishwash|waiter|waitress|bartender|barista|restaurant|hotel|reception|warehouse|forklift|logistic|packing|packer|production|factory|meat|fish|food|bakery|slaughter|butcher)/i;
-const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager)/i;
+const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber)/i;
+const NON_LATIN = /[Ͱ-ϿЀ-ӿ]/; // řečtina, azbuka
 const OTHER_LANGUAGE = /(german|french|italian|spanish|dutch|swedish|norwegian|danish|finnish|greek|estonian|polish|portuguese|slovak|slovenian|croatian|serbian|bulgarian|hungarian|romanian|lithuanian|latvian|maltese|russian|ukrainian)/i;
 const BLOCKED_WORDS = /mont|assembl/i;
 
@@ -243,7 +244,7 @@ function isPreEligible(job) {
         if (!Number.isNaN(date.getTime()) && date.getTime() < Date.now()) return false;
     }
     if (!/english/i.test(job.languages) || OTHER_LANGUAGE.test(job.languages)) return false;
-    if (EXCLUDE_HINT.test(job.title)) return false;
+    if (EXCLUDE_HINT.test(job.title) || NON_LATIN.test(job.title)) return false;
     if (!CATEGORY_HINT.test(`${job.title} ${job.body.slice(0, 800)}`)) return false;
     return true;
 }
@@ -342,8 +343,15 @@ async function sourceCandidates(usedLinks) {
     } catch (err) {
         logError("EURES zdroj selhal:", err.message);
     }
-    // Nejdřív European Job Days (mají mzdy), pak EURES; celkem max 24 pro AI.
-    return [...eligible, ...eures].slice(0, 24);
+    // EURES střídáme po zemích (jinak převáží Irsko a limit 2/zemi nedá 5 nabídek).
+    const byCountry = {};
+    for (const job of eures) (byCountry[job.country] = byCountry[job.country] || []).push(job);
+    const mixed = [];
+    for (let round = 0; mixed.length < eures.length; round++) {
+        for (const list of Object.values(byCountry)) if (list[round]) mixed.push(list[round]);
+    }
+    // Nejdřív European Job Days (mají mzdy), pak EURES; celkem max 36 pro AI.
+    return [...eligible, ...mixed].slice(0, 36);
 }
 
 // ---------------------------------------------------------------------------
@@ -354,7 +362,7 @@ async function enrichWithAI(candidates) {
     const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
     const system = `Jsi editor účtu "Pracovní tipy" (nabídky práce v zahraničí pro Čechy bez vysoké školy).
 Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
-requires_other_language: true jen když inzerát výslovně vyžaduje i jiný jazyk než angličtinu.
+required_languages: seznam jazyků, které inzerát VÝSLOVNĚ vyžaduje (např. ["English"] nebo ["English","Finnish"]); když žádný neuvádí, dej [].
 requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
 title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy.
 city: město/region z inzerátu (nebo "").
@@ -363,7 +371,7 @@ no_experience: true jen když inzerát výslovně říká, že praxe není nutn�
 description_cz: přesně 3 krátké věty (náplň práce; požadavky; benefity/podmínky).
 hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false}. Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_language":false,"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
 
     // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
     // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
@@ -413,7 +421,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_langua
         return null;
     }
 
-    const list = candidates.slice(0, 24);
+    const list = candidates.slice(0, 36);
     const results = await mapLimit(list, 4, analyze);
     const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai).map(({ job, ai }) => {
         // Kategorii určujeme sami podle klíčových slov (spolehlivější než AI),
@@ -421,7 +429,9 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_langua
         const category = categoryOf(job);
         ai.category = category;
         const yes = v => v === true || String(v).toLowerCase() === "true";
-        ai.blockLang = yes(ai.requires_other_language);
+        const langs = Array.isArray(ai.required_languages) ? ai.required_languages : [];
+        ai.requires_other_language = langs.some(l => !/^\s*(english|angličtina|anglictina|en)\s*$/i.test(String(l)));
+        ai.blockLang = ai.requires_other_language;
         ai.blockLicense = yes(ai.requires_degree_or_license);
         ai.no_experience = yes(ai.no_experience);
         // Jazyk už hlídá předfiltr (pole "Language skills" = jen angličtina).
@@ -457,7 +467,7 @@ function monthlyCzk(salary, rates) {
     return `${value.toLocaleString("cs-CZ")} Kč ${salary.net ? "čistého" : "hrubého"}`;
 }
 
-function buildJobs(enriched, rates) {
+function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
     const priority = { "Práce s ovocem/zeleninou": 3, "Práce na farmách": 3 };
     const usable = enriched
         .filter(({ ai }) => ai.eligible && CATEGORIES.includes(ai.category))
@@ -502,12 +512,13 @@ function buildJobs(enriched, rates) {
         .sort((a, b) => b.score - a.score);
 
     const perCountry = {};
+    for (const c of existingCountries) perCountry[c] = (perCountry[c] || 0) + 1;
     const picked = [];
     for (const { job } of usable) {
         if ((perCountry[job.country] || 0) >= 2) continue;
         perCountry[job.country] = (perCountry[job.country] || 0) + 1;
         picked.push(job);
-        if (picked.length === 5) break;
+        if (picked.length >= limit) break;
     }
     return picked;
 }
@@ -570,12 +581,19 @@ function setupAutomation(app, deps) {
         const date = pragueDate();
         const state = await store.load();
         const previous = state.runs[date];
-        if (previous && previous.instagram && !force) {
+        const prevSelected = (previous && previous.selected) || [];
+        // Doplnění: když dnešní běh našel méně než 5 nabídek, další běh dohledá zbytek.
+        const topUp = !!(previous && previous.instagram && prevSelected.length > 0 && prevSelected.length < 5);
+        if (previous && previous.instagram && !force && !topUp) {
             log(`Dnešní běh (${date}) už proběhl, vracím uložený výsledek.`);
             return { success: true, alreadyRan: true, date, ...previous };
         }
 
-        log(`Startuji denní běh ${date}.`);
+        if (topUp && !previous.heroheroFinishedAt) {
+            throw new Error("HeroHero dávka z dnešního běhu ještě běží, doplnění zkusím později.");
+        }
+        const limit = topUp ? 5 - prevSelected.length : 5;
+        log(topUp ? `Doplňuji dnešní běh ${date}: hledám ještě ${limit} nabídek.` : `Startuji denní běh ${date}.`);
         const candidates = await sourceCandidates(state.usedLinks);
         if (candidates.length === 0) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
         const enriched = await enrichWithAI(candidates);
@@ -584,7 +602,7 @@ function setupAutomation(app, deps) {
             lang: ai.requires_other_language, lic: ai.requires_degree_or_license
         }));
         log("AI posouzení:", JSON.stringify(review));
-        const jobs = buildJobs(enriched, await czkRates());
+        const jobs = buildJobs(enriched, await czkRates(), limit, topUp ? prevSelected.map(j => j.country) : []);
         log(`Vybráno ${jobs.length} nabídek:`, jobs.map(j => `${j.job_title} (${j.country})`).join(" | "));
         if (jobs.length === 0) throw new Error("AI nevyhodnotila žádnou nabídku jako vhodnou.");
 
@@ -598,20 +616,34 @@ function setupAutomation(app, deps) {
 
         await store.update(s => {
             for (const job of jobs) if (!s.usedLinks.includes(job.link)) s.usedLinks.push(job.link);
-            s.runs[date] = {
-                startedAt: new Date().toISOString(),
-                candidates: candidates.length,
-                review,
-                selected: jobs.map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link })),
-                heroheroQueued: herohero.length,
-                instagram
-            };
+            const selected = jobs.map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link }));
+            const prev = s.runs[date];
+            if (topUp && prev) {
+                const prevIg = prev.instagram || [];
+                prev.selected = [...(prev.selected || []), ...selected];
+                prev.heroheroQueued = (prev.heroheroQueued || 0) + herohero.length;
+                prev.instagram = prevIg.length >= 2 ? prevIg : [...prevIg, ...instagram].slice(0, 2);
+                prev.review = review;
+                prev.candidates = candidates.length;
+                prev.toppedUpAt = new Date().toISOString();
+                delete prev.heroheroFinishedAt;
+            } else {
+                s.runs[date] = {
+                    startedAt: new Date().toISOString(),
+                    candidates: candidates.length,
+                    review,
+                    selected,
+                    heroheroQueued: herohero.length,
+                    instagram
+                };
+            }
         });
 
         // HeroHero trvá ~3 min na příspěvek, proto běží na pozadí.
         publishHeroHeroBatch(date).catch(err => logError("HeroHero dávka spadla:", err.message));
 
-        return { success: true, date, selected: jobs.map(j => `${j.job_title} (${j.country})`), heroheroQueued: herohero.length, instagram };
+        const saved = (await store.load()).runs[date] || {};
+        return { success: true, date, topUp, selected: (saved.selected || []).map(j => `${j.title} (${j.country})`), heroheroQueued: herohero.length, instagram: saved.instagram || instagram };
     }
 
     // Vlastní plánovač na serveru: každých 5 minut zkontroluje, jestli je po
@@ -625,7 +657,8 @@ function setupAutomation(app, deps) {
             if (hour < 12) return;
             const date = pragueDate(now);
             const state = await store.load();
-            if (state.runs[date] && state.runs[date].instagram) return;
+            const today = state.runs[date];
+            if (today && today.instagram && ((today.selected || []).length >= 5 || !today.heroheroFinishedAt)) return;
             if ((attempts[date] || 0) >= 3) return;
             attempts[date] = (attempts[date] || 0) + 1;
             log(`Plánovač: spouštím denní běh ${date} (pokus ${attempts[date]}/3).`);
