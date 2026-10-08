@@ -105,11 +105,12 @@ async function renderSlide(templateFolder, c, slide, index, total, accent) {
     ctx.fillRect(pad, y + 20, 120, 8);
     y += 70;
 
-    ctx.font = "44px sans-serif";
+    // Text v Bebas Neue (jediné písmo na serveru se správnou češtinou).
+    ctx.font = '60px "Bebas Neue"';
     ctx.fillStyle = "#FFFFFF";
-    for (const line of wrap(ctx, slide.body, W - pad * 2)) {
+    for (const line of wrap(ctx, slide.body.toUpperCase(), W - pad * 2)) {
         ctx.fillText(line, pad, y);
-        y += 62;
+        y += 70;
     }
 
     if (slide.cover && !slide.end) {
