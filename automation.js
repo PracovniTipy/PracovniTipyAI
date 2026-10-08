@@ -557,6 +557,79 @@ function setupAutomation(app, deps) {
     const local = path => `http://127.0.0.1:${PORT}${path}`;
     let running = null;
 
+    // -----------------------------------------------------------------------
+    // Přímé zveřejnění reelů na Instagram přes Instagram API (bez Make).
+    // Funguje jen pokud má IG_ACCESS_TOKEN oprávnění
+    // instagram_business_content_publish. Dedup podle odkazu v state.igPublished.
+    // -----------------------------------------------------------------------
+    const IG_API = "https://graph.instagram.com/v21.0";
+    const IG_DIRECT_FROM = "2026-10-09"; // starší dny už zveřejnil Make
+    let igPublishing = false;
+
+    async function igCall(method, pathPart, params) {
+        const token = process.env.IG_ACCESS_TOKEN;
+        const url = new URL(`${IG_API}/${pathPart}`);
+        const opts = { method, headers: { Authorization: `Bearer ${token}` } };
+        if (method === "GET") {
+            for (const [k, v] of Object.entries(params || {})) url.searchParams.set(k, v);
+        } else {
+            opts.headers["Content-Type"] = "application/json";
+            opts.body = JSON.stringify(params || {});
+        }
+        const res = await fetch(url, opts);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.error) throw new Error((data.error && data.error.message) || `HTTP ${res.status}`);
+        return data;
+    }
+
+    async function publishReelsDirect(date) {
+        if (igPublishing || process.env.IG_DIRECT_PUBLISH === "0") return;
+        if (!process.env.IG_ACCESS_TOKEN || !IG_BUSINESS_ID || date < IG_DIRECT_FROM) return;
+        igPublishing = true;
+        try {
+            const state = await store.load();
+            const run = state.runs[date];
+            if (!run || !Array.isArray(run.instagram)) return;
+            state.igPublished = Array.isArray(state.igPublished) ? state.igPublished : [];
+            for (const reel of run.instagram.slice(0, 2)) {
+                const key = linkKey(reel.link);
+                if (!reel.videoUrl || state.igPublished.includes(key)) continue;
+                log(`IG: zveřejňuji reel "${reel.title}"…`);
+                const container = await igCall("POST", `${IG_BUSINESS_ID}/media`, {
+                    media_type: "REELS", video_url: reel.videoUrl, caption: reel.caption, share_to_feed: true
+                });
+                let status = "";
+                for (let i = 0; i < 40; i++) {
+                    await sleep(15000);
+                    status = (await igCall("GET", container.id, { fields: "status_code" })).status_code;
+                    if (status === "FINISHED" || status === "ERROR" || status === "EXPIRED") break;
+                }
+                if (status !== "FINISHED") throw new Error(`Instagram video nezpracoval (stav ${status}).`);
+                const media = await igCall("POST", `${IG_BUSINESS_ID}/media_publish`, { creation_id: container.id });
+                await store.update(st => {
+                    st.igPublished = Array.isArray(st.igPublished) ? st.igPublished : [];
+                    if (!st.igPublished.includes(key)) st.igPublished.push(key);
+                    const r = st.runs[date];
+                    if (r) (r.igDirect = r.igDirect || []).push({ title: reel.title, mediaId: media.id, at: new Date().toISOString() });
+                });
+                log(`IG: reel "${reel.title}" zveřejněn (media ${media.id}).`);
+            }
+        } catch (err) {
+            logError("IG: přímé zveřejnění selhalo:", err.message);
+        } finally {
+            igPublishing = false;
+        }
+    }
+
+    app.get("/ig/check", async (req, res) => {
+        try {
+            const limit = await igCall("GET", `${IG_BUSINESS_ID}/content_publishing_limit`, { fields: "quota_usage,config" });
+            res.json({ ok: true, canPublish: true, limit });
+        } catch (err) {
+            res.json({ ok: false, canPublish: false, error: err.message });
+        }
+    });
+
     async function postLocal(path, body) {
         const res = await fetch(local(path), {
             method: "POST",
@@ -691,6 +764,7 @@ function setupAutomation(app, deps) {
             const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", hour12: false }).format(now));
             if (hour < 12) return;
             const date = pragueDate(now);
+            publishReelsDirect(date).catch(() => {});
             const state = await store.load();
             const today = state.runs[date];
             const doneCount = today ? new Set((today.herohero || []).map(h => h.title)).size : 0;
@@ -712,6 +786,10 @@ function setupAutomation(app, deps) {
         try {
             if (!running) running = dailyRun(force).finally(() => { running = null; });
             const result = await running;
+            // Co už server zveřejnil sám, Make znovu neposílá.
+            const st = await store.load();
+            const done = new Set(st.igPublished || []);
+            result.instagram = (result.instagram || []).filter(r => !done.has(linkKey(r.link)));
             res.json(result);
         } catch (err) {
             logError("Denní běh selhal:", err.stack || err.message);
