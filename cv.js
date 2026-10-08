@@ -112,8 +112,10 @@ function setupCv(app, { cloudinary }) {
     const sessions = new Map();          // sessionId -> { lead, createdAt }
     const hits = new Map();              // ip -> [timestamps]
 
-    function rateLimited(req, max) {
-        const ip = String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+    // Limity počítáme zvlášť pro každý krok (dřív se zprávy v chatu počítaly
+    // do limitu pro vytvoření CV a po pár zprávách to hlásilo chybu).
+    function rateLimited(req, max, bucket) {
+        const ip = bucket + ":" + String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
         const now = Date.now();
         const list = (hits.get(ip) || []).filter(t => now - t < 60 * 60 * 1000);
         list.push(now);
@@ -184,7 +186,7 @@ function setupCv(app, { cloudinary }) {
     });
 
     app.post("/cv/lead", async (req, res) => {
-        if (rateLimited(req, 20)) return res.status(429).json({ error: "Příliš mnoho pokusů, zkus to za chvíli." });
+        if (rateLimited(req, 20, "lead")) return res.status(429).json({ error: "Příliš mnoho pokusů, zkus to za chvíli." });
         const b = req.body || {};
         const name = String(b.name || "").trim().slice(0, 80);
         const age = Number(b.age);
@@ -203,7 +205,7 @@ function setupCv(app, { cloudinary }) {
     });
 
     app.post("/cv/chat", async (req, res) => {
-        if (rateLimited(req, 80)) return res.status(429).json({ error: "Příliš mnoho zpráv, zkus to za chvíli." });
+        if (rateLimited(req, 150, "chat")) return res.status(429).json({ error: "Příliš mnoho zpráv, zkus to za chvíli." });
         const session = sessions.get(String((req.body || {}).sessionId || ""));
         if (!session) return res.status(400).json({ error: "Relace vypršela, obnov prosím stránku." });
         const messages = (Array.isArray(req.body.messages) ? req.body.messages : [])
@@ -226,7 +228,7 @@ Nic si nevymýšlej. Až budeš mít dost informací (nebo po ~8 otázkách), na
     });
 
     app.post("/cv/generate", async (req, res) => {
-        if (rateLimited(req, 6)) return res.status(429).json({ error: "Životopis jde vytvořit jen pár krát za hodinu." });
+        if (rateLimited(req, 15, "generate")) return res.status(429).json({ error: "Životopis jde vytvořit jen pár krát za hodinu." });
         const session = sessions.get(String((req.body || {}).sessionId || ""));
         if (!session) return res.status(400).json({ error: "Relace vypršela, obnov prosím stránku." });
         const transcript = (Array.isArray(req.body.messages) ? req.body.messages : [])
@@ -308,7 +310,7 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 </div>
 
 <div class="card hidden done" id="step3">
-  <h2 style="margin:0 0 6px">Hotovo! 🎉</h2><p>Tvůj životopis je připravený a poslali jsme ti ho i na e-mail.</p>
+  <h2 style="margin:0 0 6px">Hotovo! 🎉</h2><p>Tvůj životopis je připravený. Stáhni si ho a ulož do mobilu – hodí se při přihlášce.</p>
   <a id="cz" target="_blank">⬇️ Stáhnout CV česky (PDF)</a>
   <a id="en" target="_blank">⬇️ Stáhnout CV anglicky (PDF)</a>
   <p style="margin-top:18px">A teď kam s ním? Každý den vybíráme ověřené nabídky práce v zahraničí, kam se můžeš hned přihlásit:</p>
