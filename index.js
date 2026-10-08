@@ -973,6 +973,31 @@ async function downloadRandomMusic(targetPath) {
     }
 }
 
+const { createHookReel } = require("./reelHook");
+async function createHookReelSafe(imageBuffer, reel, templateFile) {
+    const id = Date.now();
+    const musicPath = path.join(os.tmpdir(), `${id}-hook-music.audio`);
+    const silentPath = path.join(os.tmpdir(), `${id}-hook-silence.wav`);
+    const hasMusic = await downloadRandomMusic(musicPath);
+    if (!hasMusic) fs.writeFileSync(silentPath, createSilentWavBuffer(12, 44100, 2));
+    try {
+        const url = await createHookReel({
+            templatePath: path.join(TEMPLATE_FOLDER, templateFile),
+            mainImage: imageBuffer,
+            country: getCountryCz(reel),
+            title: cleanText(reel.job_title || reel.title || ""),
+            salary: formatMonthlyCzkSalary(reel.salary_czk_month, reel.monthly_salary_czk, reel.salary_month_czk, reel.salary_monthly_czk, reel.salary),
+            audioPath: hasMusic ? musicPath : silentPath,
+            isMusic: hasMusic,
+            upload: async file => (await cloudinary.uploader.upload(file, { resource_type: "video", folder: "PracovniTipyAI/reels" })).secure_url
+        });
+        console.log("[REEL] Reel s háčkem hotový:", url);
+        return url;
+    } finally {
+        for (const f of [musicPath, silentPath]) if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
+}
+
 async function createReel(imageBuffer) {
     const id = Date.now();
     const musicPath = path.join(os.tmpdir(), `${id}-music.audio`);
@@ -1284,10 +1309,13 @@ app.post(
                         template
                     );
 
-                const videoUrl =
-                    await createReel(
-                        imageBuffer
-                    );
+                let videoUrl = "";
+                try {
+                    videoUrl = await createHookReelSafe(imageBuffer, reelForImage, template);
+                } catch (hookErr) {
+                    console.warn("[REEL] Reel s háčkem selhal, používám klasický:", hookErr.message);
+                    videoUrl = await createReel(imageBuffer);
+                }
 
                 instagram.push({
                     ...reel,
