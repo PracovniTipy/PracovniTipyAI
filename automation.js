@@ -527,6 +527,17 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
 // Denní běh
 // ---------------------------------------------------------------------------
 
+// HeroHero dávka běží v paměti serveru; když server mezitím restartuje
+// (nový deploy), nikdy nedoběhne. Po 20 minutách bez aktivity ji bereme za skončenou.
+function heroBatchFinished(run) {
+    if (!run) return true;
+    if (run.heroheroFinishedAt) return true;
+    const times = [run.startedAt, run.toppedUpAt, ...((run.herohero || []).map(h => h.at))]
+        .map(t => new Date(t || 0).getTime()).filter(Boolean);
+    const last = times.length ? Math.max(...times) : 0;
+    return Date.now() - last > 20 * 60 * 1000;
+}
+
 function setupAutomation(app, deps) {
     const {
         cloudinary, PORT, IG_BUSINESS_ID,
@@ -591,7 +602,7 @@ function setupAutomation(app, deps) {
             return { success: true, alreadyRan: true, date, ...previous };
         }
 
-        if (topUp && !previous.heroheroFinishedAt) {
+        if (topUp && !heroBatchFinished(previous)) {
             throw new Error("HeroHero dávka z dnešního běhu ještě běží, doplnění zkusím později.");
         }
         const limit = topUp ? Math.max(0, 5 - doneTitles.size - carryover.length) : 5;
@@ -670,7 +681,7 @@ function setupAutomation(app, deps) {
             const state = await store.load();
             const today = state.runs[date];
             const doneCount = today ? new Set((today.herohero || []).map(h => h.title)).size : 0;
-            if (today && today.instagram && (doneCount >= 5 || !today.heroheroFinishedAt)) return;
+            if (today && today.instagram && (doneCount >= 5 || !heroBatchFinished(today))) return;
             if ((attempts[date] || 0) >= 3) return;
             attempts[date] = (attempts[date] || 0) + 1;
             log(`Plánovač: spouštím denní běh ${date} (pokus ${attempts[date]}/3).`);
