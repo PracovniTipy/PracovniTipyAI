@@ -1316,8 +1316,10 @@ app.get("/privacy", (req, res) => {
 <h1>Zásady ochrany osobních údajů</h1>
 <p>Tato aplikace ("Pracovní Tipy Automation") slouží k automatickému odpovídání na komentáře a přímé zprávy (DM) na Instagram účtu @pracovni_tipy s odkazem na nabídky práce v zahraničí.</p>
 <p>Aplikace zpracovává pouze: ID a text komentářů/zpráv nutné k odeslání automatické odpovědi. Tyto údaje neukládáme trvale, nesdílíme s třetími stranami a nepoužíváme k žádnému jinému účelu.</p>
+<h2>Generátor životopisu (/cv)</h2>
+<p>Pokud využijete generátor životopisu, zpracováváme jméno, věk, telefon, e-mail a informace o vaší praxi, které do chatu napíšete. Údaje používáme k vytvoření životopisu (text zpracovává služba OpenAI), k jeho zaslání e-mailem a – pokud jste s tím souhlasili – k zasílání nabídek práce. Údaje nepředáváme dalším stranám kromě technických zpracovatelů (OpenAI, Cloudinary, Make, Railway). Souhlas můžete kdykoli odvolat e-mailem a údaje smažeme.</p>
 <p>Pokud chcete své údaje smazat nebo máte dotaz, napište na e-mail provozovatele: dudypetr1@seznam.cz</p>
-<p>Poslední aktualizace: srpen 2026</p>
+<p>Poslední aktualizace: říjen 2026</p>
 </body>
 </html>`);
 });
@@ -1418,6 +1420,9 @@ const automation = require("./automation")(app, {
     COMMENT_PRIVATE_REPLY_MESSAGE,
     DM_WELCOME_MESSAGE
 });
+
+// AI generátor životopisu zdarma (/cv) – lákadlo, sbírá kontakty do Make.
+require("./cv")(app, { cloudinary });
 
 app.get("/webhook/instagram", (req, res) => {
     const mode = req.query["hub.mode"];
