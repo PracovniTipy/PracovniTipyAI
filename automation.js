@@ -626,7 +626,8 @@ function setupAutomation(app, deps) {
                 lang: ai.requires_other_language, lic: ai.requires_degree_or_license
             }));
             log("AI posouzení:", JSON.stringify(review));
-            const prevCountries = topUp ? ((previous.selected || []).map(j => j.country)) : [];
+            // Limit 2 nabídky/zemi počítáme jen z toho, co už na HeroHero opravdu vyšlo.
+            const prevCountries = topUp ? (previous.selected || []).filter(j => doneTitles.has(j.title)).map(j => j.country) : [];
             fresh = buildJobs(enriched, await czkRates(), limit, prevCountries);
         }
         const jobs = [...(topUp ? carryover : []), ...fresh];

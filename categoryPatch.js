@@ -167,10 +167,10 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
 
   // HeroHero (10/2026) změnil finální tlačítko na ikonu bez textu, název je
   // jen v aria-label="Sdílet". Hledáme proto i podle aria-label / title.
-  const oldSharePredicate = 'await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {\n    return text.toLowerCase().includes("sdílet") || text.toLowerCase().includes("share");\n  });';
+  const oldSharePredicate = /await findAndClickButton\(page, "Finální tlačítko Sdílet", async \(\{ text \}\) => \{\s*return text\.toLowerCase\(\)\.includes\("sdílet"\) \|\| text\.toLowerCase\(\)\.includes\("share"\);\s*\}\);/;
   const newSharePredicate = 'await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text, ariaLabel, title }) => {\n    const label = `${text} ${ariaLabel} ${title}`.toLowerCase();\n    return label.includes("sdílet") || label.includes("share") || label.includes("publikovat") || label.includes("publish");\n  });';
-  if (source.includes(oldSharePredicate)) {
-    source = source.replace(oldSharePredicate, newSharePredicate);
+  if (oldSharePredicate.test(source)) {
+    source = source.replace(oldSharePredicate, () => newSharePredicate);
   } else {
     console.warn("[CATEGORY PATCH] Share button pattern nebyl nalezen.");
   }
