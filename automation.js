@@ -503,6 +503,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
                     salary_czk_month: salary,
                     work_category: ai.category,
                     link: job.link,
+                    source_title: String(job.title || "").replace(/\s*[-–(].*$/, "").trim(),
                     description,
                     caption
                 }
@@ -514,8 +515,13 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
     const perCountry = {};
     for (const c of existingCountries) perCountry[c] = (perCountry[c] || 0) + 1;
     const picked = [];
+    const seenTitles = new Set();
     for (const { job } of usable) {
         if ((perCountry[job.country] || 0) >= 2) continue;
+        // Stejná pozice ve stejné zemi (např. 10× "Dishwasher" na Maltě) jen jednou.
+        const titleKey = `${String(job.source_title || job.job_title).toLowerCase().replace(/[^a-z]/g, "")}|${job.country}`;
+        if (seenTitles.has(titleKey)) continue;
+        seenTitles.add(titleKey);
         perCountry[job.country] = (perCountry[job.country] || 0) + 1;
         picked.push(job);
         if (picked.length >= limit) break;
