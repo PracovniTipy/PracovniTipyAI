@@ -110,7 +110,55 @@ async function htmlToPdf(html) {
     }
 }
 
+const COUNTRY_CZ = { Austria: "Rakousko", Belgium: "Belgie", Cyprus: "Kypr", Denmark: "Dánsko", Estonia: "Estonsko", Finland: "Finsko",
+    France: "Francie", Germany: "Německo", Greece: "Řecko", Ireland: "Irsko", Italy: "Itálie", Malta: "Malta", Netherlands: "Nizozemsko",
+    Norway: "Norsko", Spain: "Španělsko", Sweden: "Švédsko" };
+
 function setupCv(app, { cloudinary }) {
+    // Nabídky z posledních denních běhů (pro doporučení po vytvoření CV).
+    let jobsCache = { at: 0, list: [] };
+    async function recentJobs() {
+        if (Date.now() - jobsCache.at < 10 * 60 * 1000 && jobsCache.list.length) return jobsCache.list;
+        try {
+            const info = await cloudinary.api.resource("PracovniTipyAI/state/automation-state.json", { resource_type: "raw" });
+            const state = await (await fetch(`${info.secure_url}?t=${Date.now()}`)).json();
+            const dates = Object.keys(state.runs || {}).sort().reverse().slice(0, 10);
+            const seen = new Set();
+            const list = [];
+            for (const d of dates) {
+                const run = state.runs[d];
+                for (const j of (run.jobs || run.selected || [])) {
+                    const title = String(j.job_title || j.title || "").trim();
+                    const country = String(j.country || "").trim();
+                    const key = `${title}|${country}`.toLowerCase();
+                    if (!title || seen.has(key)) continue;
+                    seen.add(key);
+                    list.push({ title, country, countryCz: COUNTRY_CZ[country] || country, category: j.work_category || j.category || "", salary: j.salary_czk_month || "", city: j.city || "" });
+                }
+            }
+            jobsCache = { at: Date.now(), list };
+        } catch (err) {
+            logError("Načtení nabídek pro doporučení selhalo:", err.message);
+        }
+        return jobsCache.list;
+    }
+
+    async function matchJobs(cv) {
+        const jobs = await recentJobs();
+        if (!jobs.length) return [];
+        const profile = [cv.headline, ...(cv.experience || []).map(e => e.title), ...(cv.skills || [])].filter(Boolean).join(", ");
+        try {
+            const raw = await openai([
+                { role: "system", content: 'Vyber 3 nabídky práce, které nejlépe sedí k profilu uchazeče (podobná praxe nebo dovednosti; když nic nesedí, vyber nabídky bez nutnosti praxe). Odpověz JSON {"picks":[index,index,index]}.' },
+                { role: "user", content: `Profil: ${profile}\nNabídky:\n${jobs.map((j, i) => `${i}: ${j.title} – ${j.countryCz} (${j.category})`).join("\n")}` }
+            ], { maxTokens: 60, json: true });
+            const picks = (JSON.parse(raw).picks || []).map(Number).filter(i => jobs[i]);
+            return [...new Set(picks)].slice(0, 3).map(i => jobs[i]);
+        } catch (err) {
+            return jobs.slice(0, 3);
+        }
+    }
+
     const sessions = new Map();          // sessionId -> { lead, createdAt }
     const hits = new Map();              // ip -> [timestamps]
 
@@ -263,7 +311,8 @@ Vrať JSON: {"cz": CV, "en": CV} kde CV = {"headline":"krátký titulek","summar
             const entry = { ...lead, cvCz, cvEn, cvCreatedAt: new Date().toISOString() };
             backupLead(entry);
             sendToMake({ event: "cv", ...entry, heroheroLink: HEROHERO_LINK });
-            res.json({ cvCz, cvEn });
+            const matches = await matchJobs(data.cz || {}).catch(() => []);
+            res.json({ cvCz, cvEn, matches: matches.map(m => ({ title: m.title, country: m.countryCz, city: m.city, salary: m.salary, category: m.category })) });
         } catch (err) {
             logError("Generování CV selhalo:", err.stack || err.message);
             res.status(500).json({ error: "Životopis se nepodařilo vytvořit, zkus to prosím znovu." });
@@ -304,6 +353,8 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 .tpl b{display:block;margin-top:6px;font-size:14px}.tpl span{display:block;font-size:12px;color:#667}
 .thumb{position:relative;width:100%;aspect-ratio:210/297;overflow:hidden;border-radius:6px;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.12)}
 .thumb iframe{position:absolute;left:0;top:0;width:794px;height:1123px;border:0;transform-origin:0 0;pointer-events:none}
+.job{border:1px solid #e3e7ee;border-radius:12px;padding:12px 14px;margin-top:8px;background:#fafbfd}
+.job b{display:block;font-size:15px}.job span{display:block;color:#566;font-size:14px;margin-top:2px}.job em{display:block;font-style:normal;color:#ff5a5f;font-size:13px;font-weight:600;margin-top:6px}
 .done a.hh{background:#ff5a5f}.small{font-size:12px;color:#667;text-align:center;margin-top:14px}
 </style></head><body><div class="wrap">
 <div class="hero"><div style="font-size:34px">📄✨</div><h1>Životopis v češtině i angličtině zdarma</h1>
@@ -335,13 +386,16 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
   <h2 style="margin:0 0 6px">Hotovo! 🎉</h2><p>Tvůj životopis je připravený. Stáhni si ho a ulož do mobilu – hodí se při přihlášce.</p>
   <a id="cz" target="_blank">⬇️ Stáhnout CV česky (PDF)</a>
   <a id="en" target="_blank">⬇️ Stáhnout CV anglicky (PDF)</a>
-  <p style="margin-top:18px">A teď kam s ním? Každý den vybíráme ověřené nabídky práce v zahraničí, kam se můžeš hned přihlásit:</p>
+  <div id="matchesBox" class="hidden"><h3 style="margin:22px 0 4px;font-size:17px">Nabídky, které sedí k tvé praxi 👇</h3>
+  <p style="margin:0 0 8px;color:#566;font-size:14px">Vybrali jsme je z aktuálních ověřených nabídek. Plný popis, mzdu a kontakt pro přihlášku najdeš na HeroHero.</p>
+  <div id="matches"></div></div>
+  <p style="margin-top:18px">Každý den přidáváme 5 nových ověřených nabídek práce v zahraničí, kam se můžeš hned přihlásit:</p>
   <a class="hh" href="${HEROHERO_LINK}" target="_blank">🌍 Zobrazit nabídky práce – 3 dny zdarma</a>
 </div>
 <p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme ověřené nabídky</p>
 </div>
 <script>
-const $=id=>document.getElementById(id);let sid=null;const history=[];let tpl=null;
+const $=id=>document.getElementById(id);const esc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));let sid=null;const history=[];let tpl=null;
 function fitThumbs(){document.querySelectorAll('.thumb').forEach(t=>{const f=t.querySelector('iframe');f.style.transform='scale('+(t.clientWidth/794)+')'})}
 window.addEventListener('resize',fitThumbs);setTimeout(fitThumbs,50);
 document.querySelectorAll('.tpl').forEach(el=>el.onclick=()=>{document.querySelectorAll('.tpl').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');tpl=el.dataset.id;$('err0').textContent=''});
@@ -359,7 +413,8 @@ async function send(){const t=$('input').value.trim();if(!t)return;$('input').va
 $('send').onclick=send;$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
 $('make').onclick=async()=>{if(history.filter(m=>m.role==='user').length<1){$('err2').textContent='Nejdřív mi napiš něco o své práci 🙂';return}
  $('make').disabled=true;$('make').textContent='⏳ Vytvářím životopis… (cca 30 s)';$('err2').textContent='';
- try{const j=await post('/cv/generate',{sessionId:sid,messages:history});$('cz').href=j.cvCz;$('en').href=j.cvEn;$('step2').classList.add('hidden');$('step3').classList.remove('hidden');}
+ try{const j=await post('/cv/generate',{sessionId:sid,messages:history});$('cz').href=j.cvCz;$('en').href=j.cvEn;
+  if(j.matches&&j.matches.length){$('matches').innerHTML=j.matches.map(m=>'<div class="job"><b>'+esc(m.title)+'</b><span>'+esc([m.city,m.country].filter(Boolean).join(', '))+(m.salary?' · cca '+esc(m.salary)+' / měsíc':'')+'</span><em>🔒 Detail a kontakt na HeroHero</em></div>').join('');$('matchesBox').classList.remove('hidden')}$('step2').classList.add('hidden');$('step3').classList.remove('hidden');}
  catch(e){$('err2').textContent=e.message;$('make').disabled=false;$('make').textContent='✅ Vytvořit životopis'}};
 </script></body></html>`;
 
