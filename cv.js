@@ -122,7 +122,7 @@ function setupCv(app, { cloudinary }) {
         try {
             const info = await cloudinary.api.resource("PracovniTipyAI/state/automation-state.json", { resource_type: "raw" });
             const state = await (await fetch(`${info.secure_url}?t=${Date.now()}`)).json();
-            const dates = Object.keys(state.runs || {}).sort().reverse().slice(0, 10);
+            const dates = Object.keys(state.runs || {}).sort().reverse().slice(0, 5);
             const seen = new Set();
             const list = [];
             for (const d of dates) {
@@ -133,7 +133,7 @@ function setupCv(app, { cloudinary }) {
                     const key = `${title}|${country}`.toLowerCase();
                     if (!title || seen.has(key)) continue;
                     seen.add(key);
-                    list.push({ title, country, countryCz: COUNTRY_CZ[country] || country, category: j.work_category || j.category || "", salary: j.salary_czk_month || "", city: j.city || "" });
+                    list.push({ title, country, countryCz: COUNTRY_CZ[country] || country, category: j.work_category || j.category || "", salary: j.salary_czk_month || "", city: (j.city && j.city !== country) ? j.city : "" });
                 }
             }
             jobsCache = { at: Date.now(), list };
