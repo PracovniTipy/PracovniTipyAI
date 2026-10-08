@@ -930,8 +930,53 @@ function createSilentWavBuffer(durationSeconds, sampleRate, channels) {
     return buffer;
 }
 
+// Hudba do reelů: náhodná skladba ze složky Cloudinary "PracovniTipyAI/music"
+// (mp3/m4a/wav, nahrávají se jako video/audio soubory) nebo z proměnné
+// MUSIC_URLS (URL oddělené čárkou). Používat jen hudbu s licencí pro
+// komerční použití (např. Pixabay Music). Když žádná není, zůstane ticho.
+let musicCache = { at: 0, urls: [] };
+async function listMusicUrls() {
+    if (Date.now() - musicCache.at < 30 * 60 * 1000) return musicCache.urls;
+    let urls = String(process.env.MUSIC_URLS || "").split(",").map(u => u.trim()).filter(Boolean);
+    try {
+        const res = await cloudinary.api.resources({
+            resource_type: "video",
+            type: "upload",
+            prefix: "PracovniTipyAI/music",
+            max_results: 100
+        });
+        urls = urls.concat((res.resources || []).map(r => r.secure_url));
+    } catch (err) {
+        console.warn("[MUSIC] Seznam hudby z Cloudinary se nepodařilo načíst:", err.message);
+    }
+    musicCache = { at: Date.now(), urls };
+    console.log(`[MUSIC] K dispozici ${urls.length} skladeb.`);
+    return urls;
+}
+
+let lastMusicUrl = "";
+async function downloadRandomMusic(targetPath) {
+    const urls = await listMusicUrls();
+    if (!urls.length) return false;
+    const pool = urls.length > 1 ? urls.filter(u => u !== lastMusicUrl) : urls;
+    const url = pool[Math.floor(Math.random() * pool.length)];
+    try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        fs.writeFileSync(targetPath, Buffer.from(await res.arrayBuffer()));
+        lastMusicUrl = url;
+        console.log(`[MUSIC] Reel dostane hudbu: ${url.split("/").pop()}`);
+        return true;
+    } catch (err) {
+        console.warn("[MUSIC] Stažení hudby selhalo, použiji ticho:", err.message);
+        return false;
+    }
+}
+
 async function createReel(imageBuffer) {
     const id = Date.now();
+    const musicPath = path.join(os.tmpdir(), `${id}-music.audio`);
+    const hasMusic = await downloadRandomMusic(musicPath);
 
     const imagePath = path.join(
         os.tmpdir(),
@@ -968,7 +1013,8 @@ async function createReel(imageBuffer) {
                     "-framerate",
                     "25"
                 ])
-                .input(silentAudioPath)
+                .input(hasMusic ? musicPath : silentAudioPath)
+                .inputOptions(hasMusic ? ["-ss", "8"] : [])
                 .videoCodec("libx264")
                 .audioCodec("aac")
                 .outputOptions([
@@ -988,6 +1034,8 @@ async function createReel(imageBuffer) {
                     "1",
 
                     "-shortest",
+
+                    ...(hasMusic ? ["-af", "afade=t=in:st=0:d=0.3,afade=t=out:st=6.8:d=1.2", "-b:a", "160k"] : []),
 
                     "-map",
                     "0:v:0",
@@ -1038,6 +1086,10 @@ async function createReel(imageBuffer) {
         fs.existsSync(silentAudioPath)
     ) {
         fs.unlinkSync(silentAudioPath);
+    }
+
+    if (fs.existsSync(musicPath)) {
+        fs.unlinkSync(musicPath);
     }
 
     return result.secure_url;
