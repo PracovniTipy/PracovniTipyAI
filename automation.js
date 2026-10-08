@@ -722,7 +722,7 @@ function setupAutomation(app, deps) {
                 candidates: state.runs[d].candidates,
                 review: state.runs[d].review,
                 selected: state.runs[d].selected,
-                instagram: (state.runs[d].instagram || []).map(r => r.title || r.link),
+                instagram: (state.runs[d].instagram || []).map(r => ({ title: r.title, link: r.link, videoUrl: r.videoUrl, caption: r.caption })),
                 herohero: state.runs[d].herohero,
                 heroheroFinishedAt: state.runs[d].heroheroFinishedAt
             }]))
