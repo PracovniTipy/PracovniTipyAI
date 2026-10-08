@@ -1391,14 +1391,14 @@ const DM_WELCOME_MESSAGE =
     "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
     "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
     "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK + "\n\n" +
-    "📄 Potřebuješ životopis do zahraničí? AI ti ho zdarma za 5 minut udělá česky i anglicky 👇\n" + CV_LINK;
+    "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
 
 const COMMENT_PRIVATE_REPLY_MESSAGE =
     "Ahoj! 👋😊 Díky za komentář!\n\n" +
     "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
     "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
     "Aktuální nabídky najdeš tady 🔗👇\n" + HEROHERO_LINK + "\n\n" +
-    "📄 Potřebuješ životopis do zahraničí? AI ti ho zdarma za 5 minut udělá česky i anglicky 👇\n" + CV_LINK;
+    "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
 
 const COMMENT_PUBLIC_REPLY_MESSAGE =
     "Díky za komentář! 😊 Poslali jsme ti víc informací do DM 📩";

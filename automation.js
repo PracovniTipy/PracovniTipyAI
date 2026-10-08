@@ -490,7 +490,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
                 "",
                 `Pro více prací ze zahraničí napiš do komentáře "${countryCz}".`,
                 "",
-                "📄 Životopis do zahraničí zdarma (CZ + EN) – odkaz v bio."
+                "📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN)."
             ].join("\n").replace(/\n\n\n+/g, "\n\n");
             return {
                 score: (priority[ai.category] || 1) - (Number(ai.salary && ai.salary.hours_per_week) > 0 && Number(ai.salary.hours_per_week) < 30 ? 1.5 : 0) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 0.3 : 0),
