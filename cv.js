@@ -236,7 +236,7 @@ Nic si nevymýšlej. Až budeš mít dost informací (nebo po ~8 otázkách), na
         const lead = session.lead;
         const year = currentYear();
         const system = `Z rozhovoru vytvoř životopis. Aktuální rok ${year}, věk uživatele ${lead.age}.
-PRAVIDLA: Používej jen informace z rozhovoru, nic nevymýšlej (žádné firmy, školy ani certifikáty, které nezazněly). Když název firmy nezazněl, napiš typ podniku a místo (např. "Bar, Praha"). Nejisté roky piš jako "cca 2019 – 2020". Odrážky popisují běžnou náplň uvedené práce realisticky a stručně (2–4 odrážky). Nejnovější práce první.
+PRAVIDLA: Používej jen informace z rozhovoru, nic nevymýšlej (žádné firmy, školy ani certifikáty, které nezazněly). Když název firmy nezazněl, napiš typ podniku a místo (např. "Bar, Praha"). Nejisté roky piš jako "cca 2019 – 2020". Roky počítej přesně: "loni" = ${year - 1}; "3 roky do loňska" = ${year - 4} – ${year - 1}; "byl jsem tam rok" od roku X = X – X+1. Délku praxe ve shrnutí sečti jen z uvedených období, nepřeháněj. Odrážky popisují běžnou náplň uvedené práce realisticky a stručně (2–4 odrážky). Nejnovější práce první.
 Vrať JSON: {"cz": CV, "en": CV} kde CV = {"headline":"krátký titulek","summary":"2–3 věty","experience":[{"title":"","employer":"","place":"","period":"","bullets":[""]}],"education":[{"title":"","school":"","period":""}],"languages":[""],"skills":[""]}. "en" je stejný obsah v profesionální angličtině (období "approx. 2019 – 2020").`;
         try {
             const raw = await openai([{ role: "system", content: system }, { role: "user", content: transcript }], { maxTokens: 1800, json: true });
