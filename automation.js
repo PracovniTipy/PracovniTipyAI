@@ -370,8 +370,8 @@ accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} p
 no_experience: true jen když inzerát výslovně říká, že praxe není nutná.
 description_cz: přesně 3 krátké věty (náplň práce; požadavky; benefity/podmínky).
 hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
-salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false}. Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false}}`;
+salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false, hours_per_week: číslo z inzerátu nebo null}. U hodinové mzdy VŽDY vyplň hours_per_week, pokud ho inzerát uvádí (částečný úvazek!). Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
 
     // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
     // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
@@ -460,7 +460,8 @@ function monthlyCzk(salary, rates) {
     if (!salary || typeof salary.amount !== "number" || !(salary.amount > 0)) return "";
     const rate = rates[String(salary.currency || "").toUpperCase()];
     if (!rate) return "";
-    const factor = { hour: 165, week: 4.33, biweek: 2.17, month: 1, year: 1 / 12 }[salary.period] || 0;
+    const hours = Number(salary.hours_per_week) > 0 && Number(salary.hours_per_week) <= 60 ? Number(salary.hours_per_week) : 38;
+    const factor = { hour: hours * 4.33, week: 4.33, biweek: 2.17, month: 1, year: 1 / 12 }[salary.period] || 0;
     if (!factor) return "";
     const value = Math.round((salary.amount * factor * rate) / 1000) * 1000;
     if (value < 20000 || value > 250000) return "";
@@ -490,7 +491,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
                 `Pro více prací ze zahraničí napiš do komentáře "${countryCz}".`
             ].join("\n").replace(/\n\n\n+/g, "\n\n");
             return {
-                score: (priority[ai.category] || 1) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 0.3 : 0),
+                score: (priority[ai.category] || 1) - (Number(ai.salary && ai.salary.hours_per_week) > 0 && Number(ai.salary.hours_per_week) < 30 ? 1.5 : 0) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 0.3 : 0),
                 job: {
                     job_title: title,
                     herohero_title: title,
