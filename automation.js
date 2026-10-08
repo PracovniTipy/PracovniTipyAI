@@ -253,6 +253,67 @@ function linkKey(link) {
     return String(link || "").trim().toLowerCase().replace(/\/+$/, "").replace(/-\d+$/, "");
 }
 
+// ---------------------------------------------------------------------------
+// Druhý zdroj: oficiální vyhledávač EURES (europa.eu) – statisíce nabídek.
+// Bereme jen inzeráty v angličtině od zaměstnavatelů, kteří výslovně
+// nabírají ze zahraničí (EURES vlajka).
+// ---------------------------------------------------------------------------
+const EURES_COUNTRY = {
+    AT: "Austria", BE: "Belgium", CY: "Cyprus", DK: "Denmark", EE: "Estonia", FI: "Finland",
+    FR: "France", DE: "Germany", EL: "Greece", GR: "Greece", IE: "Ireland", IT: "Italy",
+    MT: "Malta", NL: "Netherlands", NO: "Norway", ES: "Spain", SE: "Sweden"
+};
+const EURES_KEYWORDS = [
+    "fruit picker", "harvest", "farm worker", "greenhouse",
+    "housekeeping", "room attendant", "cleaner",
+    "kitchen porter", "kitchen helper", "dishwasher", "waiter", "cook",
+    "hotel", "warehouse", "order picker", "forklift", "production operator", "factory worker", "meat"
+];
+
+async function sourceEures(usedKeys) {
+    const out = [];
+    const seen = new Set();
+    await mapLimit(EURES_KEYWORDS, 3, async keyword => {
+        const body = {
+            resultsPerPage: 50, page: 1, sortSearch: "MOST_RECENT",
+            keywords: [{ keyword, specificSearchCode: "EVERYWHERE" }],
+            publicationPeriod: null, occupationUris: [], skillUris: [], requiredExperienceCodes: [],
+            positionScheduleCodes: [], sectorCodes: [], educationAndQualificationLevelCodes: [],
+            positionOfferingCodes: [], locationCodes: [], euresFlagCodes: ["WITH"], otherBenefitsCodes: [],
+            requiredLanguages: [], minNumberPost: null, sessionId: `pt${Date.now()}`
+        };
+        const res = await fetch("https://europa.eu/eures/api/jv-searchengine/public/jv-search/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Accept: "application/json", "User-Agent": "Mozilla/5.0 (PracovniTipy bot)" },
+            body: JSON.stringify(body)
+        });
+        if (!res.ok) throw new Error(`EURES HTTP ${res.status}`);
+        const data = await res.json();
+        for (const jv of data.jvs || []) {
+            if (!jv || !jv.id || seen.has(jv.id)) continue;
+            seen.add(jv.id);
+            const langs = jv.availableLanguages || [];
+            const en = (jv.translations && jv.translations.en) || (langs[0] === "en" ? jv : null);
+            if (!en || langs[0] !== "en") continue; // jen originální anglické inzeráty
+            const code = Object.keys(jv.locationMap || {})[0];
+            const country = EURES_COUNTRY[code];
+            if (!country) continue;
+            const link = `https://europa.eu/eures/portal/jv-se/jv-details/${jv.id}?lang=en`;
+            if (usedKeys.has(linkKey(link))) continue;
+            out.push({
+                link, source: "eures",
+                title: htmlToText(en.title || jv.title),
+                country, workplace: country,
+                languages: "English",
+                salaryPeriod: "", salaryText: "",
+                expired: false, expiry: "",
+                body: htmlToText(`${(jv.employer && jv.employer.name) || ""}\n${en.description || jv.description || ""}`).slice(0, 3500)
+            });
+        }
+    });
+    return out;
+}
+
 async function sourceCandidates(usedLinks) {
     const usedKeys = new Set(usedLinks.map(linkKey));
     const used = { has: link => usedKeys.has(linkKey(link)) };
@@ -273,7 +334,16 @@ async function sourceCandidates(usedLinks) {
     const pages = await mapLimit(links.slice(0, 120), 6, async link => parseJobPage(link, await fetchText(link)));
     const eligible = pages.filter(isPreEligible);
     log(`Po předfiltru (země, jen angličtina, kategorie, platnost): ${eligible.length}.`);
-    return eligible;
+
+    let eures = [];
+    try {
+        eures = (await sourceEures(usedKeys)).filter(isPreEligible);
+        log(`EURES: ${eures.length} vhodných kandidátů po předfiltru.`);
+    } catch (err) {
+        logError("EURES zdroj selhal:", err.message);
+    }
+    // Nejdřív European Job Days (mají mzdy), pak EURES; celkem max 24 pro AI.
+    return [...eligible, ...eures].slice(0, 24);
 }
 
 // ---------------------------------------------------------------------------
@@ -343,7 +413,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_langua
         return null;
     }
 
-    const list = candidates.slice(0, 16);
+    const list = candidates.slice(0, 24);
     const results = await mapLimit(list, 4, analyze);
     const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai).map(({ job, ai }) => {
         // Kategorii určujeme sami podle klíčových slov (spolehlivější než AI),
@@ -355,7 +425,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"requires_other_langua
         ai.blockLicense = yes(ai.requires_degree_or_license);
         ai.no_experience = yes(ai.no_experience);
         // Jazyk už hlídá předfiltr (pole "Language skills" = jen angličtina).
-        ai.eligible = !!category && !ai.blockLicense;
+        ai.eligible = !!category && !ai.blockLicense && !(job.source === "eures" && ai.blockLang);
         return { job, ai };
     });
     log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
