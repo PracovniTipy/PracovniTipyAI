@@ -581,9 +581,11 @@ function setupAutomation(app, deps) {
         const date = pragueDate();
         const state = await store.load();
         const previous = state.runs[date];
-        const prevSelected = (previous && previous.selected) || [];
-        // Doplnění: když dnešní běh našel méně než 5 nabídek, další běh dohledá zbytek.
-        const topUp = !!(previous && previous.instagram && prevSelected.length > 0 && prevSelected.length < 5);
+        // Doplnění: když dnešní běh na HeroHero nedal 5 příspěvků (málo nabídek
+        // nebo chyba publikace), další běh dohledá / znovu pošle zbytek.
+        const doneTitles = new Set(((previous && previous.herohero) || []).map(h => h.title));
+        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title));
+        const topUp = !!(previous && previous.instagram && doneTitles.size < 5);
         if (previous && previous.instagram && !force && !topUp) {
             log(`Dnešní běh (${date}) už proběhl, vracím uložený výsledek.`);
             return { success: true, alreadyRan: true, date, ...previous };
@@ -592,17 +594,24 @@ function setupAutomation(app, deps) {
         if (topUp && !previous.heroheroFinishedAt) {
             throw new Error("HeroHero dávka z dnešního běhu ještě běží, doplnění zkusím později.");
         }
-        const limit = topUp ? 5 - prevSelected.length : 5;
-        log(topUp ? `Doplňuji dnešní běh ${date}: hledám ještě ${limit} nabídek.` : `Startuji denní běh ${date}.`);
-        const candidates = await sourceCandidates(state.usedLinks);
-        if (candidates.length === 0) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
-        const enriched = await enrichWithAI(candidates);
-        const review = enriched.map(({ job, ai }) => ({
-            title: job.title, country: job.country, eligible: !!ai.eligible, category: ai.category, title_cz: ai.title_cz,
-            lang: ai.requires_other_language, lic: ai.requires_degree_or_license
-        }));
-        log("AI posouzení:", JSON.stringify(review));
-        const jobs = buildJobs(enriched, await czkRates(), limit, topUp ? prevSelected.map(j => j.country) : []);
+        const limit = topUp ? Math.max(0, 5 - doneTitles.size - carryover.length) : 5;
+        log(topUp ? `Doplňuji dnešní běh ${date}: ${carryover.length} k opakování, hledám ještě ${limit} nových.` : `Startuji denní běh ${date}.`);
+        let candidates = [];
+        let review = [];
+        let fresh = [];
+        if (limit > 0) {
+            candidates = await sourceCandidates(state.usedLinks);
+            if (candidates.length === 0 && !carryover.length) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
+            const enriched = candidates.length ? await enrichWithAI(candidates) : [];
+            review = enriched.map(({ job, ai }) => ({
+                title: job.title, country: job.country, eligible: !!ai.eligible, category: ai.category, title_cz: ai.title_cz,
+                lang: ai.requires_other_language, lic: ai.requires_degree_or_license
+            }));
+            log("AI posouzení:", JSON.stringify(review));
+            const prevCountries = topUp ? ((previous.selected || []).map(j => j.country)) : [];
+            fresh = buildJobs(enriched, await czkRates(), limit, prevCountries);
+        }
+        const jobs = [...(topUp ? carryover : []), ...fresh];
         log(`Vybráno ${jobs.length} nabídek:`, jobs.map(j => `${j.job_title} (${j.country})`).join(" | "));
         if (jobs.length === 0) throw new Error("AI nevyhodnotila žádnou nabídku jako vhodnou.");
 
@@ -616,11 +625,12 @@ function setupAutomation(app, deps) {
 
         await store.update(s => {
             for (const job of jobs) if (!s.usedLinks.includes(job.link)) s.usedLinks.push(job.link);
-            const selected = jobs.map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link }));
+            const selected = (topUp ? fresh : jobs).map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link }));
             const prev = s.runs[date];
             if (topUp && prev) {
                 const prevIg = prev.instagram || [];
                 prev.selected = [...(prev.selected || []), ...selected];
+                prev.jobs = [...carryover, ...fresh];
                 prev.heroheroQueued = (prev.heroheroQueued || 0) + herohero.length;
                 prev.instagram = prevIg.length >= 2 ? prevIg : [...prevIg, ...instagram].slice(0, 2);
                 prev.review = review;
@@ -633,6 +643,7 @@ function setupAutomation(app, deps) {
                     candidates: candidates.length,
                     review,
                     selected,
+                    jobs,
                     heroheroQueued: herohero.length,
                     instagram
                 };
@@ -658,7 +669,8 @@ function setupAutomation(app, deps) {
             const date = pragueDate(now);
             const state = await store.load();
             const today = state.runs[date];
-            if (today && today.instagram && ((today.selected || []).length >= 5 || !today.heroheroFinishedAt)) return;
+            const doneCount = today ? new Set((today.herohero || []).map(h => h.title)).size : 0;
+            if (today && today.instagram && (doneCount >= 5 || !today.heroheroFinishedAt)) return;
             if ((attempts[date] || 0) >= 3) return;
             attempts[date] = (attempts[date] || 0) + 1;
             log(`Plánovač: spouštím denní běh ${date} (pokus ${attempts[date]}/3).`);

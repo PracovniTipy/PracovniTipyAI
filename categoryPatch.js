@@ -165,6 +165,16 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
     console.warn("[CATEGORY PATCH] Submit click pattern nebyl nalezen.");
   }
 
+  // HeroHero (10/2026) změnil finální tlačítko na ikonu bez textu, název je
+  // jen v aria-label="Sdílet". Hledáme proto i podle aria-label / title.
+  const oldSharePredicate = 'await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text }) => {\n    return text.toLowerCase().includes("sdílet") || text.toLowerCase().includes("share");\n  });';
+  const newSharePredicate = 'await findAndClickButton(page, "Finální tlačítko Sdílet", async ({ text, ariaLabel, title }) => {\n    const label = `${text} ${ariaLabel} ${title}`.toLowerCase();\n    return label.includes("sdílet") || label.includes("share") || label.includes("publikovat") || label.includes("publish");\n  });';
+  if (source.includes(oldSharePredicate)) {
+    source = source.replace(oldSharePredicate, newSharePredicate);
+  } else {
+    console.warn("[CATEGORY PATCH] Share button pattern nebyl nalezen.");
+  }
+
   const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
   const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  logStep(\`HeroHero kategorie (nepovinné): země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);`;
 
