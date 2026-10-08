@@ -94,13 +94,15 @@ async function hookFrame(templatePath, lines, accent) {
 }
 
 async function ctaFrame(templatePath, country, accent) {
+    // Závěrečný záběr: nabídka životopisu zdarma (napiš „CV“ → přijde odkaz).
     const { canvas, ctx, w, h } = await backgroundCanvas(templatePath, 0.55);
     const maxW = w * 0.86;
     const big = Math.round(w * 0.13);
-    let y = h * 0.3;
-    y += drawCentered(ctx, "CHCEŠ VÍC NABÍDEK?", w / 2, y, maxW, big, 40, "#FFFFFF") + h * 0.03;
-    y += drawCentered(ctx, "NAPIŠ DO KOMENTÁŘE", w / 2, y, maxW, Math.round(big * 0.7), 36, "#FFFFFF") + h * 0.015;
-    drawCentered(ctx, `„${country}“`, w / 2, y, maxW, Math.round(big * 1.25), 50, accent);
+    let y = h * 0.28;
+    y += drawCentered(ctx, "POTŘEBUJEŠ ŽIVOTOPIS?", w / 2, y, maxW, big, 40, "#FFFFFF") + h * 0.03;
+    y += drawCentered(ctx, "SESTAV SI HO S AI ZDARMA", w / 2, y, maxW, Math.round(big * 0.7), 36, "#FFFFFF") + h * 0.015;
+    y += drawCentered(ctx, "ČESKY I ANGLICKY", w / 2, y, maxW, Math.round(big * 0.55), 32, "#FFFFFF") + h * 0.03;
+    drawCentered(ctx, "NAPIŠ MI „CV“", w / 2, y, maxW, Math.round(big * 1.1), 50, accent);
     return canvas.toBuffer("image/png");
 }
 
