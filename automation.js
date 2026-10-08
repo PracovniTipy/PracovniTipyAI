@@ -364,7 +364,7 @@ async function enrichWithAI(candidates) {
 Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
 required_languages: seznam jazyků, které inzerát VÝSLOVNĚ vyžaduje (např. ["English"] nebo ["English","Finnish"]); když žádný neuvádí, dej [].
 requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
-title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy.
+title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy. Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
 city: město/region z inzerátu (nebo "").
 accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} podle inzerátu ("" když se o bydlení nepíše; "Ubytování zajištěno" jen když ho zaměstnavatel opravdu zajišťuje).
 no_experience: true jen když inzerát výslovně říká, že praxe není nutná.
@@ -652,6 +652,9 @@ function setupAutomation(app, deps) {
                 prev.jobs = [...carryover, ...fresh];
                 prev.heroheroQueued = (prev.heroheroQueued || 0) + herohero.length;
                 prev.instagram = prevIg.length >= 2 ? prevIg : [...prevIg, ...instagram].slice(0, 2);
+                // Nevyužité reely z doplnění si necháme jako zálohu (např. když
+                // se ranní reel ukáže jako nevhodný).
+                prev.instagramSpare = [...(prev.instagramSpare || []), ...instagram.filter(r => !prev.instagram.some(x => x.link === r.link))];
                 prev.review = review;
                 prev.candidates = candidates.length;
                 prev.toppedUpAt = new Date().toISOString();
@@ -714,6 +717,12 @@ function setupAutomation(app, deps) {
         }
     });
 
+    // Detail jednoho dne (vybrané nabídky vč. textů, reely) – pro ruční kontrolu.
+    app.get("/daily-run/day/:date", async (req, res) => {
+        const state = await store.load();
+        res.json(state.runs[req.params.date] || null);
+    });
+
     app.get("/daily-run/status", async (req, res) => {
         const state = await store.load();
         const dates = Object.keys(state.runs).sort().slice(-5);
@@ -725,6 +734,7 @@ function setupAutomation(app, deps) {
                 review: state.runs[d].review,
                 selected: state.runs[d].selected,
                 instagram: (state.runs[d].instagram || []).map(r => ({ title: r.title, link: r.link, videoUrl: r.videoUrl, caption: r.caption })),
+                instagramSpare: (state.runs[d].instagramSpare || []).map(r => ({ title: r.title, link: r.link, videoUrl: r.videoUrl, caption: r.caption })),
                 herohero: state.runs[d].herohero,
                 heroheroFinishedAt: state.runs[d].heroheroFinishedAt
             }]))
