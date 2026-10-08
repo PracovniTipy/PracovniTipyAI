@@ -621,6 +621,71 @@ function setupAutomation(app, deps) {
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Týdenní karusel „Jak odjet za prací do …“ (každou neděli po 17:00).
+    // -----------------------------------------------------------------------
+    const { buildCarousel } = require("./carousel");
+    const TEMPLATE_FOLDER = require("path").join(__dirname, "templates");
+    let carouselBusy = false;
+
+    function uploadImage(buffer) {
+        return new Promise((resolve, reject) => {
+            cloudinary.uploader.upload_stream({ folder: "PracovniTipyAI/carousel", resource_type: "image" },
+                (err, r) => (err ? reject(err) : resolve(r.secure_url))).end(buffer);
+        });
+    }
+
+    function weekKey(date = new Date()) {
+        const d = Date.parse(pragueDate(date));
+        return `W${Math.floor((d / 86400000 + 3) / 7)}`;
+    }
+
+    async function publishCarousel() {
+        if (carouselBusy || !process.env.IG_ACCESS_TOKEN || !IG_BUSINESS_ID) return;
+        carouselBusy = true;
+        try {
+            const state = await store.load();
+            state.carousels = Array.isArray(state.carousels) ? state.carousels : [];
+            const week = weekKey();
+            if (state.carousels.some(c => c.week === week)) return;
+            const { country, images, caption } = await buildCarousel(TEMPLATE_FOLDER, state.carousels.length);
+            log(`Karusel: připravuji ${country.name} (${images.length} slidů).`);
+            const urls = [];
+            for (const img of images) urls.push(await uploadImage(img));
+            const children = [];
+            for (const url of urls) children.push((await igCall("POST", `${IG_BUSINESS_ID}/media`, { image_url: url, is_carousel_item: true })).id);
+            const container = await igCall("POST", `${IG_BUSINESS_ID}/media`, { media_type: "CAROUSEL", children: children.join(","), caption });
+            let status = "";
+            for (let i = 0; i < 20; i++) {
+                await sleep(6000);
+                status = (await igCall("GET", container.id, { fields: "status_code" })).status_code;
+                if (status === "FINISHED" || status === "ERROR") break;
+            }
+            if (status !== "FINISHED") throw new Error(`Karusel nezpracován (stav ${status}).`);
+            const media = await igCall("POST", `${IG_BUSINESS_ID}/media_publish`, { creation_id: container.id });
+            await store.update(st => {
+                st.carousels = Array.isArray(st.carousels) ? st.carousels : [];
+                st.carousels.push({ week, country: country.name, mediaId: media.id, at: new Date().toISOString() });
+            });
+            log(`Karusel ${country.name} zveřejněn (media ${media.id}).`);
+        } catch (err) {
+            logError("Karusel selhal:", err.message);
+        } finally {
+            carouselBusy = false;
+        }
+    }
+
+    // Náhled slidu: /carousel/preview/0?i=0  (i = pořadí karuselu, 0 = Irsko)
+    app.get("/carousel/preview/:n", async (req, res) => {
+        try {
+            const { images } = await buildCarousel(TEMPLATE_FOLDER, Number(req.query.i || 0));
+            const img = images[Math.min(images.length - 1, Math.max(0, Number(req.params.n) || 0))];
+            res.type("png").send(img);
+        } catch (err) {
+            res.status(500).send(err.message);
+        }
+    });
+
     app.get("/ig/check", async (req, res) => {
         try {
             const limit = await igCall("GET", `${IG_BUSINESS_ID}/content_publishing_limit`, { fields: "quota_usage,config" });
@@ -765,6 +830,8 @@ function setupAutomation(app, deps) {
             if (hour < 12) return;
             const date = pragueDate(now);
             publishReelsDirect(date).catch(() => {});
+            const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Prague", weekday: "short" }).format(now);
+            if (weekday === "Sun" && hour >= 17) publishCarousel().catch(() => {});
             const state = await store.load();
             const today = state.runs[date];
             const doneCount = today ? new Set((today.herohero || []).map(h => h.title)).size : 0;

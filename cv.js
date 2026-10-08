@@ -20,6 +20,8 @@ const { TEMPLATES, renderCv, SAMPLE } = require("./cvTemplates");
 
 const MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
 const HEROHERO_LINK = "https://herohero.co/devotedzxfepftuubeim";
+const PUBLIC_BASE = "https://pracovnitipyai-production.up.railway.app";
+const goLink = src => `${PUBLIC_BASE}/go/hh?src=${encodeURIComponent(src)}`;
 const log = (...a) => console.log("[CV]", ...a);
 const logError = (...a) => console.error("[CV]", ...a);
 
@@ -108,6 +110,10 @@ async function htmlToPdf(html) {
     } finally {
         await browser.close();
     }
+}
+
+function matchesText(matches) {
+    return (matches || []).map(m => `• ${m.title} – ${[m.city, m.country].filter(Boolean).join(", ")}${m.salary ? ` (cca ${m.salary} / měsíc)` : ""}`).join("\n");
 }
 
 const COUNTRY_CZ = { Austria: "Rakousko", Belgium: "Belgie", Cyprus: "Kypr", Denmark: "Dánsko", Estonia: "Estonsko", Finland: "Finsko",
@@ -308,15 +314,133 @@ Vrať JSON: {"cz": CV, "en": CV} kde CV = {"headline":"krátký titulek","summar
             const cvCz = `${base_url}${slug}-CZ`;
             const cvEn = `${base_url}${slug}-EN`;
             log(`CV vytvořeno pro ${lead.id}.`);
-            const entry = { ...lead, cvCz, cvEn, cvCreatedAt: new Date().toISOString() };
+            const cz = data.cz || {};
+            const profile = [cz.headline, ...(cz.experience || []).map(e => e.title), ...(cz.skills || [])].filter(Boolean).join(", ").slice(0, 300);
+            const entry = { ...lead, cvCz, cvEn, profile, cvCreatedAt: new Date().toISOString() };
             backupLead(entry);
-            sendToMake({ event: "cv", ...entry, heroheroLink: HEROHERO_LINK });
-            const matches = await matchJobs(data.cz || {}).catch(() => []);
-            res.json({ cvCz, cvEn, matches: matches.map(m => ({ title: m.title, country: m.countryCz, city: m.city, salary: m.salary, category: m.category })) });
+            const matches = (await matchJobs(cz).catch(() => [])).map(m => ({ title: m.title, country: m.countryCz, city: m.city, salary: m.salary, category: m.category }));
+            sendToMake({ event: "cv", ...entry, matches, matchesText: matchesText(matches), heroheroLink: goLink("email-cv") });
+            res.json({ cvCz, cvEn, matches });
         } catch (err) {
             logError("Generování CV selhalo:", err.stack || err.message);
             res.status(500).json({ error: "Životopis se nepodařilo vytvořit, zkus to prosím znovu." });
         }
+    });
+
+    // -----------------------------------------------------------------------
+    // Statistiky: kliknutí na HeroHero (sledovaný odkaz /go/hh?src=...)
+    // -----------------------------------------------------------------------
+    const STATS_ID = "PracovniTipyAI/state/stats.json";
+    let stats = null, statsDirty = false;
+    async function loadStats() {
+        if (stats) return stats;
+        try {
+            const info = await cloudinary.api.resource(STATS_ID, { resource_type: "raw" });
+            stats = await (await fetch(`${info.secure_url}?t=${Date.now()}`)).json();
+        } catch (e) { stats = {}; }
+        stats.clicks = stats.clicks || {};
+        return stats;
+    }
+    setInterval(async () => {
+        if (!statsDirty) return;
+        statsDirty = false;
+        try {
+            const data = Buffer.from(JSON.stringify(stats)).toString("base64");
+            await cloudinary.uploader.upload(`data:application/json;base64,${data}`, { resource_type: "raw", public_id: STATS_ID, overwrite: true, invalidate: true });
+        } catch (err) { statsDirty = true; logError("Uložení statistik selhalo:", err.message); }
+    }, 60 * 1000);
+
+    app.get("/go/hh", async (req, res) => {
+        res.redirect(302, HEROHERO_LINK);
+        try {
+            const st = await loadStats();
+            const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date());
+            const src = String(req.query.src || "jine").replace(/[^a-z0-9-]/gi, "").slice(0, 20) || "jine";
+            st.clicks[day] = st.clicks[day] || {};
+            st.clicks[day][src] = (st.clicks[day][src] || 0) + 1;
+            statsDirty = true;
+        } catch (e) { /* statistika nesmí rozbít přesměrování */ }
+    });
+
+    async function loadLeads() {
+        try {
+            const info = await cloudinary.api.resource("PracovniTipyAI/state/cv-leads.json", { resource_type: "raw" });
+            return await (await fetch(`${info.secure_url}?t=${Date.now()}`)).json();
+        } catch (e) { return []; }
+    }
+
+    // -----------------------------------------------------------------------
+    // Navazující e-mail 2 dny po vytvoření CV (posílá Make, pokud je nastaven
+    // MAKE_LEAD_WEBHOOK). Jen jednou na kontakt.
+    // -----------------------------------------------------------------------
+    let followupBusy = false;
+    async function followupTick() {
+        if (followupBusy || !process.env.MAKE_LEAD_WEBHOOK) return;
+        const hour = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Prague", hour: "2-digit", hour12: false }).format(new Date()));
+        if (hour < 10 || hour >= 20) return;
+        followupBusy = true;
+        try {
+            const leads = await loadLeads();
+            const now = Date.now();
+            const due = leads.filter(l => l.cvCreatedAt && !l.followupAt && l.source !== "test" && !/^test\b/i.test(l.name || "") &&
+                now - Date.parse(l.cvCreatedAt) > 48 * 3600 * 1000 && now - Date.parse(l.cvCreatedAt) < 7 * 24 * 3600 * 1000).slice(0, 20);
+            for (const l of due) {
+                const matches = (await matchJobs({ headline: l.profile || "" }).catch(() => [])).map(m => ({ title: m.title, country: m.countryCz, city: m.city, salary: m.salary }));
+                await sendToMake({ event: "followup", id: l.id, name: l.name, email: l.email, matches, matchesText: matchesText(matches), heroheroLink: goLink("email-followup") });
+                await backupLead({ id: l.id, followupAt: new Date().toISOString() });
+                log(`Navazující e-mail odeslán do Make: ${l.id}`);
+            }
+        } catch (err) {
+            logError("Navazující e-maily selhaly:", err.message);
+        } finally {
+            followupBusy = false;
+        }
+    }
+    setInterval(followupTick, 15 * 60 * 1000);
+
+    // -----------------------------------------------------------------------
+    // Přehled výsledků: /stats?key=...
+    // -----------------------------------------------------------------------
+    app.get("/stats", async (req, res) => {
+        if (!process.env.STATS_KEY || req.query.key !== process.env.STATS_KEY) return res.status(403).send("Přístup odepřen");
+        const [leadsAll, st] = await Promise.all([loadLeads(), loadStats()]);
+        let auto = {};
+        try {
+            const info = await cloudinary.api.resource("PracovniTipyAI/state/automation-state.json", { resource_type: "raw" });
+            auto = await (await fetch(`${info.secure_url}?t=${Date.now()}`)).json();
+        } catch (e) { auto = {}; }
+        const leads = leadsAll.filter(l => l.source !== "test" && !/^test\b/i.test(l.name || ""));
+        const dayOf = iso => new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(iso));
+        const days = [];
+        for (let i = 13; i >= 0; i--) days.push(new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Prague" }).format(new Date(Date.now() - i * 86400000)));
+        const count = (arr, fn) => arr.reduce((m, x) => { const k = fn(x); if (k) m[k] = (m[k] || 0) + 1; return m; }, {});
+        const leadsByDay = count(leads, l => l.createdAt && dayOf(l.createdAt));
+        const cvByDay = count(leads.filter(l => l.cvCreatedAt), l => dayOf(l.cvCreatedAt));
+        const bySource = count(leads, l => l.source || "přímo");
+        const byTemplate = count(leads.filter(l => l.cvCreatedAt), l => l.template || "executive");
+        const clickTotal = {}; let clicksAll = 0;
+        for (const d of Object.keys(st.clicks)) for (const [k, v] of Object.entries(st.clicks[d])) { clickTotal[k] = (clickTotal[k] || 0) + v; clicksAll += v; }
+        const runs = auto.runs || {};
+        const rows = days.map(d => {
+            const r = runs[d] || {};
+            const clicks = Object.values(st.clicks[d] || {}).reduce((a, b) => a + b, 0);
+            return `<tr><td>${d.slice(5).split("-").reverse().join(".")}</td><td>${leadsByDay[d] || 0}</td><td>${cvByDay[d] || 0}</td><td>${clicks}</td><td>${(r.herohero || []).filter(h => !h.skipped).length}</td><td>${(r.igDirect || []).length || (r.instagram ? "Make" : 0)}</td></tr>`;
+        }).join("");
+        const kv = o => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`).join("") || "<div class='kv'><span>zatím nic</span></div>";
+        const cvTotal = leads.filter(l => l.cvCreatedAt).length;
+        res.type("html").send(`<!DOCTYPE html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Přehled | Pracovní Tipy</title><style>
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:#f4f6fa;color:#1d2433}.w{max-width:900px;margin:0 auto;padding:20px 16px}
+h1{font-size:22px;margin:4px 0 14px}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.c{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 10px rgba(0,0,0,.05)}.c b{display:block;font-size:28px}.c span{color:#667;font-size:13px}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:14px;overflow:hidden;margin-top:14px;font-size:14px}th,td{padding:9px 10px;text-align:center;border-bottom:1px solid #eef1f5}th{background:#1f3a5f;color:#fff;font-weight:600}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;margin-top:14px}.kv{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #eef1f5;font-size:14px}h3{margin:0 0 6px;font-size:15px}
+</style></head><body><div class="w"><h1>📊 Přehled – Pracovní Tipy</h1>
+<div class="cards"><div class="c"><b>${leads.length}</b><span>kontaktů celkem</span></div><div class="c"><b>${cvTotal}</b><span>hotových životopisů</span></div>
+<div class="c"><b>${clicksAll}</b><span>kliknutí na HeroHero</span></div><div class="c"><b>${leads.length ? Math.round(cvTotal / leads.length * 100) : 0} %</b><span>dokončí CV</span></div>
+<div class="c"><b>${(auto.repliedComments || []).length}</b><span>odpovězených komentářů</span></div><div class="c"><b>${(auto.carousels || []).length}</b><span>karuselů</span></div></div>
+<table><tr><th>Den</th><th>Kontakty</th><th>CV</th><th>Kliky HH</th><th>HeroHero</th><th>IG reely</th></tr>${rows}</table>
+<div class="grid2"><div class="c"><h3>Odkud přišli</h3>${kv(bySource)}</div><div class="c"><h3>Kliky na HeroHero podle zdroje</h3>${kv(clickTotal)}</div><div class="c"><h3>Oblíbené šablony</h3>${kv(byTemplate)}</div></div>
+<p style="color:#889;font-size:12px;margin-top:14px">Testovací záznamy nejsou započítané. Kliky se počítají od ${Object.keys(st.clicks).sort()[0] || "dnes"}.</p></div></body></html>`);
     });
 
     // Úklid starých relací (24 h).
@@ -390,7 +514,7 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
   <p style="margin:0 0 8px;color:#566;font-size:14px">Vybrali jsme je z aktuálních ověřených nabídek. Plný popis, mzdu a kontakt pro přihlášku najdeš na HeroHero.</p>
   <div id="matches"></div></div>
   <p style="margin-top:18px">Každý den přidáváme 5 nových ověřených nabídek práce v zahraničí, kam se můžeš hned přihlásit:</p>
-  <a class="hh" href="${HEROHERO_LINK}" target="_blank">🌍 Zobrazit nabídky práce – 3 dny zdarma</a>
+  <a class="hh" href="${goLink("cv-web")}" target="_blank">🌍 Zobrazit nabídky práce – 3 dny zdarma</a>
 </div>
 <p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme ověřené nabídky</p>
 </div>
