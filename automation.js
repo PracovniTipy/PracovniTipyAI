@@ -34,7 +34,7 @@ const KEYWORDS = [
 ];
 
 const CATEGORY_HINT = /(pick|harvest|farm|fruit|vegetable|berr|greenhouse|agricult|clean|housekeep|room attendant|maid|kitchen|chef|cook|dishwash|waiter|waitress|bartender|barista|restaurant|hotel|reception|warehouse|forklift|logistic|packing|packer|production|factory|meat|fish|food|bakery|slaughter|butcher)/i;
-const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber)/i;
+const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber|carpenter|joiner|fitter|welder|bricklayer|plasterer|roofer|construction|hygienist|dental|dentist|pharmacist|veterinar)/i;
 const NON_LATIN = /[Ͱ-ϿЀ-ӿ]/; // řečtina, azbuka
 const OTHER_LANGUAGE = /(german|french|italian|spanish|dutch|swedish|norwegian|danish|finnish|greek|estonian|polish|portuguese|slovak|slovenian|croatian|serbian|bulgarian|hungarian|romanian|lithuanian|latvian|maltese|russian|ukrainian)/i;
 const BLOCKED_WORDS = /mont|assembl/i;
@@ -226,10 +226,10 @@ function categoryOf(job) {
         ["Práce s ovocem/zeleninou", /(pick|harvest|fruit|vegetable|berr|strawberr|apple|grape)/],
         ["Práce na farmách", /(farm|greenhouse|agricult|horticult|nursery)/],
         ["Úklid", /(clean|housekeep|room attendant|maid)/],
-        ["Gastronomie", /(chef|cook|kitchen|dishwash|waiter|waitress|waitstaff|bartender|barman|barista|restaurant|pizza|food service|server)/],
+        ["Gastronomie", /(chef|cook|baker|kitchen|dishwash|waiter|waitress|waitstaff|bartender|barman|barista|restaurant|pizza|food service|server)/],
         ["Hotelové práce", /(hotel|reception|hospitality|resort)/],
         ["Sklady", /(warehouse|forklift|logistic|order pick|packing|packer)/],
-        ["Továrny", /(factory|production|operator|machine|extrusion|cnc|meat|fish|bakery|butcher|slaughter|manufactur)/]
+        ["Továrny", /(factory|production|operator|operative|cnc|machine|extrusion|cnc|meat|fish|bakery|butcher|slaughter|manufactur)/]
     ];
     // Nejdřív podle názvu pozice, pak podle celého textu.
     for (const [cat, re] of rules) if (re.test(title)) return cat;
@@ -743,7 +743,8 @@ function setupAutomation(app, deps) {
         // nebo chyba publikace), další běh dohledá / znovu pošle zbytek.
         const doneTitles = new Set(((previous && previous.herohero) || []).map(h => h.title));
         const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title));
-        const topUp = !!(previous && previous.instagram && doneTitles.size < 5);
+        const doneCount = ((previous && previous.herohero) || []).filter(h => !h.skipped).length;
+        const topUp = !!(previous && previous.instagram && doneCount < 5);
         if (previous && previous.instagram && !force && !topUp) {
             log(`Dnešní běh (${date}) už proběhl, vracím uložený výsledek.`);
             return { success: true, alreadyRan: true, date, ...previous };
@@ -752,7 +753,7 @@ function setupAutomation(app, deps) {
         if (topUp && !heroBatchFinished(previous)) {
             throw new Error("HeroHero dávka z dnešního běhu ještě běží, doplnění zkusím později.");
         }
-        const limit = topUp ? Math.max(0, 5 - doneTitles.size - carryover.length) : 5;
+        const limit = topUp ? Math.max(0, 5 - doneCount - carryover.length) : 5;
         log(topUp ? `Doplňuji dnešní běh ${date}: ${carryover.length} k opakování, hledám ještě ${limit} nových.` : `Startuji denní běh ${date}.`);
         let candidates = [];
         let review = [];
@@ -834,7 +835,7 @@ function setupAutomation(app, deps) {
             if (weekday === "Sun" && hour >= 17) publishCarousel().catch(() => {});
             const state = await store.load();
             const today = state.runs[date];
-            const doneCount = today ? new Set((today.herohero || []).map(h => h.title)).size : 0;
+            const doneCount = today ? (today.herohero || []).filter(h => !h.skipped).length : 0;
             if (today && today.instagram && (doneCount >= 5 || !heroBatchFinished(today))) return;
             if ((attempts[date] || 0) >= 3) return;
             attempts[date] = (attempts[date] || 0) + 1;
