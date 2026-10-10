@@ -265,18 +265,19 @@ const EURES_COUNTRY = {
     MT: "Malta", NL: "Netherlands", NO: "Norway", ES: "Spain", SE: "Sweden"
 };
 const EURES_KEYWORDS = [
-    "fruit picker", "harvest", "farm worker", "greenhouse",
-    "housekeeping", "room attendant", "cleaner",
-    "kitchen porter", "kitchen helper", "dishwasher", "waiter", "cook",
-    "hotel", "warehouse", "order picker", "forklift", "production operator", "factory worker", "meat"
+    "fruit picker", "harvest", "farm worker", "greenhouse", "dairy farm", "horticulture", "berry", "packhouse",
+    "housekeeping", "room attendant", "chambermaid", "cleaner", "cleaning operative",
+    "kitchen porter", "kitchen assistant", "dishwasher", "waiter", "waitress", "cook", "commis chef", "bartender", "barista",
+    "hotel", "receptionist", "warehouse", "order picker", "packer", "forklift", "production operator", "production worker",
+    "factory worker", "meat", "fish processing", "food production", "bakery"
 ];
 
 async function sourceEures(usedKeys) {
     const out = [];
     const seen = new Set();
-    await mapLimit(EURES_KEYWORDS, 3, async keyword => {
+    await mapLimit(EURES_KEYWORDS, 4, async keyword => {
         const body = {
-            resultsPerPage: 50, page: 1, sortSearch: "MOST_RECENT",
+            resultsPerPage: 100, page: 1, sortSearch: "MOST_RECENT",
             keywords: [{ keyword, specificSearchCode: "EVERYWHERE" }],
             publicationPeriod: null, occupationUris: [], skillUris: [], requiredExperienceCodes: [],
             positionScheduleCodes: [], sectorCodes: [], educationAndQualificationLevelCodes: [],
@@ -591,7 +592,11 @@ function setupAutomation(app, deps) {
             const run = state.runs[date];
             if (!run || !Array.isArray(run.instagram)) return;
             state.igPublished = Array.isArray(state.igPublished) ? state.igPublished : [];
-            for (const reel of run.instagram.slice(0, 2)) {
+            const queue = run.instagram.slice(0, 2);
+            if (run.brandReel && run.brandReel.videoUrl) {
+                queue.push({ title: "Reel o účtu", link: `brand:${date.replace(/-/g, "")}`, videoUrl: run.brandReel.videoUrl, caption: run.brandReel.caption });
+            }
+            for (const reel of queue) {
                 const key = linkKey(reel.link);
                 if (!reel.videoUrl || state.igPublished.includes(key)) continue;
                 log(`IG: zveřejňuji reel "${reel.title}"…`);
@@ -783,6 +788,17 @@ function setupAutomation(app, deps) {
             .map(r => ({ link: r.link, caption: r.caption, videoUrl: r.videoUrl, title: r.title || r.job_title }));
         log(`/generate: HeroHero ${herohero.length}, Instagram ${instagram.length}.`);
 
+        // Třetí denní reel – o účtu Pracovní tipy (jen při prvním běhu dne).
+        let brandReel = null;
+        if (!topUp && typeof global.createBrandReelSafe === "function") {
+            try {
+                brandReel = await global.createBrandReelSafe();
+                log("Reel o účtu připraven:", brandReel.videoUrl);
+            } catch (err) {
+                logError("Reel o účtu se nepodařilo vytvořit:", err.message);
+            }
+        }
+
         await store.update(s => {
             for (const job of jobs) if (!s.usedLinks.includes(job.link)) s.usedLinks.push(job.link);
             const selected = (topUp ? fresh : jobs).map(j => ({ title: j.job_title, country: j.country, category: j.work_category, link: j.link }));
@@ -808,7 +824,8 @@ function setupAutomation(app, deps) {
                     selected,
                     jobs,
                     heroheroQueued: herohero.length,
-                    instagram
+                    instagram,
+                    brandReel
                 };
             }
         });

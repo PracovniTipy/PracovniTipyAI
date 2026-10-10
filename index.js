@@ -973,7 +973,7 @@ async function downloadRandomMusic(targetPath) {
     }
 }
 
-const { createHookReel } = require("./reelHook");
+const { createHookReel, createBrandReel } = require("./reelHook");
 async function createHookReelSafe(imageBuffer, reel, templateFile) {
     const id = Date.now();
     const musicPath = path.join(os.tmpdir(), `${id}-hook-music.audio`);
@@ -987,6 +987,9 @@ async function createHookReelSafe(imageBuffer, reel, templateFile) {
             country: getCountryCz(reel),
             title: cleanText(reel.job_title || reel.title || ""),
             salary: formatMonthlyCzkSalary(reel.salary_czk_month, reel.monthly_salary_czk, reel.salary_month_czk, reel.salary_monthly_czk, reel.salary),
+            housing: normalizeHousing(reel.housing || reel.accommodation),
+            language: normalizeLanguage(reel.language),
+            city: cleanText(reel.city || ""),
             audioPath: hasMusic ? musicPath : silentPath,
             isMusic: hasMusic,
             upload: async file => (await cloudinary.uploader.upload(file, { resource_type: "video", folder: "PracovniTipyAI/reels" })).secure_url
@@ -997,6 +1000,43 @@ async function createHookReelSafe(imageBuffer, reel, templateFile) {
         for (const f of [musicPath, silentPath]) if (fs.existsSync(f)) fs.unlinkSync(f);
     }
 }
+
+// Denní reel o účtu (volá jen server sám – automation.js).
+async function createBrandReelSafe() {
+    const keys = Object.keys(reelTemplates);
+    const country = keys[Math.floor(Math.random() * keys.length)];
+    const id = Date.now();
+    const musicPath = path.join(os.tmpdir(), `${id}-brand-music.audio`);
+    const silentPath = path.join(os.tmpdir(), `${id}-brand-silence.wav`);
+    const hasMusic = await downloadRandomMusic(musicPath);
+    if (!hasMusic) fs.writeFileSync(silentPath, createSilentWavBuffer(12, 44100, 2));
+    try {
+        return await createBrandReel({
+            templatePath: path.join(TEMPLATE_FOLDER, reelTemplates[country]),
+            audioPath: hasMusic ? musicPath : silentPath,
+            isMusic: hasMusic,
+            upload: async file => (await cloudinary.uploader.upload(file, { resource_type: "video", folder: "PracovniTipyAI/reels" })).secure_url
+        });
+    } finally {
+        for (const f of [musicPath, silentPath]) if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
+}
+global.createBrandReelSafe = createBrandReelSafe;
+
+// Náhledy reelů (obrázek): /reel/preview/job?country=Ireland&slot=0  a  /reel/preview/brand?d=0
+app.get("/reel/preview/:kind", async (req, res) => {
+    try {
+        const { previewJob, previewBrand } = require("./reelHook");
+        const country = reelTemplates[req.query.country] ? req.query.country : "Ireland";
+        const tpl = path.join(TEMPLATE_FOLDER, reelTemplates[country]);
+        const png = req.params.kind === "brand"
+            ? await previewBrand(tpl, Number(req.query.d || 0))
+            : await previewJob(tpl, { country: countryNamesCz[country], title: req.query.title || "Pomocník na farmě", salary: req.query.salary === "0" ? "" : "cca 67 000 Kč hrubého / měsíc", housing: req.query.housing === "0" ? "" : "Ubytování zajištěno", language: "Angličtina", city: req.query.city || "Bandon" }, Number(req.query.slot || 0));
+        res.type("png").send(png);
+    } catch (err) {
+        res.status(500).send(err.message);
+    }
+});
 
 async function createReel(imageBuffer) {
     const id = Date.now();
