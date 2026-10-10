@@ -1031,7 +1031,7 @@ app.get("/reel/preview/:kind", async (req, res) => {
         const tpl = path.join(TEMPLATE_FOLDER, reelTemplates[country]);
         const png = req.params.kind === "brand"
             ? await previewBrand(tpl, Number(req.query.d || 0))
-            : await previewJob(tpl, { country: countryNamesCz[country], title: req.query.title || "Pomocník na farmě", salary: req.query.salary === "0" ? "" : "cca 67 000 Kč hrubého / měsíc", housing: req.query.housing === "0" ? "" : "Ubytování zajištěno", language: "Angličtina", city: req.query.city || "Bandon" }, Number(req.query.slot || 0));
+            : await previewJob(tpl, { country: countryNamesCz[country], title: req.query.title || "Pomocník na farmě", salary: req.query.salary === "0" ? "" : "cca 67 000 Kč hrubého / měsíc", housing: req.query.housing === "0" ? "" : "Ubytování zajištěno", language: "Angličtina", city: req.query.city !== undefined ? req.query.city : "Bandon" }, Number(req.query.slot || 0));
         res.type("png").send(png);
     } catch (err) {
         res.status(500).send(err.message);

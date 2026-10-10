@@ -112,8 +112,8 @@ async function jobFrame(templatePath, d, hook, accent) {
     rows.push(["JAZYK", d.language || "ANGLIČTINA"]);
     if (d.city) rows.push(["MÍSTO", d.city]);
     for (const [label, value] of rows) {
-        y += drawText(ctx, label, cx, y, maxW, Math.round(w * 0.04), 26, accent, "center", 1) + 2;
-        y += drawText(ctx, value, cx, y, maxW, Math.round(w * 0.06), 32, "#FFFFFF", "center", 2) + h * 0.016;
+        y += drawText(ctx, label, cx, y, maxW, Math.round(w * 0.048), 26, accent, "center", 1) + 4;
+        y += drawText(ctx, value, cx, y, maxW, Math.round(w * 0.072), 32, "#FFFFFF", "center", 2) + h * 0.02;
     }
 
     // výzva dole
@@ -140,7 +140,7 @@ async function brandFrame(templatePath, b, accent) {
     let y = h * 0.14;
     y += drawText(ctx, b.a, cx, y, maxW, Math.round(w * 0.11), 48, "#FFFFFF", "center", 2);
     y += drawText(ctx, b.b, cx, y, maxW, Math.round(w * 0.11), 48, accent, "center", 2) + h * 0.06;
-    for (const r of b.rows) y += drawText(ctx, r, cx, y, maxW, Math.round(w * 0.06), 30, "#FFFFFF", "center", 2) + h * 0.022;
+    for (const r of b.rows) y += drawText(ctx, r, cx, y, maxW, Math.round(w * 0.068), 30, "#FFFFFF", "center", 2) + h * 0.026;
     drawText(ctx, b.cta, cx, h * 0.8, maxW, Math.round(w * 0.085), 40, accent, "center", 2);
     drawText(ctx, "@PRACOVNI_TIPY", cx, h * 0.8 + w * 0.12, maxW, Math.round(w * 0.05), 28, "#FFFFFF", "center", 1);
     return canvas.toBuffer("image/png");
