@@ -275,9 +275,12 @@ const EURES_KEYWORDS = [
 async function sourceEures(usedKeys) {
     const out = [];
     const seen = new Set();
-    await mapLimit(EURES_KEYWORDS, 4, async keyword => {
+    let raw = 0;
+    const tasks = [];
+    for (const keyword of EURES_KEYWORDS) for (const page of [1, 2]) tasks.push({ keyword, page });
+    await mapLimit(tasks, 4, async ({ keyword, page }) => {
         const body = {
-            resultsPerPage: 100, page: 1, sortSearch: "MOST_RECENT",
+            resultsPerPage: 50, page, sortSearch: "MOST_RECENT",
             keywords: [{ keyword, specificSearchCode: "EVERYWHERE" }],
             publicationPeriod: null, occupationUris: [], skillUris: [], requiredExperienceCodes: [],
             positionScheduleCodes: [], sectorCodes: [], educationAndQualificationLevelCodes: [],
@@ -291,6 +294,7 @@ async function sourceEures(usedKeys) {
         });
         if (!res.ok) throw new Error(`EURES HTTP ${res.status}`);
         const data = await res.json();
+        raw += (data.jvs || []).length;
         for (const jv of data.jvs || []) {
             if (!jv || !jv.id || seen.has(jv.id)) continue;
             seen.add(jv.id);
@@ -313,6 +317,7 @@ async function sourceEures(usedKeys) {
             });
         }
     });
+    log(`EURES: staženo ${raw} inzerátů (${tasks.length} dotazů).`);
     return out;
 }
 
