@@ -34,7 +34,7 @@ const KEYWORDS = [
 ];
 
 const CATEGORY_HINT = /(pick|harvest|farm|fruit|vegetable|berr|greenhouse|agricult|clean|housekeep|room attendant|maid|kitchen|chef|cook|dishwash|waiter|waitress|bartender|barista|restaurant|hotel|reception|warehouse|forklift|logistic|packing|packer|production|factory|meat|fish|food|bakery|slaughter|butcher)/i;
-const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber|carpenter|joiner|fitter|welder|bricklayer|plasterer|roofer|construction|hygienist|dental|dentist|pharmacist|veterinar)/i;
+const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber|carpenter|joiner|fitter|welder|bricklayer|plasterer|roofer|construction|hygienist|dental|dentist|pharmacist|veterinar|superintendent|sales|salesperson|shop|cashier|retail|tester|inspector|fencing|security|guard)/i;
 const NON_LATIN = /[Ͱ-ϿЀ-ӿ]/; // řečtina, azbuka
 const OTHER_LANGUAGE = /(german|french|italian|spanish|dutch|swedish|norwegian|danish|finnish|greek|estonian|polish|portuguese|slovak|slovenian|croatian|serbian|bulgarian|hungarian|romanian|lithuanian|latvian|maltese|russian|ukrainian)/i;
 const BLOCKED_WORDS = /mont|assembl/i;
@@ -752,7 +752,7 @@ function setupAutomation(app, deps) {
         // Doplnění: když dnešní běh na HeroHero nedal 5 příspěvků (málo nabídek
         // nebo chyba publikace), další běh dohledá / znovu pošle zbytek.
         const doneTitles = new Set(((previous && previous.herohero) || []).map(h => h.title));
-        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title));
+        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title) && !EXCLUDE_HINT.test(j.source_title || ""));
         const doneCount = ((previous && previous.herohero) || []).filter(h => !h.skipped).length;
         const topUp = !!(previous && previous.instagram && doneCount < 5);
         if (previous && previous.instagram && !force && !topUp) {
