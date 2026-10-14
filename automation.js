@@ -35,6 +35,17 @@ const KEYWORDS = [
 
 const CATEGORY_HINT = /(pick|harvest|farm|fruit|vegetable|berr|greenhouse|agricult|clean|housekeep|room attendant|maid|kitchen|chef|cook|dishwash|waiter|waitress|bartender|barista|restaurant|hotel|reception|warehouse|forklift|logistic|packing|packer|production|factory|meat|fish|food|bakery|slaughter|butcher)/i;
 const EXCLUDE_HINT = /(engineer|nurse|doctor|physician|teacher|developer|programmer|accountant|physio|pharmac|software|scientist|researcher|lawyer|architect|phd|professor|manager|supervisor|technician|mechanic|officer|\blead\b|driver|administrat|coordinator|director|\bhead\b|electrician|plumber|carpenter|joiner|fitter|welder|bricklayer|plasterer|roofer|construction|hygienist|dental|dentist|pharmacist|veterinar|superintendent|sales|salesperson|shop|cashier|retail|tester|inspector|fencing|security|guard)/i;
+// Kvalifikované pozice – chceme jednodušší práce (sběr ovoce, farmy, úklid, sklady…).
+const SKILLED = /(chef de partie|sous chef|head chef|pastry chef|demi chef|executive chef|\bchef\b|butcher|cnc|welder|mechanic|carpenter|electrician|joiner|baker|barista)/i;
+const ENTRY_OK = /(commis|assistant|helper|porter|trainee|apprentice)/i;
+// Jak „jednoduchá“ je práce podle názvu (vyšší = upřednostnit).
+function simpleScore(title) {
+    const t = String(title || "").toLowerCase();
+    if (/(fruit|pick|harvest|berr|strawberr|apple|grape|vegetable|mushroom|crop|orchard|vineyard)/.test(t)) return 5;
+    if (/(farm|greenhouse|horticult|nursery|dairy|agricult|seasonal)/.test(t)) return 4;
+    if (/(clean|housekeep|chambermaid|room attendant|maid|kitchen porter|dishwash|kitchen hand|warehouse|order picker|packer|packing|packhouse|production|factory|operative|labourer|general worker)/.test(t)) return 3;
+    return 1;
+}
 const NON_LATIN = /[Ͱ-ϿЀ-ӿ]/; // řečtina, azbuka
 const OTHER_LANGUAGE = /(german|french|italian|spanish|dutch|swedish|norwegian|danish|finnish|greek|estonian|polish|portuguese|slovak|slovenian|croatian|serbian|bulgarian|hungarian|romanian|lithuanian|latvian|maltese|russian|ukrainian)/i;
 const BLOCKED_WORDS = /mont|assembl/i;
@@ -245,6 +256,7 @@ function isPreEligible(job) {
     }
     if (!/english/i.test(job.languages) || OTHER_LANGUAGE.test(job.languages)) return false;
     if (EXCLUDE_HINT.test(job.title) || NON_LATIN.test(job.title)) return false;
+    if (SKILLED.test(job.title) && !ENTRY_OK.test(job.title)) return false;
     if (!CATEGORY_HINT.test(`${job.title} ${job.body.slice(0, 800)}`)) return false;
     return true;
 }
@@ -265,7 +277,8 @@ const EURES_COUNTRY = {
     MT: "Malta", NL: "Netherlands", NO: "Norway", ES: "Spain", SE: "Sweden"
 };
 const EURES_KEYWORDS = [
-    "fruit picker", "harvest", "farm worker", "greenhouse", "dairy farm", "horticulture", "berry", "packhouse",
+    "fruit picker", "fruit picking", "berry picker", "strawberry", "apple picking", "mushroom picker", "vegetable packing",
+    "seasonal worker", "agricultural worker", "harvest", "farm worker", "greenhouse", "dairy farm", "horticulture", "berry", "packhouse",
     "housekeeping", "room attendant", "chambermaid", "cleaner", "cleaning operative",
     "kitchen porter", "kitchen assistant", "dishwasher", "waiter", "waitress", "cook", "commis chef", "bartender", "barista",
     "hotel", "receptionist", "warehouse", "order picker", "packer", "forklift", "production operator", "production worker",
@@ -356,8 +369,10 @@ async function sourceCandidates(usedLinks) {
     for (let round = 0; mixed.length < eures.length; round++) {
         for (const list of Object.values(byCountry)) if (list[round]) mixed.push(list[round]);
     }
-    // Nejdřív European Job Days (mají mzdy), pak EURES; celkem max 36 pro AI.
-    return [...eligible, ...mixed].slice(0, 36);
+    // Jednodušší práce (sběr ovoce, farmy…) mají přednost; jinak pořadí po zemích.
+    const all = [...eligible, ...mixed].map((job, i) => ({ job, i, s: simpleScore(job.title) }));
+    all.sort((a, b) => b.s - a.s || a.i - b.i);
+    return all.map(x => x.job).slice(0, 36);
 }
 
 // ---------------------------------------------------------------------------
@@ -479,8 +494,8 @@ function monthlyCzk(salary, rates) {
     return `${value.toLocaleString("cs-CZ")} Kč ${salary.net ? "čistého" : "hrubého"}`;
 }
 
-function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
-    const priority = { "Práce s ovocem/zeleninou": 3, "Práce na farmách": 3 };
+function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKeys = new Set()) {
+    const priority = { "Práce s ovocem/zeleninou": 5, "Práce na farmách": 4, "Úklid": 3, "Sklady": 3, "Hotelové práce": 2.5, "Továrny": 2.5, "Gastronomie": 1.5 };
     const usable = enriched
         .filter(({ ai }) => ai.eligible && CATEGORIES.includes(ai.category))
         .map(({ job, ai }) => {
@@ -539,15 +554,22 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
     for (const c of existingCountries) perCountry[c] = (perCountry[c] || 0) + 1;
     const picked = [];
     const seenTitles = new Set();
-    for (const { job } of usable) {
-        if ((perCountry[job.country] || 0) >= 2) continue;
-        // Stejná pozice ve stejné zemi (např. 10× "Dishwasher" na Maltě) jen jednou.
-        const titleKey = `${String(job.source_title || job.job_title).toLowerCase().replace(/[^a-z]/g, "")}|${job.country}`;
-        if (seenTitles.has(titleKey)) continue;
-        seenTitles.add(titleKey);
-        perCountry[job.country] = (perCountry[job.country] || 0) + 1;
-        picked.push(job);
-        if (picked.length >= limit) break;
+    const tkey = job => String(job.job_title || "").toLowerCase().replace(/[^a-záčďéěíňóřšťúůýž]/g, "");
+    // 1. kolo: žádná stejná pozice v ten den a žádná pozice+země z posledních 10 dnů.
+    // 2. kolo (jen když chybí nabídky): stejná pozice může být, ale v jiné zemi než nedávno.
+    for (const strict of [true, false]) {
+        for (const { job } of usable) {
+            if (picked.length >= limit) break;
+            if (picked.includes(job)) continue;
+            if ((perCountry[job.country] || 0) >= 2) continue;
+            const title = tkey(job);
+            if (seenTitles.has(title)) continue;
+            if (recentKeys.has(`${title}|${job.country}`)) continue;
+            if (strict && recentKeys.has(title)) continue;
+            seenTitles.add(title);
+            perCountry[job.country] = (perCountry[job.country] || 0) + 1;
+            picked.push(job);
+        }
     }
     return picked;
 }
@@ -793,7 +815,16 @@ function setupAutomation(app, deps) {
             log("AI posouzení:", JSON.stringify(review));
             // Limit 2 nabídky/zemi počítáme jen z toho, co už na HeroHero opravdu vyšlo.
             const prevCountries = topUp ? (previous.selected || []).filter(j => doneTitles.has(j.title)).map(j => j.country) : [];
-            fresh = buildJobs(enriched, await czkRates(), limit, prevCountries);
+            // Co vyšlo za posledních 10 dnů (aby se pozice neopakovaly).
+            const recentKeys = new Set();
+            for (const d of Object.keys(state.runs).sort().slice(-11)) {
+                for (const j of (state.runs[d].selected || [])) {
+                    const t = String(j.title || "").toLowerCase().replace(/[^a-záčďéěíňóřšťúůýž]/g, "");
+                    recentKeys.add(t);
+                    recentKeys.add(`${t}|${j.country}`);
+                }
+            }
+            fresh = buildJobs(enriched, await czkRates(), limit, prevCountries, recentKeys);
         }
         const jobs = [...(topUp ? carryover : []), ...fresh];
         log(`Vybráno ${jobs.length} nabídek:`, jobs.map(j => `${j.job_title} (${j.country})`).join(" | "));
