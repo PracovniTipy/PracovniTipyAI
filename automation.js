@@ -659,6 +659,20 @@ function setupAutomation(app, deps) {
                     if (r) (r.igDirect = r.igDirect || []).push({ title: reel.title, mediaId: media.id, at: new Date().toISOString() });
                 });
                 log(`IG: reel "${reel.title}" zveřejněn (media ${media.id}).`);
+                // Stejný reel i na Facebook (a další sítě) přes Make webhook.
+                const hooks = [process.env.MAKE_FB_WEBHOOK, process.env.MAKE_TIKTOK_WEBHOOK].filter(Boolean);
+                for (const hook of hooks) {
+                    try {
+                        const r = await fetch(hook, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ videoUrl: reel.videoUrl, caption: reel.caption, title: reel.title, date })
+                        });
+                        log(`Sociální sítě: reel "${reel.title}" odeslán do Make (${r.status}).`);
+                    } catch (e) {
+                        logError("Odeslání reelu do Make selhalo:", e.message);
+                    }
+                }
             }
         } catch (err) {
             logError("IG: přímé zveřejnění selhalo:", err.message);
