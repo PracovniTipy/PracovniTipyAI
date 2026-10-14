@@ -175,6 +175,17 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
     console.warn("[CATEGORY PATCH] Share button pattern nebyl nalezen.");
   }
 
+  // Popisek na HeroHero: doplníme úvazek a nástup (pokud je inzerát uvádí).
+  const oldLocationLine = "if (hasUsefulJobValue(locationValue)) lines.push(`📍 Lokalita: ${locationValue}`);";
+  const newLocationLine = oldLocationLine +
+    "\n  if (hasUsefulJobValue(job.contract_cz)) lines.push(`🕒 Úvazek: ${job.contract_cz}`);" +
+    "\n  if (hasUsefulJobValue(job.start_cz)) lines.push(`📅 Nástup: ${job.start_cz}`);";
+  if (source.includes(oldLocationLine)) {
+    source = source.replace(oldLocationLine, () => newLocationLine);
+  } else {
+    console.warn("[CATEGORY PATCH] Location line pattern nebyl nalezen.");
+  }
+
   const oldCalls = `  await selectCountryCategory(page, job);\n  await selectWorkCategory(page, job);`;
   const newCalls = `  const countryCategorySelected = await selectCountryCategory(page, job);\n  const workCategorySelected = await selectWorkCategory(page, job);\n  logStep(\`HeroHero kategorie (nepovinné): země=\${countryCategorySelected}, práce=\${workCategorySelected}\`);`;
 

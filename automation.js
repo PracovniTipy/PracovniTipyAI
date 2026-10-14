@@ -374,10 +374,15 @@ title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská",
 city: město/region z inzerátu (nebo "").
 accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} podle inzerátu ("" když se o bydlení nepíše; "Ubytování zajištěno" jen když ho zaměstnavatel opravdu zajišťuje).
 no_experience: true jen když inzerát výslovně říká, že praxe není nutná.
-description_cz: přesně 3 krátké věty (náplň práce; požadavky; benefity/podmínky).
+description_cz: 2–4 krátké odrážky – co se v práci dělá (náplň práce).
+requirements_cz: 1–4 krátké odrážky – co inzerát od uchazeče požaduje (jazyk a úroveň, praxe, fyzická zdatnost, směny…). [] když nic neuvádí.
+benefits_cz: 0–4 krátké odrážky – co zaměstnavatel nabízí (bonusy, strava, doprava, školení, příplatky…). [] když nic neuvádí.
+contract_cz: typ úvazku/smlouvy z inzerátu, např. "plný úvazek, 39 h týdně", "sezónní, květen–září", "částečný úvazek" ("" když neuvádí).
+start_cz: nástup, když ho inzerát uvádí (např. "ihned", "od 7. 12. 2026"), jinak "".
+meals_cz: strava, když ji inzerát uvádí (např. "jídlo zdarma během směny"), jinak "".
 hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false, hours_per_week: číslo z inzerátu nebo null}. U hodinové mzdy VŽDY vyplň hours_per_week, pokud ho inzerát uvádí (částečný úvazek!). Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..","..",".."],"hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..",".."],"requirements_cz":[".."],"benefits_cz":[],"contract_cz":"","start_cz":"","meals_cz":"","hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
 
     // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
     // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
@@ -396,7 +401,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":[
                     body: JSON.stringify({
                         model,
                         temperature: 0.2,
-                        max_tokens: 700,
+                        max_tokens: 1000,
                         response_format: { type: "json_object" },
                         messages: [
                             { role: "system", content: system },
@@ -487,7 +492,11 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
             const noExpRe = /,?\s*(i\s+)?bez (praxe|zkušeností|předchozích zkušeností)!?/gi;
             const clean = s => (ai.no_experience ? String(s) : String(s).replace(noExpRe, "")).trim();
             ai.hook_cz = clean(ai.hook_cz || "");
-            const description = (Array.isArray(ai.description_cz) ? ai.description_cz : []).map(clean).filter(Boolean).slice(0, 3);
+            const listOf = v => (Array.isArray(v) ? v : []).map(x => clean(String(x || ""))).filter(Boolean);
+            const description = listOf(ai.description_cz).slice(0, 4);
+            const requirements = listOf(ai.requirements_cz).slice(0, 4);
+            const benefits = listOf(ai.benefits_cz).slice(0, 4);
+            const str = v => clean(String(v || "")).slice(0, 80);
             const emoji = { "Práce s ovocem/zeleninou": "🍓", "Práce na farmách": "🚜", "Úklid": "🧹", "Gastronomie": "👨‍🍳", "Hotelové práce": "🏨", "Sklady": "📦", "Továrny": "🏭" }[ai.category] || "💼";
             const caption = [
                 `${emoji} ${title} – ${countryCz}${salary ? ` – cca ${salary} / měsíc` : ""}`,
@@ -514,6 +523,11 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = []) {
                     link: job.link,
                     source_title: String(job.title || "").replace(/\s*[-–(].*$/, "").trim(),
                     description,
+                    requirements,
+                    advantages: benefits,
+                    meals: str(ai.meals_cz),
+                    contract_cz: str(ai.contract_cz),
+                    start_cz: str(ai.start_cz),
                     caption
                 }
             };
