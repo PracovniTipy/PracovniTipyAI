@@ -845,7 +845,7 @@ function setupAutomation(app, deps) {
         // Doplnění: když dnešní běh na HeroHero nedal 5 příspěvků (málo nabídek
         // nebo chyba publikace), další běh dohledá / znovu pošle zbytek.
         const doneTitles = new Set(((previous && previous.herohero) || []).map(h => h.title));
-        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title) && !EXCLUDE_HINT.test(j.source_title || ""));
+        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title) && !EXCLUDE_HINT.test(j.source_title || "") && j.salary_czk_month && j.city);
         const doneCount = ((previous && previous.herohero) || []).filter(h => !h.skipped).length;
         const topUp = !!(previous && previous.instagram && doneCount < 5);
         if (previous && previous.instagram && !force && !topUp) {
