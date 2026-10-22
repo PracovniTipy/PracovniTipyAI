@@ -375,7 +375,9 @@ async function sourceCandidates(usedLinks, recentSrc = new Set()) {
         for (const list of Object.values(byCountry)) if (list[round]) mixed.push(list[round]);
     }
     // Jednodušší práce (sběr ovoce, farmy…) mají přednost; jinak pořadí po zemích.
-    const all = [...eligible, ...mixed].map((job, i) => ({ job, i, s: simpleScore(job.title) }));
+    // Inzeráty, kde je uvedená mzda, mají velkou přednost (příspěvek bez mzdy nechceme).
+    const PAY = /(€|eur\b|euro|£|\bkr\b|nok|sek|dkk|chf)\s?\d|\d[\d.,\s]*\s?(€|eur\b|euro|kr\b|nok|sek|dkk|per hour|an hour|p\/h|\/h\b|per week|per month|per annum)|(salary|wage|pay|rate)[^.\n]{0,40}\d/i;
+    const all = [...eligible, ...mixed].map((job, i) => ({ job, i, s: simpleScore(job.title) + (PAY.test(`${job.salaryText || ""} ${job.body || ""}`) ? 10 : 0) }));
     all.sort((a, b) => b.s - a.s || a.i - b.i);
     // Rozmanitost: stejná pozice ve stejné zemi jen jednou, max 6 kandidátů na
     // zemi a nic, co už vyšlo za posledních 10 dnů (jinak 36 míst zaberou
@@ -386,11 +388,11 @@ async function sourceCandidates(usedLinks, recentSrc = new Set()) {
     for (const { job } of all) {
         const key = `${srcKey(job.title)}|${job.country}`;
         if (seen.has(key) || recentSrc.has(key)) continue;
-        if ((perCountry[job.country] || 0) >= 6) continue;
+        if ((perCountry[job.country] || 0) >= 8) continue;
         seen.add(key);
         perCountry[job.country] = (perCountry[job.country] || 0) + 1;
         out.push(job);
-        if (out.length >= 36) break;
+        if (out.length >= 48) break;
     }
     log(`Kandidáti po odstranění opakování: ${out.length} (${Object.entries(perCountry).map(([c, n]) => `${c} ${n}`).join(", ")}).`);
     return out;
@@ -472,7 +474,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":[
         return null;
     }
 
-    const list = candidates.slice(0, 36);
+    const list = candidates.slice(0, 48);
     const results = await mapLimit(list, 4, analyze);
     const out = list.map((job, i) => ({ job, ai: results[i] })).filter(x => x.ai).map(({ job, ai }) => {
         // Kategorii určujeme sami podle klíčových slov (spolehlivější než AI),
@@ -561,7 +563,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
                 `#pracevzahranici #brigadavzahranici #prace${tag} #${tag} #prace #brigada #pracovnitipy`
             ].join("\n").replace(/\n\n\n+/g, "\n\n");
             return {
-                score: (priority[ai.category] || 1) - (Number(ai.salary && ai.salary.hours_per_week) > 0 && Number(ai.salary.hours_per_week) < 30 ? 1.5 : 0) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 0.3 : 0),
+                score: (priority[ai.category] || 1) - (Number(ai.salary && ai.salary.hours_per_week) > 0 && Number(ai.salary.hours_per_week) < 30 ? 1.5 : 0) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 1.5 : 0),
                 job: {
                     job_title: title,
                     herohero_title: title,
@@ -586,6 +588,8 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             };
         })
         .filter(({ job }) => job.job_title && job.description.length > 0 && !BLOCKED_WORDS.test(`${job.job_title} ${job.description.join(" ")} ${job.city}`))
+        // Na HeroHero musí být vždy mzda, jazyk, město (ubytování když ho inzerát uvádí).
+        .filter(({ job }) => job.salary_czk_month && job.city)
         .sort((a, b) => b.score - a.score);
 
     const perCountry = {};

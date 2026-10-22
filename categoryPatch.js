@@ -177,7 +177,10 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
 
   // Popisek na HeroHero: doplníme úvazek a nástup (pokud je inzerát uvádí).
   const oldLocationLine = "if (hasUsefulJobValue(locationValue)) lines.push(`📍 Lokalita: ${locationValue}`);";
-  const newLocationLine = oldLocationLine +
+  // Ubytování je vždy v příspěvku – když ho inzerát neuvádí, napíšeme to férově.
+  const newLocationLine =
+    "if (!hasUsefulJobValue(job.accommodation)) lines.push(`🏠 Ubytování: zaměstnavatel neuvádí – zeptej se při přihlášce`);\n  " +
+    oldLocationLine +
     "\n  if (hasUsefulJobValue(job.contract_cz)) lines.push(`🕒 Úvazek: ${job.contract_cz}`);" +
     "\n  if (hasUsefulJobValue(job.start_cz)) lines.push(`📅 Nástup: ${job.start_cz}`);";
   if (source.includes(oldLocationLine)) {
