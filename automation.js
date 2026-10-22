@@ -531,7 +531,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const accommodation = ACCOMMODATION_VALUES.includes(ai.accommodation) ? ai.accommodation : "";
             const title = String(ai.title_cz || "").trim().slice(0, 40);
             // Pojistka proti nepravdě: "bez praxe" jen když to inzerát opravdu říká.
-            const noExpRe = /,?\s*(i\s+)?(bez (praxe|zkušeností|předchozích zkušeností)|(praxe|zkušenosti) (není|nejsou) (nutná|nutné|potřeba))!?/gi;
+            const noExpRe = /,?\s*(i\s+)?(bez (nutnosti |potřeby )?(praxe|zkušeností|předchozích zkušeností)|(praxe|zkušenosti) (není|nejsou) (nutná|nutné|potřeba))!?/gi;
             const clean = s => (ai.no_experience ? String(s) : String(s).replace(noExpRe, "")).trim();
             ai.hook_cz = clean(ai.hook_cz || "");
             const listOf = v => (Array.isArray(v) ? v : []).map(x => clean(String(x || ""))).filter(Boolean);
