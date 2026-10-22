@@ -50,6 +50,11 @@ const NON_LATIN = /[Ͱ-ϿЀ-ӿ]/; // řečtina, azbuka
 const OTHER_LANGUAGE = /(german|french|italian|spanish|dutch|swedish|norwegian|danish|finnish|greek|estonian|polish|portuguese|slovak|slovenian|croatian|serbian|bulgarian|hungarian|romanian|lithuanian|latvian|maltese|russian|ukrainian)/i;
 const BLOCKED_WORDS = /mont|assembl/i;
 
+const FLAGS = {
+    Austria: "🇦🇹", Belgium: "🇧🇪", Cyprus: "🇨🇾", Denmark: "🇩🇰", Estonia: "🇪🇪", Finland: "🇫🇮", France: "🇫🇷",
+    Germany: "🇩🇪", Greece: "🇬🇷", Ireland: "🇮🇪", Italy: "🇮🇹", Malta: "🇲🇹", Netherlands: "🇳🇱", Norway: "🇳🇴",
+    Spain: "🇪🇸", Sweden: "🇸🇪"
+};
 const ACCOMMODATION_VALUES = ["Ubytování zdarma", "Ubytování zajištěno", "Ubytování k dispozici", "Pomoc s ubytováním", ""];
 const CATEGORIES = ["Práce s ovocem/zeleninou", "Práce na farmách", "Úklid", "Gastronomie", "Hotelové práce", "Sklady", "Továrny"];
 
@@ -334,7 +339,7 @@ async function sourceEures(usedKeys) {
     return out;
 }
 
-async function sourceCandidates(usedLinks) {
+async function sourceCandidates(usedLinks, recentSrc = new Set()) {
     const usedKeys = new Set(usedLinks.map(linkKey));
     const used = { has: link => usedKeys.has(linkKey(link)) };
     const lists = await mapLimit(KEYWORDS, 4, async keyword => {
@@ -372,7 +377,27 @@ async function sourceCandidates(usedLinks) {
     // Jednodušší práce (sběr ovoce, farmy…) mají přednost; jinak pořadí po zemích.
     const all = [...eligible, ...mixed].map((job, i) => ({ job, i, s: simpleScore(job.title) }));
     all.sort((a, b) => b.s - a.s || a.i - b.i);
-    return all.map(x => x.job).slice(0, 36);
+    // Rozmanitost: stejná pozice ve stejné zemi jen jednou, max 6 kandidátů na
+    // zemi a nic, co už vyšlo za posledních 10 dnů (jinak 36 míst zaberou
+    // desítky stejných inzerátů "DISHWASHER – Malta" a výběr skončí prázdný).
+    const seen = new Set();
+    const perCountry = {};
+    const out = [];
+    for (const { job } of all) {
+        const key = `${srcKey(job.title)}|${job.country}`;
+        if (seen.has(key) || recentSrc.has(key)) continue;
+        if ((perCountry[job.country] || 0) >= 6) continue;
+        seen.add(key);
+        perCountry[job.country] = (perCountry[job.country] || 0) + 1;
+        out.push(job);
+        if (out.length >= 36) break;
+    }
+    log(`Kandidáti po odstranění opakování: ${out.length} (${Object.entries(perCountry).map(([c, n]) => `${c} ${n}`).join(", ")}).`);
+    return out;
+}
+
+function srcKey(title) {
+    return String(title || "").replace(/\s*[-–(].*$/, "").toLowerCase().replace(/[^a-z]/g, "");
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +420,7 @@ benefits_cz: 0–4 krátké odrážky – co zaměstnavatel nabízí (bonusy, st
 contract_cz: typ úvazku/smlouvy z inzerátu, např. "plný úvazek, 39 h týdně", "sezónní, květen–září", "částečný úvazek" ("" když neuvádí).
 start_cz: nástup, když ho inzerát uvádí (např. "ihned", "od 7. 12. 2026"), jinak "".
 meals_cz: strava, když ji inzerát uvádí (např. "jídlo zdarma během směny"), jinak "".
-hook_cz: 1 krátká lákavá věta pro Instagram (fakta, např. ubytování zdarma, bez praxe).
+hook_cz: 1 úderná věta pro Instagram (max 70 znaků), která zastaví scrollování. Postav ji na NEJSILNĚJŠÍM konkrétním faktu z inzerátu (ubytování, praxe není nutná, plný úvazek, příplatky, strava, nástup ihned, celoroční práce). Mluv přímo ke čtenáři (ty). NEOPAKUJ název pozice ani země. Zakázané prázdné fráze: "Práce na Maltě", "Hledáme motivované pracovníky", "Skvělá příležitost", "Přidej se k našemu týmu". Příklady: "Bydlení ti zařídí zaměstnavatel, ty jen přijedeš.", "Stačí základní angličtina, všechno tě naučí na místě.", "Jídlo během směny máš zdarma." – ale VŽDY jen to, co inzerát opravdu říká.
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false, hours_per_week: číslo z inzerátu nebo null}. U hodinové mzdy VŽDY vyplň hours_per_week, pokud ho inzerát uvádí (částečný úvazek!). Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
 Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..",".."],"requirements_cz":[".."],"benefits_cz":[],"contract_cz":"","start_cz":"","meals_cz":"","hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
 
@@ -504,7 +529,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const accommodation = ACCOMMODATION_VALUES.includes(ai.accommodation) ? ai.accommodation : "";
             const title = String(ai.title_cz || "").trim().slice(0, 40);
             // Pojistka proti nepravdě: "bez praxe" jen když to inzerát opravdu říká.
-            const noExpRe = /,?\s*(i\s+)?bez (praxe|zkušeností|předchozích zkušeností)!?/gi;
+            const noExpRe = /,?\s*(i\s+)?(bez (praxe|zkušeností|předchozích zkušeností)|(praxe|zkušenosti) (není|nejsou) (nutná|nutné|potřeba))!?/gi;
             const clean = s => (ai.no_experience ? String(s) : String(s).replace(noExpRe, "")).trim();
             ai.hook_cz = clean(ai.hook_cz || "");
             const listOf = v => (Array.isArray(v) ? v : []).map(x => clean(String(x || ""))).filter(Boolean);
@@ -513,14 +538,27 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const benefits = listOf(ai.benefits_cz).slice(0, 4);
             const str = v => clean(String(v || "")).slice(0, 80);
             const emoji = { "Práce s ovocem/zeleninou": "🍓", "Práce na farmách": "🚜", "Úklid": "🧹", "Gastronomie": "👨‍🍳", "Hotelové práce": "🏨", "Sklady": "📦", "Továrny": "🏭" }[ai.category] || "💼";
+            const flag = FLAGS[job.country] || "🌍";
+            const cityCz = String(ai.city || "").trim();
+            const tag = String(countryCz || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+            const facts = [
+                salary ? `💰 Mzda: cca ${salary} měsíčně` : "",
+                accommodation ? `🏠 ${accommodation}` : "",
+                "🗣️ Jazyk: stačí angličtina",
+                `📍 ${cityCz ? `${cityCz}, ` : ""}${countryCz}`,
+                ai.no_experience ? "✅ Praxe není nutná" : ""
+            ].filter(Boolean);
             const caption = [
-                `${emoji} ${title} – ${countryCz}${salary ? ` – cca ${salary} / měsíc` : ""}`,
-                "",
+                `${flag} ${title} – ${countryCz}`,
                 String(ai.hook_cz || "").trim(),
                 "",
-                `Pro více prací ze zahraničí napiš do komentáře "${countryCz}".`,
+                ...facts,
                 "",
-                "📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN)."
+                `👇 Napiš do komentáře „${countryCz}“ a pošlu ti další nabídky do zpráv.`,
+                "💾 Ulož si to, ať to pak nehledáš. Pošli kamarádovi, který chce taky vyrazit.",
+                "📄 Životopis do zahraničí si sestavíš s AI zdarma (CZ + EN) – napiš „CV“.",
+                "",
+                `#pracevzahranici #brigadavzahranici #prace${tag} #${tag} #prace #brigada #pracovnitipy`
             ].join("\n").replace(/\n\n\n+/g, "\n\n");
             return {
                 score: (priority[ai.category] || 1) - (Number(ai.salary && ai.salary.hours_per_week) > 0 && Number(ai.salary.hours_per_week) < 30 ? 1.5 : 0) + (ai.no_experience ? 0.5 : 0) + (salary ? 0.3 : 0) + (accommodation ? 0.3 : 0),
@@ -557,11 +595,12 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
     const tkey = job => String(job.job_title || "").toLowerCase().replace(/[^a-záčďéěíňóřšťúůýž]/g, "");
     // 1. kolo: žádná stejná pozice v ten den a žádná pozice+země z posledních 10 dnů.
     // 2. kolo (jen když chybí nabídky): stejná pozice může být, ale v jiné zemi než nedávno.
-    for (const strict of [true, false]) {
+    // 3. kolo (nouzové): max 3 nabídky z jedné země, aby den nezůstal prázdný.
+    for (const [strict, maxPer] of [[true, 2], [false, 2], [false, 3]]) {
         for (const { job } of usable) {
             if (picked.length >= limit) break;
             if (picked.includes(job)) continue;
-            if ((perCountry[job.country] || 0) >= 2) continue;
+            if ((perCountry[job.country] || 0) >= maxPer) continue;
             const title = tkey(job);
             if (seenTitles.has(title)) continue;
             if (recentKeys.has(`${title}|${job.country}`)) continue;
@@ -819,7 +858,11 @@ function setupAutomation(app, deps) {
         let review = [];
         let fresh = [];
         if (limit > 0) {
-            candidates = await sourceCandidates(state.usedLinks);
+            const recentSrc = new Set();
+            for (const d of Object.keys(state.runs).sort().slice(-11)) {
+                for (const j of (state.runs[d].jobs || [])) recentSrc.add(`${srcKey(j.source_title)}|${j.country}`);
+            }
+            candidates = await sourceCandidates(state.usedLinks, recentSrc);
             if (candidates.length === 0 && !carryover.length) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
             const enriched = candidates.length ? await enrichWithAI(candidates) : [];
             review = enriched.map(({ job, ai }) => ({
