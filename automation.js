@@ -848,16 +848,18 @@ function setupAutomation(app, deps) {
     });
 
     // Nastavení (např. API klíče Jooble) – uložené ve stavu, ne v kódu. Chráněno STATS_KEY.
-    app.post("/admin/config", require("express").json(), async (req, res) => {
+    app.post("/admin/config", require("express").text({ type: "text/plain", limit: "100kb" }), async (req, res) => {
         const auth = req.get("x-admin-key");
         if (!process.env.STATS_KEY || auth !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
-        const body = req.body || {};
+        let body = req.body || {};
+        if (typeof body === "string") { try { body = JSON.parse(body); } catch (e) { body = {}; } }
+        log("Admin config: přijaté klíče", Object.keys(body || {}).join(","), "typ", typeof req.body);
         await store.update(st => {
             st.config = st.config || {};
             if (body.jooble && typeof body.jooble === "object") st.config.jooble = { ...(st.config.jooble || {}), ...body.jooble };
         });
         const st = await store.load();
-        res.json({ ok: true, jooble: Object.keys((st.config && st.config.jooble) || {}) });
+        res.json({ ok: true, got: Object.keys(body || {}), bodyType: typeof req.body, jooble: Object.keys((st.config && st.config.jooble) || {}) });
     });
 
     app.get("/ig/check", async (req, res) => {
