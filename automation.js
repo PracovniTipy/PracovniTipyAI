@@ -352,7 +352,7 @@ const ENGLISH_TEXT = /\b(the|and|we are|you will|our|with|for|looking for|experi
 async function sourceJooble(usedKeys, keys = {}) {
     const out = [];
     const day = Math.floor(Date.now() / 86400000);
-    const words = [0, 1, 2].map(i => JOOBLE_WORDS[(day * 3 + i) % JOOBLE_WORDS.length]);
+    const words = [0, 4, 8].map(i => JOOBLE_WORDS[(day + i) % JOOBLE_WORDS.length]);
     for (const [cc, key] of Object.entries(keys || {})) {
         const country = JOOBLE_COUNTRY[cc];
         if (!country || !key) continue;
@@ -470,7 +470,7 @@ async function enrichWithAI(candidates) {
 Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
 required_languages: seznam jazyků, které inzerát VÝSLOVNĚ vyžaduje (např. ["English"] nebo ["English","Finnish"]); když žádný neuvádí, dej [].
 requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
-title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy. Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
+title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy, bez zkratek (GMP, HGV…), srozumitelně pro běžného Čecha (např. "Uklízeč/ka ve výrobě"). Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
 city: město/region z inzerátu (nebo "").
 accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} podle inzerátu ("" když se o bydlení nepíše; "Ubytování zajištěno" jen když ho zaměstnavatel opravdu zajišťuje).
 no_experience: true jen když inzerát výslovně říká, že praxe není nutná.
@@ -658,17 +658,21 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
     // 1. kolo: žádná stejná pozice v ten den a žádná pozice+země z posledních 10 dnů.
     // 2. kolo (jen když chybí nabídky): stejná pozice může být, ale v jiné zemi než nedávno.
     // 3. kolo (nouzové): max 3 nabídky z jedné země, aby den nezůstal prázdný.
-    for (const [strict, maxPer] of [[true, 2], [false, 2], [false, 3]]) {
+    // Pestrost: max 2 nabídky stejného typu práce (např. úklid) za den, v nouzi 3.
+    const perCat = {};
+    for (const [strict, maxPer, maxCat] of [[true, 2, 2], [false, 2, 2], [false, 3, 3], [false, 3, 5]]) {
         for (const { job } of usable) {
             if (picked.length >= limit) break;
             if (picked.includes(job)) continue;
             if ((perCountry[job.country] || 0) >= maxPer) continue;
+            if ((perCat[job.work_category] || 0) >= maxCat) continue;
             const title = tkey(job);
             if (seenTitles.has(title)) continue;
             if (recentKeys.has(`${title}|${job.country}`)) continue;
             if (strict && recentKeys.has(title)) continue;
             seenTitles.add(title);
             perCountry[job.country] = (perCountry[job.country] || 0) + 1;
+            perCat[job.work_category] = (perCat[job.work_category] || 0) + 1;
             picked.push(job);
         }
     }
