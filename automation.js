@@ -344,7 +344,7 @@ async function sourceEures(usedKeys) {
 // a uložené ve stavu na Cloudinary (state.config.jooble), ne v kódu.
 // Limit ~500 dotazů na klíč, proto jen 3 dotazy na zemi denně (střídají se slova).
 // ---------------------------------------------------------------------------
-const JOOBLE_COUNTRY = { ie: "Ireland", nl: "Netherlands", de: "Germany", at: "Austria", be: "Belgium", dk: "Denmark", se: "Sweden", fi: "Finland", no: "Norway", cy: "Cyprus" };
+const JOOBLE_COUNTRY = { ie: "Ireland", nl: "Netherlands", de: "Germany", at: "Austria", be: "Belgium", dk: "Denmark", se: "Sweden", fi: "Finland", no: "Norway", es: "Spain", it: "Italy", fr: "France" };
 const JOOBLE_WORDS = ["warehouse operative", "fruit picker", "farm worker", "cleaner", "housekeeping", "kitchen porter",
     "production operative", "general operative", "packer", "room attendant", "food production", "picker packer"];
 const ENGLISH_TEXT = /\b(the|and|we are|you will|our|with|for|looking for|experience)\b/gi;
@@ -469,6 +469,7 @@ async function enrichWithAI(candidates) {
     const system = `Jsi editor účtu "Pracovní tipy" (nabídky práce v zahraničí pro Čechy bez vysoké školy).
 Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si nevymýšlej.
 required_languages: seznam jazyků, které inzerát VÝSLOVNĚ vyžaduje (např. ["English"] nebo ["English","Finnish"]); když žádný neuvádí, dej [].
+simple_job: true jen když jde o JEDNODUCHOU manuální práci bez kvalifikace (sběr ovoce/zeleniny, farma, úklid, pokojská, sklad, balení, výroba u linky, pomocná síla v kuchyni, umývání nádobí, pomocník v hotelu). false u kanceláře, prodeje, řízení, řidičů, řemesel, techniků, zdravotnictví, péče, kuchařů s praxí, baristů a barmanů.
 requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
 title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy, bez zkratek (GMP, HGV…), srozumitelně pro běžného Čecha (např. "Uklízeč/ka ve výrobě"). Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
 city: město/region z inzerátu (nebo "").
@@ -482,7 +483,7 @@ start_cz: nástup, když ho inzerát uvádí (např. "ihned", "od 7. 12. 2026"),
 meals_cz: strava, když ji inzerát uvádí (např. "jídlo zdarma během směny"), jinak "".
 hook_cz: 1 úderná věta pro Instagram (max 70 znaků), která zastaví scrollování. Postav ji na NEJSILNĚJŠÍM konkrétním faktu z inzerátu (ubytování, praxe není nutná, plný úvazek, příplatky, strava, nástup ihned, celoroční práce). Mluv přímo ke čtenáři (ty). NEOPAKUJ název pozice ani země. Zakázané prázdné fráze: "Práce na Maltě", "Hledáme motivované pracovníky", "Skvělá příležitost", "Přidej se k našemu týmu". Příklady: "Bydlení ti zařídí zaměstnavatel, ty jen přijedeš.", "Stačí základní angličtina, všechno tě naučí na místě.", "Jídlo během směny máš zdarma." – ale VŽDY jen to, co inzerát opravdu říká.
 salary: {amount: číslo (střed rozpětí) nebo null, currency: "EUR"/"SEK"/"NOK"/"DKK"/..., period: "hour"|"week"|"biweek"|"month"|"year", net: true/false, hours_per_week: číslo z inzerátu nebo null}. U hodinové mzdy VŽDY vyplň hours_per_week, pokud ho inzerát uvádí (částečný úvazek!). Pozor: když je "měsíční" částka v desítkách tisíc EUR, jde nejspíš o roční mzdu → period "year". Hodinovou sazbu poznáš podle výše (např. 13-19 EUR).
-Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..",".."],"requirements_cz":[".."],"benefits_cz":[],"contract_cz":"","start_cz":"","meals_cz":"","hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
+Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":["English"],"simple_job":true,"requires_degree_or_license":false,"title_cz":"...","city":"...","accommodation":"...","no_experience":false,"description_cz":["..",".."],"requirements_cz":[".."],"benefits_cz":[],"contract_cz":"","start_cz":"","meals_cz":"","hook_cz":"...","salary":{"amount":null,"currency":"EUR","period":"month","net":false,"hours_per_week":null}}`;
 
     // Jedno krátké volání na nabídku (omezený výstup + časový limit), přes
     // vestavěný fetch. Hromadné volání generovalo obří odpověď a padalo.
@@ -546,7 +547,8 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":[
         ai.blockLicense = yes(ai.requires_degree_or_license);
         ai.no_experience = yes(ai.no_experience);
         // Jazyk už hlídá předfiltr (pole "Language skills" = jen angličtina).
-        ai.eligible = !!category && !ai.blockLicense && !((job.source === "eures" || job.source === "jooble") && ai.blockLang);
+        ai.simple_job = yes(ai.simple_job);
+        ai.eligible = !!category && ai.simple_job && !ai.blockLicense && !((job.source === "eures" || job.source === "jooble") && ai.blockLang);
         return { job, ai };
     });
     log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
