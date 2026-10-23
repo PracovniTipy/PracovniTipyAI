@@ -339,7 +339,58 @@ async function sourceEures(usedKeys) {
     return out;
 }
 
-async function sourceCandidates(usedLinks, recentSrc = new Set()) {
+// ---------------------------------------------------------------------------
+// Třetí zdroj: Jooble (agregátor tisíců portálů). Klíče jsou po zemích
+// a uložené ve stavu na Cloudinary (state.config.jooble), ne v kódu.
+// Limit ~500 dotazů na klíč, proto jen 3 dotazy na zemi denně (střídají se slova).
+// ---------------------------------------------------------------------------
+const JOOBLE_COUNTRY = { ie: "Ireland", nl: "Netherlands", de: "Germany", at: "Austria", be: "Belgium", dk: "Denmark", se: "Sweden", fi: "Finland", no: "Norway", cy: "Cyprus" };
+const JOOBLE_WORDS = ["warehouse operative", "fruit picker", "farm worker", "cleaner", "housekeeping", "kitchen porter",
+    "production operative", "general operative", "packer", "room attendant", "food production", "picker packer"];
+const ENGLISH_TEXT = /\b(the|and|we are|you will|our|with|for|looking for|experience)\b/gi;
+
+async function sourceJooble(usedKeys, keys = {}) {
+    const out = [];
+    const day = Math.floor(Date.now() / 86400000);
+    const words = [0, 1, 2].map(i => JOOBLE_WORDS[(day * 3 + i) % JOOBLE_WORDS.length]);
+    for (const [cc, key] of Object.entries(keys || {})) {
+        const country = JOOBLE_COUNTRY[cc];
+        if (!country || !key) continue;
+        for (const keywords of words) {
+            try {
+                const res = await fetch(`https://${cc}.jooble.org/api/${key}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ keywords, location: "", ResultOnPage: 50, page: 1 })
+                });
+                if (!res.ok) throw new Error(`HTTP ${res.status}`);
+                const data = await res.json();
+                for (const j of data.jobs || []) {
+                    const link = String(j.link || "");
+                    if (!link || usedKeys.has(linkKey(link)) || out.some(o => o.link === link)) continue;
+                    const snippet = htmlToText(String(j.snippet || ""));
+                    // Jen inzeráty psané anglicky (v NL/DE jinak vyžadují místní jazyk).
+                    if ((snippet.match(ENGLISH_TEXT) || []).length < 3) continue;
+                    out.push({
+                        link, source: "jooble",
+                        title: htmlToText(String(j.title || "")),
+                        country, workplace: String(j.location || country),
+                        languages: "English",
+                        salaryPeriod: "", salaryText: String(j.salary || ""),
+                        expired: false, expiry: "",
+                        body: `${j.company || ""}\nMísto: ${j.location || ""}\nMzda: ${j.salary || "neuvedena"}\nÚvazek: ${j.type || ""}\n${snippet}`.slice(0, 3500)
+                    });
+                }
+            } catch (err) {
+                logError(`Jooble ${cc} "${keywords}" selhal:`, err.message);
+            }
+        }
+    }
+    log(`Jooble: ${out.length} anglických inzerátů (${words.join(", ")}).`);
+    return out;
+}
+
+async function sourceCandidates(usedLinks, recentSrc = new Set(), joobleKeys = {}) {
     const usedKeys = new Set(usedLinks.map(linkKey));
     const used = { has: link => usedKeys.has(linkKey(link)) };
     const lists = await mapLimit(KEYWORDS, 4, async keyword => {
@@ -366,6 +417,13 @@ async function sourceCandidates(usedLinks, recentSrc = new Set()) {
         log(`EURES: ${eures.length} vhodných kandidátů po předfiltru.`);
     } catch (err) {
         logError("EURES zdroj selhal:", err.message);
+    }
+    try {
+        const jooble = (await sourceJooble(usedKeys, joobleKeys)).filter(isPreEligible);
+        log(`Jooble: ${jooble.length} vhodných kandidátů po předfiltru.`);
+        eures = [...eures, ...jooble];
+    } catch (err) {
+        logError("Jooble zdroj selhal:", err.message);
     }
     // EURES střídáme po zemích (jinak převáží Irsko a limit 2/zemi nedá 5 nabídek).
     const byCountry = {};
@@ -488,7 +546,7 @@ Odpověz JEN tímto JSON objektem (žádný jiný text): {"required_languages":[
         ai.blockLicense = yes(ai.requires_degree_or_license);
         ai.no_experience = yes(ai.no_experience);
         // Jazyk už hlídá předfiltr (pole "Language skills" = jen angličtina).
-        ai.eligible = !!category && !ai.blockLicense && !(job.source === "eures" && ai.blockLang);
+        ai.eligible = !!category && !ai.blockLicense && !((job.source === "eures" || job.source === "jooble") && ai.blockLang);
         return { job, ai };
     });
     log(`AI vyhodnotila ${out.length} nabídek, vhodných: ${out.filter(x => x.ai.eligible).length}.`);
@@ -789,6 +847,19 @@ function setupAutomation(app, deps) {
         }
     });
 
+    // Nastavení (např. API klíče Jooble) – uložené ve stavu, ne v kódu. Chráněno STATS_KEY.
+    app.post("/admin/config", require("express").json(), async (req, res) => {
+        const auth = req.get("x-admin-key");
+        if (!process.env.STATS_KEY || auth !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        const body = req.body || {};
+        await store.update(st => {
+            st.config = st.config || {};
+            if (body.jooble && typeof body.jooble === "object") st.config.jooble = { ...(st.config.jooble || {}), ...body.jooble };
+        });
+        const st = await store.load();
+        res.json({ ok: true, jooble: Object.keys((st.config && st.config.jooble) || {}) });
+    });
+
     app.get("/ig/check", async (req, res) => {
         try {
             const limit = await igCall("GET", `${IG_BUSINESS_ID}/content_publishing_limit`, { fields: "quota_usage,config" });
@@ -866,7 +937,7 @@ function setupAutomation(app, deps) {
             for (const d of Object.keys(state.runs).sort().slice(-11)) {
                 for (const j of (state.runs[d].jobs || [])) recentSrc.add(`${srcKey(j.source_title)}|${j.country}`);
             }
-            candidates = await sourceCandidates(state.usedLinks, recentSrc);
+            candidates = await sourceCandidates(state.usedLinks, recentSrc, (state.config && state.config.jooble) || {});
             if (candidates.length === 0 && !carryover.length) throw new Error("Nenašla se žádná vhodná aktivní nabídka.");
             const enriched = candidates.length ? await enrichWithAI(candidates) : [];
             review = enriched.map(({ job, ai }) => ({
