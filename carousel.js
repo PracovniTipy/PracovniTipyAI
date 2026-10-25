@@ -124,7 +124,94 @@ async function renderSlide(templateFolder, c, slide, index, total, accent) {
 
 const ACCENTS = ["#FFD233", "#4FE3C1", "#FF7A59", "#7CC4FF", "#C7F25C"];
 
-async function buildCarousel(templateFolder, index) {
+// Obecné návody – jen ověřená, obecně platná fakta (žádné AI, žádná čísla, která se mění).
+const GUIDES = [
+    {
+        name: "Podvodné nabídky", title: "JAK POZNAT PODVODNOU NABÍDKU PRÁCE", intro: "6 varovných signálů. Ulož si to dřív, než někomu pošleš peníze nebo doklady.",
+        slides: [
+            ["1. CHTĚJÍ PENÍZE PŘEDEM", "Poplatek za zprostředkování, rezervaci místa nebo školení předem je varovný signál. Agentura práce v Česku nesmí za zprostředkování zaměstnání chtít peníze od uchazeče."],
+            ["2. MZDA AŽ PŘÍLIŠ VYSOKÁ", "Když nabízí mnohem víc než podobné nabídky v té zemi a k tomu nechtějí žádnou praxi ani jazyk, zpozorni."],
+            ["3. ŽÁDNÁ PÍSEMNÁ NABÍDKA", "Seriózní zaměstnavatel ti před odjezdem pošle písemnou nabídku nebo smlouvu se mzdou, pracovní dobou a místem práce."],
+            ["4. CHTĚJÍ TVOJE DOKLADY", "Neposílej fotku občanky, pasu ani údaje z platební karty, dokud si firmu neověříš."],
+            ["5. FIRMA NEJDE DOHLEDAT", "Dohledej si název firmy, adresu a recenze. Nabídka jen přes WhatsApp nebo ze soukromého e-mailu bez názvu firmy je podezřelá."],
+            ["6. TLAČÍ TĚ NA RYCHLOST", "Musíš se rozhodnout hned, jinak místo propadne? Typická past. Na rozmyšlení máš vždycky právo."]
+        ]
+    },
+    {
+        name: "Co si zabalit", title: "CO SI ZABALIT NA PRÁCI DO ZAHRANIČÍ", intro: "Kontrolní seznam, ať na nic nezapomeneš.",
+        slides: [
+            ["1. DOKLADY", "Platná občanka nebo pas, řidičák, evropský průkaz zdravotního pojištění (EHIC). Fotky všech dokladů si ulož i do mobilu."],
+            ["2. PENÍZE NA ZAČÁTEK", "Hotovost na první dny a platební kartu. První výplata obvykle nepřijde hned, ale až po několika týdnech."],
+            ["3. PAPÍRY K PRÁCI", "Životopis v angličtině, kontakt na zaměstnavatele, adresu ubytování a písemnou nabídku nebo smlouvu."],
+            ["4. OBLEČENÍ DO PRÁCE", "Pevné pohodlné boty a oblečení podle počasí, na farmu i nepromokavou bundu. Jestli ochranné pomůcky dává zaměstnavatel, si ověř předem."],
+            ["5. LÉKY", "Léky, které pravidelně bereš, a malou lékárničku. Některé léky se v zahraničí bez receptu nekoupí."],
+            ["6. ELEKTRONIKA", "Nabíječku, powerbanku a do Irska, na Maltu a na Kypr adaptér do zásuvky. Mají jiné zásuvky než my."]
+        ]
+    },
+    {
+        name: "První týden", title: "PRVNÍ TÝDEN V NOVÉ ZEMI", intro: "Co si vyřídit hned po příjezdu, ať nemáš problémy s výplatou.",
+        slides: [
+            ["1. REGISTRACE A OSOBNÍ ČÍSLO", "V mnoha zemích se musíš přihlásit k pobytu nebo získat osobní číslo pro práci a daně. Zjisti si předem, co platí v té zemi."],
+            ["2. BANKOVNÍ ÚČET", "Mzda chodí na účet. Zeptej se zaměstnavatele, jestli ti stačí tvůj český účet, nebo si musíš založit místní."],
+            ["3. TELEFON", "V EU voláš za domácí ceny, ale při dlouhém pobytu může operátor roaming omezit. Místní SIM bývá výhodnější."],
+            ["4. SMLOUVA A VÝPLATNICE", "Schovávej si smlouvu a všechny výplatní pásky. Budeš je potřebovat k daním i při změně práce."],
+            ["5. DANĚ", "Daň z příjmu se obvykle platí v zemi, kde pracuješ. Zeptej se zaměstnavatele, jak ti ji strhává, ať neplatíš zbytečně víc."],
+            ["6. ZDRAVOTNÍ POJIŠTĚNÍ", "Když pracuješ v zahraničí, jsi pojištěný v zemi, kde pracuješ. Své české zdravotní pojišťovně to oznam."]
+        ]
+    },
+    {
+        name: "Chyby v životopisu", title: "6 CHYB V ŽIVOTOPISU DO ZAHRANIČÍ", intro: "Kvůli těmhle chybám se ti zaměstnavatel neozve.",
+        slides: [
+            ["1. ŽIVOTOPIS JEN ČESKY", "Zaměstnavatel v zahraničí česky nerozumí. Pošli životopis anglicky."],
+            ["2. CHYBÍ KONTAKT", "Telefon s předvolbou +420, e-mail a kde právě bydlíš. Bez toho se ti nemá jak ozvat."],
+            ["3. MOC DLOUHÉ TEXTY", "Jedna strana stačí. U každé práce krátce: kde, kdy a co jsi tam dělal."],
+            ["4. CHYBÍ DATA", "U každé práce uveď měsíc a rok od kdy do kdy. Bez dat životopis působí nedůvěryhodně."],
+            ["5. ZAPOMENUTÉ DOVEDNOSTI", "Řidičák, vysokozdvižný vozík, jazyky, směny, práce v noci. I maličkost může rozhodnout."],
+            ["6. NEVHODNÝ E-MAIL", "Přezdívka v e-mailu nepůsobí dobře. Založ si adresu ve tvaru jmeno.prijmeni."]
+        ]
+    },
+    {
+        name: "Pohovor anglicky", title: "POHOVOR V ANGLIČTINĚ: 6 VĚT", intro: "Věty, které se na pohovoru hodí nejvíc. S překladem.",
+        slides: [
+            ["PŘEDSTAVENÍ", "HI, MY NAME IS PETR. I AM FROM THE CZECH REPUBLIC.\n= Dobrý den, jmenuji se Petr, jsem z Česka."],
+            ["ZKUŠENOSTI", "I HAVE TWO YEARS OF EXPERIENCE IN A WAREHOUSE.\n= Mám dva roky praxe ve skladu."],
+            ["NÁSTUP", "I CAN START IMMEDIATELY.\n= Můžu nastoupit hned."],
+            ["SMĚNY", "I AM HAPPY TO WORK NIGHT SHIFTS AND WEEKENDS.\n= Klidně budu pracovat v noci i o víkendech."],
+            ["KDYŽ NEROZUMÍŠ", "SORRY, COULD YOU REPEAT THAT, PLEASE?\n= Promiňte, můžete to prosím zopakovat?"],
+            ["OTÁZKA NA KONEC", "IS ACCOMMODATION PROVIDED?\n= Je zajištěné ubytování?"]
+        ]
+    }
+];
+
+function guideSlides(g) {
+    return [
+        { cover: true, title: g.title, body: g.intro },
+        ...g.slides.map(([title, body]) => ({ title, body })),
+        { cover: true, end: true, title: "NABÍDKY PRÁCE V ZAHRANIČÍ", body: "Každý den sdílím nabídky ze spolehlivých zdrojů, se mzdou a místem. Sleduj účet a napiš do komentáře, kterou zemi chceš." }
+    ];
+}
+
+// kind: "guide" = obecný návod (index = kolikátý návod), jinak návod pro zemi (index = kolikátá země).
+async function buildCarousel(templateFolder, index, kind = "country") {
+    if (kind === "guide") {
+        const g = GUIDES[index % GUIDES.length];
+        const bgCountry = COUNTRIES[(index * 3) % COUNTRIES.length];
+        const accent = ACCENTS[index % ACCENTS.length];
+        const slides = guideSlides(g);
+        const images = [];
+        for (let i = 0; i < slides.length; i++) images.push(await renderSlide(templateFolder, bgCountry, slides[i], i, slides.length, accent));
+        const caption = [
+            `💡 ${g.title.charAt(0)}${g.title.slice(1).toLowerCase()}`,
+            "",
+            "Ulož si to 💾 a pošli kamarádovi, který chce taky vyrazit za prací. 🙌",
+            "",
+            "👉 Napiš do komentáře zemi, která tě zajímá, a pošlu ti nabídky práce.",
+            "📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN).",
+            "",
+            "#pracevzahranici #brigadavzahranici #tipy #prace #pracovnitipy"
+        ].join("\n");
+        return { country: { name: g.name }, images, caption };
+    }
     const c = COUNTRIES[index % COUNTRIES.length];
     const accent = ACCENTS[index % ACCENTS.length];
     const slides = slidesFor(c);
@@ -143,4 +230,4 @@ async function buildCarousel(templateFolder, index) {
     return { country: c, images, caption };
 }
 
-module.exports = { buildCarousel, COUNTRIES };
+module.exports = { buildCarousel, COUNTRIES, GUIDES };

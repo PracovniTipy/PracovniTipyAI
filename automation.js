@@ -239,7 +239,8 @@ function categoryOf(job) {
     const title = String(job.title || "").toLowerCase();
     const text = `${title} ${String(job.body || "").slice(0, 1500).toLowerCase()}`;
     const rules = [
-        ["Práce s ovocem/zeleninou", /(pick|harvest|fruit|vegetable|berr|strawberr|apple|grape)/],
+        ["Sklady", /(order ?pick|pick ?& ?pack|picker ?packer|warehouse)/],
+        ["Práce s ovocem/zeleninou", /(fruit|vegetable|berr|strawberr|apple|grape|harvest|(fruit|berry|apple|mushroom|vegetable|crop) ?pick)/],
         ["Práce na farmách", /(farm|greenhouse|agricult|horticult|nursery)/],
         ["Úklid", /(clean|housekeep|room attendant|maid)/],
         ["Gastronomie", /(chef|cook|baker|kitchen|dishwash|waiter|waitress|waitstaff|bartender|barman|barista|restaurant|pizza|food service|server)/],
@@ -471,11 +472,11 @@ Dostaneš JEDNU nabídku. Piš česky, krátce, POUZE fakta z inzerátu, nic si 
 required_languages: seznam jazyků, které inzerát VÝSLOVNĚ vyžaduje (např. ["English"] nebo ["English","Finnish"]); když žádný neuvádí, dej [].
 simple_job: true jen když jde o JEDNODUCHOU manuální práci bez kvalifikace (sběr ovoce/zeleniny, farma, úklid, pokojská, sklad, balení, výroba u linky, pomocná síla v kuchyni, umývání nádobí, pomocník v hotelu). false u kanceláře, prodeje, řízení, řidičů, řemesel, techniků, zdravotnictví, péče, kuchařů s praxí, baristů a barmanů.
 requires_degree_or_license: true jen když inzerát výslovně vyžaduje vysokou školu nebo úřední licenci/průkaz (např. řidičský průkaz C, licence A&P, diplom zdravotní sestry). Praxe ani zkušenost NENÍ licence.
-title_cz: max 32 znaků, název pozice česky (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy, bez zkratek (GMP, HGV…), srozumitelně pro běžného Čecha (např. "Uklízeč/ka ve výrobě"). Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
+title_cz: max 32 znaků, PŘESNÝ překlad původního názvu pozice česky – nic nepřidávej (žádné plodiny, obory ani detaily, které v názvu nejsou; "Greenhouse worker" = "Pracovník/ce ve skleníku", ne "Sběr jahod") (např. "Kuchař/ka", "Pokojská", "Skladník", "Sběr jahod"), BEZ názvu země a firmy, bez zkratek (GMP, HGV…), srozumitelně pro běžného Čecha (např. "Uklízeč/ka ve výrobě"). Dishwasher/Kitchen porter = "Umývač/ka nádobí" (nikdy "Myčka nádobí" – to je stroj).
 city: město/region z inzerátu (nebo "").
 accommodation: přesně jedna z hodnot ${JSON.stringify(ACCOMMODATION_VALUES)} podle inzerátu ("" když se o bydlení nepíše; "Ubytování zajištěno" jen když ho zaměstnavatel opravdu zajišťuje).
 no_experience: true jen když inzerát výslovně říká, že praxe není nutná.
-description_cz: 2–4 krátké odrážky – co se v práci dělá (náplň práce).
+description_cz: 1–4 krátké odrážky – co se v práci dělá (náplň práce), POUZE to, co v textu inzerátu opravdu stojí. Když je text krátký, dej jen 1 odrážku. Nic nedomýšlej.
 requirements_cz: 1–4 krátké odrážky – co inzerát od uchazeče požaduje (jazyk a úroveň, praxe, fyzická zdatnost, směny…). [] když nic neuvádí.
 benefits_cz: 0–4 krátké odrážky – co zaměstnavatel nabízí (bonusy, strava, doprava, školení, příplatky…). [] když nic neuvádí.
 contract_cz: typ úvazku/smlouvy z inzerátu, např. "plný úvazek, 39 h týdně", "sezónní, květen–září", "částečný úvazek" ("" když neuvádí).
@@ -587,7 +588,17 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
         .filter(({ ai }) => ai.eligible && CATEGORIES.includes(ai.category))
         .map(({ job, ai }) => {
             const countryCz = SUPPORTED[job.country];
-            const salary = monthlyCzk(ai.salary, rates);
+            // Mzda přesně podle inzerátu + přepočet na měsíc jen u plného úvazku.
+            const sal = ai.salary || {};
+            const hoursPW = Number(sal.hours_per_week) || 0;
+            const contractTxt = String(ai.contract_cz || "");
+            const partTime = (hoursPW > 0 && hoursPW < 30) || (!hoursPW && /částečn|part/i.test(contractTxt));
+            const salary = partTime ? "" : monthlyCzk(sal, rates);
+            const per = { hour: "/ hod.", week: "/ týden", biweek: "/ 14 dní", month: "/ měsíc", year: "/ rok" }[sal.period] || "";
+            const cur = { EUR: "€", GBP: "£" }[String(sal.currency || "").toUpperCase()] || String(sal.currency || "").toUpperCase();
+            const salarySource = typeof sal.amount === "number" && sal.amount > 0 && per && cur
+                ? `${sal.amount.toLocaleString("cs-CZ", { minimumFractionDigits: sal.amount % 1 ? 2 : 0, maximumFractionDigits: 2 })} ${cur} ${per} ${sal.net ? "čistého" : "hrubého"}${partTime ? " (částečný úvazek)" : ""}`
+                : "";
             const accommodation = ACCOMMODATION_VALUES.includes(ai.accommodation) ? ai.accommodation : "";
             const title = String(ai.title_cz || "").trim().slice(0, 40);
             // Pojistka proti nepravdě: "bez praxe" jen když to inzerát opravdu říká.
@@ -604,7 +615,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const cityCz = String(ai.city || "").trim();
             const tag = String(countryCz || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]/g, "");
             const facts = [
-                salary ? `💰 Mzda: cca ${salary} měsíčně` : "",
+                salarySource ? `💰 Mzda: ${salarySource}${salary ? ` (cca ${salary.replace(/ (hrubého|čistého)$/, "")} měsíčně)` : ""}` : (salary ? `💰 Mzda: cca ${salary} měsíčně` : ""),
                 accommodation ? `🏠 ${accommodation}` : "",
                 "🗣️ Jazyk: stačí angličtina",
                 `📍 ${cityCz ? `${cityCz}, ` : ""}${countryCz}`,
@@ -634,6 +645,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
                     language: "English",
                     accommodation,
                     salary_czk_month: salary,
+                    salary_source: salarySource,
                     work_category: ai.category,
                     link: job.link,
                     source_title: String(job.title || "").replace(/\s*[-–(].*$/, "").trim(),
@@ -649,7 +661,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
         })
         .filter(({ job }) => job.job_title && job.description.length > 0 && !BLOCKED_WORDS.test(`${job.job_title} ${job.description.join(" ")} ${job.city}`))
         // Na HeroHero musí být vždy mzda, jazyk, město (ubytování když ho inzerát uvádí).
-        .filter(({ job }) => job.salary_czk_month && job.city)
+        .filter(({ job }) => (job.salary_czk_month || job.salary_source) && job.city)
         .sort((a, b) => b.score - a.score);
 
     const perCountry = {};
@@ -813,9 +825,14 @@ function setupAutomation(app, deps) {
         try {
             const state = await store.load();
             state.carousels = Array.isArray(state.carousels) ? state.carousels : [];
+            // Každý den jeden karusel (návod), střídavě země a obecný návod.
+            const day = pragueDate();
+            if (state.carousels.some(c => c.day === day)) return;
             const week = weekKey();
-            if (state.carousels.some(c => c.week === week)) return;
-            const { country, images, caption } = await buildCarousel(TEMPLATE_FOLDER, state.carousels.length);
+            const last = state.carousels[state.carousels.length - 1];
+            const kind = last && !last.guide ? "guide" : "country";
+            const n = state.carousels.filter(c => (kind === "guide") === !!c.guide).length;
+            const { country, images, caption } = await buildCarousel(TEMPLATE_FOLDER, n, kind);
             log(`Karusel: připravuji ${country.name} (${images.length} slidů).`);
             const urls = [];
             for (const img of images) urls.push(await uploadImage(img));
@@ -832,7 +849,7 @@ function setupAutomation(app, deps) {
             const media = await igCall("POST", `${IG_BUSINESS_ID}/media_publish`, { creation_id: container.id });
             await store.update(st => {
                 st.carousels = Array.isArray(st.carousels) ? st.carousels : [];
-                st.carousels.push({ week, country: country.name, mediaId: media.id, at: new Date().toISOString() });
+                st.carousels.push({ week, day, guide: kind === "guide", country: country.name, mediaId: media.id, at: new Date().toISOString() });
             });
             log(`Karusel ${country.name} zveřejněn (media ${media.id}).`);
         } catch (err) {
@@ -845,7 +862,7 @@ function setupAutomation(app, deps) {
     // Náhled slidu: /carousel/preview/0?i=0  (i = pořadí karuselu, 0 = Irsko)
     app.get("/carousel/preview/:n", async (req, res) => {
         try {
-            const { images } = await buildCarousel(TEMPLATE_FOLDER, Number(req.query.i || 0));
+            const { images } = await buildCarousel(TEMPLATE_FOLDER, Number(req.query.i || 0), req.query.kind === "guide" ? "guide" : "country");
             const img = images[Math.min(images.length - 1, Math.max(0, Number(req.params.n) || 0))];
             res.type("png").send(img);
         } catch (err) {
@@ -924,7 +941,7 @@ function setupAutomation(app, deps) {
         // Doplnění: když dnešní běh na HeroHero nedal 5 příspěvků (málo nabídek
         // nebo chyba publikace), další běh dohledá / znovu pošle zbytek.
         const doneTitles = new Set(((previous && previous.herohero) || []).map(h => h.title));
-        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title) && !EXCLUDE_HINT.test(j.source_title || "") && j.salary_czk_month && j.city);
+        const carryover = ((previous && previous.jobs) || []).filter(j => !doneTitles.has(j.job_title) && !EXCLUDE_HINT.test(j.source_title || "") && (j.salary_czk_month || j.salary_source) && j.city);
         const doneCount = ((previous && previous.herohero) || []).filter(h => !h.skipped).length;
         const topUp = !!(previous && previous.instagram && doneCount < 5);
         if (previous && previous.instagram && !force && !topUp) {
@@ -1039,7 +1056,7 @@ function setupAutomation(app, deps) {
             const date = pragueDate(now);
             publishReelsDirect(date).catch(() => {});
             const weekday = new Intl.DateTimeFormat("en-US", { timeZone: "Europe/Prague", weekday: "short" }).format(now);
-            if (weekday === "Sun" && hour >= 17) publishCarousel().catch(() => {});
+            if (hour >= 17) publishCarousel().catch(() => {});
             const state = await store.load();
             const today = state.runs[date];
             const doneCount = today ? (today.herohero || []).filter(h => !h.skipped).length : 0;
