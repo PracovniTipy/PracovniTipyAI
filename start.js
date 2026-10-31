@@ -69,9 +69,9 @@ function steps(c) {
     const target = c ? prep(c.in) : "v zahraničí";
     return `
 <div class="card"><h2><span class="num">1</span>Najdi práci</h2>
-<p>Každý den vybíráme nové nabídky jednoduchých prací ${esc(target)} – sklady, farmy, sběr ovoce, úklid, hotely, výroba. U každé je mzda podle inzerátu, jazyk, město a kontakt, kam se přihlásit.</p>
+<p>Každý den vybíráme nové nabídky jednoduchých prací ${esc(target)} – sklady, farmy, sběr ovoce, úklid, hotely, výroba. U nových nabídek najdeš mzdu přesně podle inzerátu, jazyk, město a odkaz, kde se přihlásit.</p>
 <a class="btn hh" href="${go(c ? "start-" + slug(c.name) : "start")}">Zobrazit nabídky na HeroHero – 3 dny zdarma</a>
-<p class="small">Pak 5 € měsíčně, zrušit můžeš kdykoli.</p></div>
+<p class="small">Pak 5 € měsíčně.</p></div>
 
 <div class="card"><h2><span class="num">2</span>Životopis v angličtině – zdarma</h2>
 <p>AI se tě zeptá na pár otázek a sestaví ti životopis česky i anglicky. Vybereš si z 10 šablon a stáhneš PDF.</p>
