@@ -1457,15 +1457,17 @@ const CV_LINK = "https://pracovnitipyai-production.up.railway.app/cv?src=ig";
 const DM_WELCOME_MESSAGE =
     "Ahoj! 👋😊 Díky za zprávu!\n\n" +
     "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
-    "Aktuální nabídky najdeš tady 🔗👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
+    "Jako občan EU nepotřebuješ do zemí EU žádné vízum ani pracovní povolení 🛂✅ Stačí platná občanka nebo pas.\n\n" +
+    "🧭 Jak odjet krok za krokem (země, pojištění, angličtina, letenky) 👇\n" + "https://pracovnitipyai-production.up.railway.app/start" + "\n\n" +
+    "💼 Aktuální nabídky najdeš tady 👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
     "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
 
 const COMMENT_PRIVATE_REPLY_MESSAGE =
     "Ahoj! 👋😊 Díky za komentář!\n\n" +
     "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Věděl(a) jsi, že do většiny zemí EU nepotřebuješ na pobyt do 3 měsíců žádné vízum? 🛂✅ Stačí občanka a můžeš vyrazit.\n\n" +
-    "Aktuální nabídky najdeš tady 🔗👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
+    "Jako občan EU nepotřebuješ do zemí EU žádné vízum ani pracovní povolení 🛂✅ Stačí platná občanka nebo pas.\n\n" +
+    "🧭 Jak odjet krok za krokem (země, pojištění, angličtina, letenky) 👇\n" + "https://pracovnitipyai-production.up.railway.app/start" + "\n\n" +
+    "💼 Aktuální nabídky najdeš tady 👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
     "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
 
 const COMMENT_PUBLIC_REPLY_MESSAGE =
@@ -1547,6 +1549,7 @@ const automation = require("./automation")(app, {
 
 // AI generátor životopisu zdarma (/cv) – lákadlo, sbírá kontakty do Make.
 require("./cv")(app, { cloudinary });
+require("./start")(app, { cloudinary });
 
 app.get("/webhook/instagram", (req, res) => {
     const mode = req.query["hub.mode"];
