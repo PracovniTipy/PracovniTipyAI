@@ -41,6 +41,8 @@ const COUNTRIES = [
       stay: "Občan EU nepotřebuje povolení k práci. Při pobytu nad 3 měsíce se registruješ (formulář MEU1)." }
 ];
 
+const prep = s => { const w = String(s).toLowerCase().split(" "); return w.map((x, i) => i === 0 ? x : x.charAt(0).toUpperCase() + x.slice(1)).join(" "); };
+
 function slidesFor(c) {
     return [
         { cover: true, title: `JAK ODJET ZA PRACÍ ${c.to}`, body: "Krok za krokem. Ulož si to, ať to máš po ruce." },
@@ -222,11 +224,11 @@ async function buildCarousel(templateFolder, index, kind = "country") {
     const images = [];
     for (let i = 0; i < slides.length; i++) images.push(await renderSlide(templateFolder, c, slides[i], i, slides.length, accent));
     const caption = [
-        `🧳 Jak odjet za prací ${c.to.toLowerCase()} – krok za krokem`,
+        `🧳 Jak odjet za prací ${prep(c.to)} – krok za krokem`,
         "",
         "Ulož si tenhle návod a pošli ho kamarádovi, který chce taky vyrazit. 🙌",
         "",
-        `👉 Pro nabídky práce ${c.in.toLowerCase()} napiš do komentáře „${c.name}“.`,
+        `👉 Pro nabídky práce ${prep(c.in)} napiš do komentáře „${c.name}“.`,
         "📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN).",
         "",
         "Informace jsou orientační, podrobnosti si vždy ověř na úřadech dané země."

@@ -10,6 +10,8 @@ const { COUNTRIES, GUIDES } = require("./carousel");
 const BASE = "https://pracovnitipyai-production.up.railway.app";
 const go = src => `${BASE}/go/hh?src=${src}`;
 const slug = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]/g, "");
+// "DO IRSKA" -> "do Irska", "VE ŠVÉDSKU" -> "ve Švédsku"
+const prep = s => { const w = String(s).toLowerCase().split(" "); return w.map((x, i) => i === 0 ? x : x.charAt(0).toUpperCase() + x.slice(1)).join(" "); };
 const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 const FLAG = { Ireland: "🇮🇪", Norway: "🇳🇴", Netherlands: "🇳🇱", Germany: "🇩🇪", Austria: "🇦🇹", Denmark: "🇩🇰", Sweden: "🇸🇪", Finland: "🇫🇮", Malta: "🇲🇹", Cyprus: "🇨🇾" };
@@ -64,7 +66,7 @@ function flights(countryEn) {
 }
 
 function steps(c) {
-    const target = c ? c.in.toLowerCase() : "v zahraničí";
+    const target = c ? prep(c.in) : "v zahraničí";
     return `
 <div class="card"><h2><span class="num">1</span>Najdi práci</h2>
 <p>Každý den vybíráme nové nabídky jednoduchých prací ${esc(target)} – sklady, farmy, sběr ovoce, úklid, hotely, výroba. U každé je mzda podle inzerátu, jazyk, město a kontakt, kam se přihlásit.</p>
@@ -134,15 +136,15 @@ ${steps(null)}`, "Práce v zahraničí krok za krokem: nabídky, životopis zdar
         if (!c) return res.redirect(302, `${BASE}/start`);
         const jobs = await jobsFor(c.key).catch(() => []);
         const jobsHtml = jobs.length
-            ? jobs.map(j => `<div class="job"><b>${esc(j.job_title)}</b><span>${esc(j.city || c.name)}${j.salary_source ? ` · ${esc(j.salary_source)}` : j.salary_czk_month ? ` · cca ${esc(j.salary_czk_month)} měsíčně` : ""}</span></div>`).join("") +
+            ? jobs.map(j => `<div class="job"><b>${esc(j.job_title)}</b><span>${esc(j.city || c.name)}${j.salary_source ? ` · ${esc(j.salary_source)}` : ""}</span></div>`).join("") +
               `<a class="btn hh" href="${go("start-" + slug(c.name))}">Celý popis a kontakt na HeroHero</a>`
             : `<p class="small">Za posledních 14 dní jsme v této zemi nic nezveřejnili. Další nabídky přibývají každý den.</p>`;
-        res.send(page(`Práce ${c.in.toLowerCase()} – jak odjet krok za krokem | Pracovní tipy`, `
-<div class="hero"><h1>${FLAG[c.key] || ""} Jak odjet za prací ${esc(c.to.toLowerCase())}</h1><p>Doklady, úřady a aktuální nabídky – krok za krokem.</p></div>
+        res.send(page(`Práce ${prep(c.in)} – jak odjet krok za krokem | Pracovní tipy`, `
+<div class="hero"><h1>${FLAG[c.key] || ""} Jak odjet za prací ${esc(prep(c.to))}</h1><p>Doklady, úřady a aktuální nabídky – krok za krokem.</p></div>
 <div class="card"><h2>📋 Doklady a pobyt</h2><p>Stačí platná občanka nebo pas, žádná víza. ${esc(c.stay)}</p></div>
 <div class="card"><h2>🏛️ Úřední číslo</h2><p>${esc(c.reg)}</p></div>
-<div class="card"><h2>💼 Nedávné nabídky ${esc(c.in.toLowerCase())}</h2>${jobsHtml}</div>
+<div class="card"><h2>💼 Nedávné nabídky ${esc(prep(c.in))}</h2>${jobsHtml}</div>
 ${steps(c)}
-<a class="btn ghost" href="${BASE}/start">← Ostatní země</a>`, `Jak odjet za prací ${c.to.toLowerCase()}: doklady, úřady, pojištění, letenky a aktuální nabídky.`));
+<a class="btn ghost" href="${BASE}/start">← Ostatní země</a>`, `Jak odjet za prací ${prep(c.to)}: doklady, úřady, pojištění, letenky a aktuální nabídky.`));
     });
 };
