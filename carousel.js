@@ -1,6 +1,6 @@
 "use strict";
 
-// Týdenní karusel „Jak odjet za prací do … krok za krokem“.
+// Denní karusel: střídavě „Jak odjet za prací do …“ a obecný návod. Jen ověřená fakta.
 // Obsah je ručně ověřený (žádné AI), obrázky se kreslí z pozadí reelů.
 
 const path = require("path");
