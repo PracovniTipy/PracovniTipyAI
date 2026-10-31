@@ -1454,21 +1454,14 @@ const HEROHERO_LINK = "https://herohero.co/devotedzxfepftuubeim";
 
 const CV_LINK = "https://pracovnitipyai-production.up.railway.app/cv?src=ig";
 
-const DM_WELCOME_MESSAGE =
-    "Ahoj! 👋😊 Díky za zprávu!\n\n" +
-    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Jako občan EU nepotřebuješ do zemí EU žádné vízum ani pracovní povolení 🛂✅ Stačí platná občanka nebo pas.\n\n" +
-    "🧭 Jak odjet krok za krokem (země, pojištění, angličtina, letenky) 👇\n" + "https://pracovnitipyai-production.up.railway.app/start" + "\n\n" +
-    "💼 Aktuální nabídky najdeš tady 👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
-    "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
+const DM_BODY =
+    "Každý den vybírám nabídky jednoduchých prací v zahraničí (sklady, farmy, úklid, hotely, výroba) z oficiálních pracovních portálů – se mzdou podle inzerátu, městem a odkazem na přihlášku.\n\n" +
+    "💼 Nabídky – 3 dny zdarma 👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
+    "📄 Životopis v angličtině zdarma s AI 👇\n" + CV_LINK;
 
-const COMMENT_PRIVATE_REPLY_MESSAGE =
-    "Ahoj! 👋😊 Díky za komentář!\n\n" +
-    "Každý den vybírám a sdílím ověřené nabídky práce ze zahraničí 🌍💼 — práci nezprostředkovávám, jen sdílím ověřené nabídky.\n\n" +
-    "Jako občan EU nepotřebuješ do zemí EU žádné vízum ani pracovní povolení 🛂✅ Stačí platná občanka nebo pas.\n\n" +
-    "🧭 Jak odjet krok za krokem (země, pojištění, angličtina, letenky) 👇\n" + "https://pracovnitipyai-production.up.railway.app/start" + "\n\n" +
-    "💼 Aktuální nabídky najdeš tady 👇\n" + "https://pracovnitipyai-production.up.railway.app/go/hh?src=dm" + "\n\n" +
-    "📄 Potřebuješ životopis do zahraničí? Sestav si ho zdarma s AI – odpovíš na pár otázek a máš ho česky i anglicky 👇\n" + CV_LINK;
+const DM_WELCOME_MESSAGE = "Ahoj! 👋 Díky za zprávu!\n\n" + DM_BODY;
+
+const COMMENT_PRIVATE_REPLY_MESSAGE = "Ahoj! 👋 Díky za komentář!\n\n" + DM_BODY;
 
 const COMMENT_PUBLIC_REPLY_MESSAGE =
     "Díky za komentář! 😊 Poslali jsme ti víc informací do DM 📩";
