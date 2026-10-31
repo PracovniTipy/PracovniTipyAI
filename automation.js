@@ -235,6 +235,26 @@ function parseJobPage(link, html) {
     };
 }
 
+// Kategorie podle NÁZVU pozice (český i původní) – stejná pravidla jako při
+// kontrole HeroHero. Název je spolehlivější než celý text inzerátu.
+const TITLE_CATEGORY_RULES = [
+    ["Práce s ovocem/zeleninou", /sběr|sber|sklizeň|sklizen|jahod|ovoc|zelenin|borůvk|jabl|hrozn|vinobraní|banán|fruit|berry|strawberr|apple|vegetable|harvest|grape|mushroom/i],
+    ["Práce na farmách", /farm|zeměděl|zemedel|skleník|sklenik|dojič|krav|zvířat|zvirat|stáj|staj|prasár|prasar|drůbe|drube|zahradn|greenhouse|agricult|horticult|dairy|livestock|pig|poultry/i],
+    ["Úklid", /úklid|uklid|uklíz|ukliz|pokojsk|housekeep|cleaner|cleaning|room attendant|chambermaid|maid|čistič|cistic/i],
+    ["Gastronomie", /kuch|nádob|nadob|číšn|cisn|servír|servir|barman|barist|gastro|restaur|kavár|kavar|pekař|pekar|catering|delikates|pizz|kitchen|dishwash|cook|chef|waiter|waitress|bartender|bakery|baker|deli|café|cafe/i],
+    ["Hotelové práce", /hotel|recep|resort|hostel/i],
+    ["Sklady", /sklad|balič|balic|balen|logist|vychyst|expedic|vzv|vysokozdviž|warehouse|order ?pick|pick ?& ?pack|picker|packer|packing|forklift/i],
+    ["Továrny", /výrob|vyrob|továr|tovar|dělník|delnik|operátor|operator|linka|potravin|jatk|maso|ryb|zpracov|production|factory|operative|meat|fish|processing|manufactur/i]
+];
+function categoryFromTitle(...titles) {
+    for (const t of titles) {
+        const s = String(t || "");
+        if (!s) continue;
+        for (const [cat, re] of TITLE_CATEGORY_RULES) if (re.test(s)) return cat;
+    }
+    return "";
+}
+
 function categoryOf(job) {
     const title = String(job.title || "").toLowerCase();
     const text = `${title} ${String(job.body || "").slice(0, 1500).toLowerCase()}`;
@@ -655,7 +675,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
                     accommodation,
                     salary_czk_month: salary,
                     salary_source: salarySource,
-                    work_category: ai.category,
+                    work_category: categoryFromTitle(title, job.title) || ai.category,
                     link: job.link,
                     source_title: String(job.title || "").replace(/\s*[-–(].*$/, "").trim(),
                     description,
