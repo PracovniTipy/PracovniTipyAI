@@ -108,9 +108,13 @@ async function renderSlide(templateFolder, c, slide, index, total, accent) {
     // Text v Bebas Neue (jediné písmo na serveru se správnou češtinou).
     ctx.font = '60px "Bebas Neue"';
     ctx.fillStyle = "#FFFFFF";
-    for (const line of wrap(ctx, slide.body.toUpperCase(), W - pad * 2)) {
-        ctx.fillText(line, pad, y);
-        y += 70;
+    // "\n" v textu = nový odstavec (např. věta + překlad).
+    for (const para of slide.body.toUpperCase().split("\n")) {
+        for (const line of wrap(ctx, para, W - pad * 2)) {
+            ctx.fillText(line, pad, y);
+            y += 70;
+        }
+        y += 30;
     }
 
     if (slide.cover && !slide.end) {
@@ -156,7 +160,7 @@ const GUIDES = [
             ["3. TELEFON", "V EU voláš za domácí ceny, ale při dlouhém pobytu může operátor roaming omezit. Místní SIM bývá výhodnější."],
             ["4. SMLOUVA A VÝPLATNICE", "Schovávej si smlouvu a všechny výplatní pásky. Budeš je potřebovat k daním i při změně práce."],
             ["5. DANĚ", "Daň z příjmu se obvykle platí v zemi, kde pracuješ. Zeptej se zaměstnavatele, jak ti ji strhává, ať neplatíš zbytečně víc."],
-            ["6. ZDRAVOTNÍ POJIŠTĚNÍ", "Když pracuješ v zahraničí, jsi pojištěný v zemi, kde pracuješ. Své české zdravotní pojišťovně to oznam."]
+            ["6. ZDRAVOTNÍ POJIŠTĚNÍ", "Když pracuješ v jiném státě EU, jsi zdravotně pojištěný tam. České zdravotní pojišťovně to podle VZP oznam do 8 dnů od začátku práce."]
         ]
     },
     {
