@@ -186,7 +186,7 @@ Module._extensions[".js"] = function categoryAwareJsLoader(module, filename) {
   // Mzda přesně podle inzerátu (hodinová/roční) + přepočet na měsíc, pokud ho máme.
   const oldSalaryLine = "if (salary) lines.push(salary);";
   if (source.includes(oldSalaryLine)) {
-    source = source.replace(oldSalaryLine, () => "if (hasUsefulJobValue(job.salary_source)) lines.push(`💰 Mzda: ${job.salary_source}${hasUsefulJobValue(job.salary_czk_month) ? ` (cca ${job.salary_czk_month} měsíčně)` : \"\"}`); else if (salary) lines.push(salary);");
+    source = source.replace(oldSalaryLine, () => "if (hasUsefulJobValue(job.salary_source)) lines.push(`💰 Mzda: ${job.salary_source}${hasUsefulJobValue(job.salary_czk_month) ? ` (cca ${job.salary_czk_month} měsíčně při plném úvazku)` : \"\"}`); else if (salary) lines.push(salary);");
   } else {
     console.warn("[CATEGORY PATCH] Salary line pattern nebyl nalezen.");
   }

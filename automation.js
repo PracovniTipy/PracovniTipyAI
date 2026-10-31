@@ -596,7 +596,13 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const hoursPW = Number(sal.hours_per_week) || 0;
             const contractTxt = String(ai.contract_cz || "");
             const partTime = (hoursPW > 0 && hoursPW < 30) || (!hoursPW && /částečn|part/i.test(contractTxt));
-            const salary = partTime ? "" : monthlyCzk(sal, rates);
+            // Přepočet na měsíc jen když je jistý: měsíční/roční mzda v inzerátu,
+            // nebo hodinová/týdenní a inzerát výslovně uvádí plný úvazek / aspoň 30 h týdně.
+            const fullTimeSure = hoursPW >= 30 || /plný|full/i.test(contractTxt);
+            const monthlyOk = sal.period === "month" || sal.period === "year" || (!partTime && fullTimeSure);
+            let salary = monthlyOk ? monthlyCzk(sal, rates) : "";
+            // Pojistka: nereálně vysoký přepočet radši nezveřejníme.
+            if (salary && Number(salary.replace(/[^0-9]/g, "")) > 120000) salary = "";
             const per = { hour: "/ hod.", week: "/ týden", biweek: "/ 14 dní", month: "/ měsíc", year: "/ rok" }[sal.period] || "";
             const cur = { EUR: "€", GBP: "£" }[String(sal.currency || "").toUpperCase()] || String(sal.currency || "").toUpperCase();
             const salarySource = typeof sal.amount === "number" && sal.amount > 0 && per && cur
@@ -618,7 +624,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
             const cityCz = String(ai.city || "").trim();
             const tag = String(countryCz || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z]/g, "");
             const facts = [
-                salarySource ? `💰 Mzda: ${salarySource}${salary ? ` (cca ${salary.replace(/ (hrubého|čistého)$/, "")} měsíčně)` : ""}` : (salary ? `💰 Mzda: cca ${salary} měsíčně` : ""),
+                salarySource ? `💰 Mzda: ${salarySource}${salary ? ` (cca ${salary.replace(/ (hrubého|čistého)$/, "")} měsíčně${sal.period === "month" || sal.period === "year" ? "" : " při plném úvazku"})` : ""}` : (salary ? `💰 Mzda: cca ${salary} měsíčně` : ""),
                 accommodation ? `🏠 ${accommodation}` : "",
                 "🗣️ Jazyk: stačí angličtina",
                 `📍 ${cityCz ? `${cityCz}, ` : ""}${countryCz}`,
@@ -710,6 +716,9 @@ function heroBatchFinished(run) {
     const last = times.length ? Math.max(...times) : 0;
     return Date.now() - last > 20 * 60 * 1000;
 }
+
+const CODE_VERSION = "2026-10-31b";
+const SERVER_STARTED = new Date().toISOString();
 
 function setupAutomation(app, deps) {
     const {
@@ -887,6 +896,9 @@ function setupAutomation(app, deps) {
         const st = await store.load();
         res.json({ ok: true, got: Object.keys(body || {}), bodyType: typeof req.body, jooble: Object.keys((st.config && st.config.jooble) || {}) });
     });
+
+    // Verze kódu – po každém nasazení ověřím, že server opravdu běží s novým kódem.
+    app.get("/version", (req, res) => res.json({ version: CODE_VERSION, startedAt: SERVER_STARTED }));
 
     app.get("/ig/check", async (req, res) => {
         try {
