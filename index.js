@@ -973,7 +973,7 @@ async function downloadRandomMusic(targetPath) {
     }
 }
 
-const { createHookReel, createBrandReel } = require("./reelHook");
+const { createHookReel, createBrandReel, createPhraseReel } = require("./reelHook");
 async function createHookReelSafe(imageBuffer, reel, templateFile) {
     const id = Date.now();
     const musicPath = path.join(os.tmpdir(), `${id}-hook-music.audio`);
@@ -1023,13 +1023,37 @@ async function createBrandReelSafe() {
 }
 global.createBrandReelSafe = createBrandReelSafe;
 
+// Denní reel „Angličtina do práce“ (volá automation.js).
+async function createPhraseReelSafe() {
+    const keys = Object.keys(reelTemplates);
+    const country = keys[Math.floor(Math.random() * keys.length)];
+    const id = Date.now();
+    const musicPath = path.join(os.tmpdir(), `${id}-phrase-music.audio`);
+    const silentPath = path.join(os.tmpdir(), `${id}-phrase-silence.wav`);
+    const hasMusic = await downloadRandomMusic(musicPath);
+    if (!hasMusic) fs.writeFileSync(silentPath, createSilentWavBuffer(12, 44100, 2));
+    try {
+        return await createPhraseReel({
+            templatePath: path.join(TEMPLATE_FOLDER, reelTemplates[country]),
+            audioPath: hasMusic ? musicPath : silentPath,
+            isMusic: hasMusic,
+            upload: async file => (await cloudinary.uploader.upload(file, { resource_type: "video", folder: "PracovniTipyAI/reels" })).secure_url
+        });
+    } finally {
+        for (const f of [musicPath, silentPath]) if (fs.existsSync(f)) fs.unlinkSync(f);
+    }
+}
+global.createPhraseReelSafe = createPhraseReelSafe;
+
 // Náhledy reelů (obrázek): /reel/preview/job?country=Ireland&slot=0  a  /reel/preview/brand?d=0
 app.get("/reel/preview/:kind", async (req, res) => {
     try {
-        const { previewJob, previewBrand } = require("./reelHook");
+        const { previewJob, previewBrand, previewPhrase } = require("./reelHook");
         const country = reelTemplates[req.query.country] ? req.query.country : "Ireland";
         const tpl = path.join(TEMPLATE_FOLDER, reelTemplates[country]);
-        const png = req.params.kind === "brand"
+        const png = req.params.kind === "phrase"
+            ? await previewPhrase(tpl, Number(req.query.d || 0))
+            : req.params.kind === "brand"
             ? await previewBrand(tpl, Number(req.query.d || 0))
             : await previewJob(tpl, { country: countryNamesCz[country], title: req.query.title || "Pomocník na farmě", salary: req.query.salary === "0" ? "" : "cca 67 000 Kč hrubého / měsíc", housing: req.query.housing === "0" ? "" : "Ubytování zajištěno", language: "Angličtina", city: req.query.city !== undefined ? req.query.city : "Bandon" }, Number(req.query.slot || 0));
         res.type("png").send(png);

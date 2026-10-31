@@ -89,7 +89,7 @@ function cvHtml(cv, lang) {
     </style></head><body>
       <div class="head"><h1>${esc(cv.name)}</h1>
         <p>${esc(cv.headline || "")}</p>
-        <p>${esc(cv.phone)} · ${esc(cv.email)}${cv.age ? ` · ${L.age}: ${esc(cv.age)} ${L.years}` : ""}</p></div>
+        <p>${[esc(cv.phone), esc(cv.email), cv.age ? `${L.age}: ${esc(cv.age)} ${L.years}` : ""].filter(Boolean).join(" · ")}</p></div>
       <div class="body">
         ${cv.summary ? `<h2>${L.profile}</h2><p>${esc(cv.summary)}</p>` : ""}
         ${exp ? `<h2>${L.exp}</h2>${exp}` : ""}
@@ -254,11 +254,11 @@ function setupCv(app, { cloudinary }) {
         const age = Number(b.age);
         const phone = String(b.phone || "").trim().slice(0, 30);
         const email = String(b.email || "").trim().slice(0, 120);
-        if (!name || !(age >= 15 && age <= 80) || !/^[+\d][\d\s-]{6,}$/.test(phone) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || b.consent !== true) {
-            return res.status(400).json({ error: "Vyplň prosím správně všechna pole a potvrď souhlas." });
+        if (!name || !(age >= 15 && age <= 80) || (phone && !/^[+\d][\d\s-]{6,}$/.test(phone)) || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email) || b.consent !== true) {
+            return res.status(400).json({ error: "Vyplň prosím jméno, věk a e-mail a potvrď souhlas." });
         }
         const id = crypto.randomUUID();
-        const template = TEMPLATES.some(t => t.id === b.template) ? b.template : "executive";
+        const template = TEMPLATES.some(t => t.id === b.template) ? b.template : "sidebar";
         const lead = { id, name, age, phone, email, template, source: String(b.source || "").slice(0, 50), createdAt: new Date().toISOString() };
         sessions.set(id, { lead, createdAt: Date.now() });
         log(`Nový kontakt ${id} (${email}).`);
@@ -299,6 +299,7 @@ Nic si nevymýšlej. Až budeš mít dost informací (nebo po ~8 otázkách), na
             .map(m => `${m.role === "assistant" ? "Asistent" : "Uživatel"}: ${String(m.content || "").slice(0, 1500)}`)
             .join("\n");
         const lead = session.lead;
+        if (TEMPLATES.some(t => t.id === (req.body || {}).template)) lead.template = req.body.template;
         const year = currentYear();
         const system = `Z rozhovoru vytvoř životopis. Aktuální rok ${year}, věk uživatele ${lead.age}.
 PRAVIDLA: Používej jen informace z rozhovoru, nic nevymýšlej (žádné firmy, školy ani certifikáty, které nezazněly). Když název firmy nezazněl, napiš typ podniku a místo (např. "Bar, Praha"). Nejisté roky piš jako "cca 2019 – 2020". Roky počítej přesně: "loni" = ${year - 1}; "3 roky do loňska" = ${year - 4} – ${year - 1}; "byl jsem tam rok" od roku X = X – X+1. Délku praxe ve shrnutí sečti jen z uvedených období, nepřeháněj. Odrážky popisují běžnou náplň uvedené práce realisticky a stručně (2–4 odrážky). Nejnovější práce první.
@@ -482,28 +483,32 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 .done a.hh{background:#ff5a5f}.small{font-size:12px;color:#667;text-align:center;margin-top:14px}
 </style></head><body><div class="wrap">
 <div class="hero"><div style="font-size:34px">📄✨</div><h1>Životopis v češtině i angličtině zdarma</h1>
-<p>Stačí napsat, kde jsi pracoval/a – i když si nepamatuješ přesná data. AI to dopočítá a připraví ti CV pro práci v zahraničí.</p></div>
+<p>Stačí napsat, kde jsi pracoval/a – i když si nepamatuješ přesná data. AI to dopočítá a připraví ti CV pro práci v zahraničí. Zabere to asi 5 minut.</p></div>
 
-<div class="card" id="step0">
-  <h2 style="margin:0 0 4px;font-size:18px">1. Vyber si vzhled životopisu</h2>
-  <p style="margin:0 0 10px;color:#566;font-size:14px">Obsah doplní AI podle toho, co jí napíšeš.</p>
-  <div class="tpls">${TEMPLATES.map(t => `<div class="tpl" data-id="${t.id}"><div class="thumb"><iframe src="/cv/template/${t.id}" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><b>${t.name}</b><span>${t.desc}</span></div>`).join("")}</div>
-  <button id="pick">Pokračovat ➜</button><div class="err" id="err0"></div>
-</div>
-
-<div class="card hidden" id="step1">
+<div class="card" id="step1">
+  <div style="display:flex;gap:14px;align-items:center">
+    <div class="thumb" style="width:110px;flex:none"><iframe src="/cv/template/sidebar" scrolling="no" tabindex="-1"></iframe></div>
+    <div><b style="font-size:16px">Ukázka hotového životopisu</b><p style="margin:4px 0 0;color:#566;font-size:14px">1. Vyplníš 3 údaje<br>2. Napíšeš AI, kde jsi pracoval/a<br>3. Vybereš vzhled a stáhneš PDF česky i anglicky</p></div>
+  </div>
   <label>Jméno a příjmení</label><input id="name" type="text" autocomplete="name">
   <label>Věk</label><input id="age" type="number" min="15" max="80" inputmode="numeric">
-  <label>Telefon</label><input id="phone" type="tel" placeholder="+420 ..." autocomplete="tel">
   <label>E-mail (pošleme ti na něj hotové CV)</label><input id="email" type="email" autocomplete="email">
+  <label>Telefon <span style="font-weight:400;color:#889">(nepovinné – bude v životopisu)</span></label><input id="phone" type="tel" placeholder="+420 ..." autocomplete="tel">
   <div class="check"><input id="consent" type="checkbox"><span>Souhlasím se zpracováním údajů pro vytvoření životopisu a se zasíláním nabídek práce od Pracovní Tipy. Souhlas můžu kdykoli odvolat. <a href="/privacy" target="_blank">Zásady</a></span></div>
-  <button id="start">Pokračovat ➜</button><div class="err" id="err1"></div>
+  <button id="start">Začít ➜</button><div class="err" id="err1"></div>
 </div>
 
 <div class="card hidden" id="step2">
   <div class="msgs" id="msgs"></div>
   <div class="row"><textarea id="input" placeholder="Napiš odpověď…"></textarea><button id="send">➤</button></div>
-  <button class="secondary" id="make">✅ Vytvořit životopis</button><div class="err" id="err2"></div>
+  <button class="secondary" id="next">✅ Mám hotovo – vybrat vzhled</button><div class="err" id="err2"></div>
+</div>
+
+<div class="card hidden" id="step0">
+  <h2 style="margin:0 0 4px;font-size:18px">Vyber si vzhled životopisu</h2>
+  <p style="margin:0 0 10px;color:#566;font-size:14px">Obsah doplní AI podle toho, co jsi napsal/a.</p>
+  <div class="tpls">${TEMPLATES.map(t => `<div class="tpl${t.id === "sidebar" ? " sel" : ""}" data-id="${t.id}"><div class="thumb"><iframe src="/cv/template/${t.id}" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><b>${t.name}</b><span>${t.desc}</span></div>`).join("")}</div>
+  <button class="secondary" id="make">✅ Vytvořit životopis</button><div class="err" id="err0"></div>
 </div>
 
 <div class="card hidden done" id="step3">
@@ -519,27 +524,27 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
 <p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme vybrané nabídky</p>
 </div>
 <script>
-const $=id=>document.getElementById(id);const esc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));let sid=null;const history=[];let tpl=null;
+const $=id=>document.getElementById(id);const esc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));let sid=null;const history=[];let tpl='sidebar';
 function fitThumbs(){document.querySelectorAll('.thumb').forEach(t=>{const f=t.querySelector('iframe');f.style.transform='scale('+(t.clientWidth/794)+')'})}
 window.addEventListener('resize',fitThumbs);setTimeout(fitThumbs,50);
 document.querySelectorAll('.tpl').forEach(el=>el.onclick=()=>{document.querySelectorAll('.tpl').forEach(x=>x.classList.remove('sel'));el.classList.add('sel');tpl=el.dataset.id;$('err0').textContent=''});
-$('pick').onclick=()=>{if(!tpl){$('err0').textContent='Vyber si prosím jednu šablonu 🙂';return}$('step0').classList.add('hidden');$('step1').classList.remove('hidden');window.scrollTo(0,0)};
+$('next').onclick=()=>{if(history.filter(m=>m.role==='user').length<1){$('err2').textContent='Nejdřív mi napiš něco o své práci 🙂';return}$('step2').classList.add('hidden');$('step0').classList.remove('hidden');window.scrollTo(0,0);setTimeout(fitThumbs,50)};
 function add(role,text){history.push({role,content:text});const d=document.createElement('div');d.className='msg '+(role==='assistant'?'ai':'me');d.textContent=text;$('msgs').appendChild(d);$('msgs').scrollTop=1e9;}
 async function post(url,body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Chyba, zkus to znovu.');return j;}
 $('start').onclick=async()=>{$('err1').textContent='';$('start').disabled=true;
  try{const src=new URLSearchParams(location.search).get('src')||'';
-  const j=await post('/cv/lead',{name:$('name').value,age:$('age').value,phone:$('phone').value,email:$('email').value,consent:$('consent').checked,source:src,template:tpl});
+  const j=await post('/cv/lead',{name:$('name').value,age:$('age').value,phone:$('phone').value,email:$('email').value,consent:$('consent').checked,source:src});
   sid=j.sessionId;$('step1').classList.add('hidden');$('step2').classList.remove('hidden');
   add('assistant','Ahoj '+$('name').value.split(' ')[0]+'! 👋 Napiš mi, kde a jako co jsi pracoval/a. Klidně přibližně – třeba „dělal jsem barmana, nepamatuju si kdy, ale chodil jsem tam rok“. Data spolu dopočítáme. 🙂');
  }catch(e){$('err1').textContent=e.message}$('start').disabled=false;};
 async function send(){const t=$('input').value.trim();if(!t)return;$('input').value='';add('user',t);$('send').disabled=true;$('err2').textContent='';
  try{const j=await post('/cv/chat',{sessionId:sid,messages:history});add('assistant',j.reply)}catch(e){$('err2').textContent=e.message}$('send').disabled=false;}
 $('send').onclick=send;$('input').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}});
-$('make').onclick=async()=>{if(history.filter(m=>m.role==='user').length<1){$('err2').textContent='Nejdřív mi napiš něco o své práci 🙂';return}
- $('make').disabled=true;$('make').textContent='⏳ Vytvářím životopis… (cca 30 s)';$('err2').textContent='';
- try{const j=await post('/cv/generate',{sessionId:sid,messages:history});$('cz').href=j.cvCz;$('en').href=j.cvEn;
-  if(j.matches&&j.matches.length){$('matches').innerHTML=j.matches.map(m=>'<div class="job"><b>'+esc(m.title)+'</b><span>'+esc([m.city,m.country].filter(Boolean).join(', '))+(m.salary?' · cca '+esc(m.salary)+' / měsíc':'')+'</span><em>🔒 Detail a kontakt na HeroHero</em></div>').join('');$('matchesBox').classList.remove('hidden')}$('step2').classList.add('hidden');$('step3').classList.remove('hidden');}
- catch(e){$('err2').textContent=e.message;$('make').disabled=false;$('make').textContent='✅ Vytvořit životopis'}};
+$('make').onclick=async()=>{
+ $('make').disabled=true;$('make').textContent='⏳ Vytvářím životopis… (cca 30 s)';$('err0').textContent='';
+ try{const j=await post('/cv/generate',{sessionId:sid,messages:history,template:tpl});$('cz').href=j.cvCz;$('en').href=j.cvEn;
+  if(j.matches&&j.matches.length){$('matches').innerHTML=j.matches.map(m=>'<div class="job"><b>'+esc(m.title)+'</b><span>'+esc([m.city,m.country].filter(Boolean).join(', '))+(m.salary?' · cca '+esc(m.salary)+' / měsíc':'')+'</span><em>🔒 Detail a kontakt na HeroHero</em></div>').join('');$('matchesBox').classList.remove('hidden')}$('step0').classList.add('hidden');$('step3').classList.remove('hidden');window.scrollTo(0,0);}
+ catch(e){$('err0').textContent=e.message;$('make').disabled=false;$('make').textContent='✅ Vytvořit životopis'}};
 </script></body></html>`;
 
 module.exports = setupCv;

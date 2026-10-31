@@ -717,7 +717,7 @@ function heroBatchFinished(run) {
     return Date.now() - last > 20 * 60 * 1000;
 }
 
-const CODE_VERSION = "2026-10-31b";
+const CODE_VERSION = "2026-11-01a";
 const SERVER_STARTED = new Date().toISOString();
 
 function setupAutomation(app, deps) {
@@ -767,6 +767,9 @@ function setupAutomation(app, deps) {
             const queue = run.instagram.slice(0, 2);
             if (run.brandReel && run.brandReel.videoUrl) {
                 queue.push({ title: "Reel o účtu", link: `brand:${date.replace(/-/g, "")}`, videoUrl: run.brandReel.videoUrl, caption: run.brandReel.caption });
+            }
+            if (run.phraseReel && run.phraseReel.videoUrl) {
+                queue.push({ title: "Angličtina do práce", link: `phrase:${date.replace(/-/g, "")}`, videoUrl: run.phraseReel.videoUrl, caption: run.phraseReel.caption });
             }
             for (const reel of queue) {
                 const key = linkKey(reel.link);
@@ -1020,6 +1023,16 @@ function setupAutomation(app, deps) {
                 logError("Reel o účtu se nepodařilo vytvořit:", err.message);
             }
         }
+        // Čtvrtý reel – „Angličtina do práce“ (věta dne).
+        let phraseReel = null;
+        if (!topUp && typeof global.createPhraseReelSafe === "function") {
+            try {
+                phraseReel = await global.createPhraseReelSafe();
+                log("Reel s angličtinou připraven:", phraseReel.videoUrl);
+            } catch (err) {
+                logError("Reel s angličtinou se nepodařilo vytvořit:", err.message);
+            }
+        }
 
         await store.update(s => {
             for (const job of jobs) if (!s.usedLinks.includes(job.link)) s.usedLinks.push(job.link);
@@ -1047,7 +1060,8 @@ function setupAutomation(app, deps) {
                     jobs,
                     heroheroQueued: herohero.length,
                     instagram,
-                    brandReel
+                    brandReel,
+                    phraseReel
                 };
             }
         });

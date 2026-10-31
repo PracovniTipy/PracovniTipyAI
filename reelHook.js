@@ -215,6 +215,62 @@ async function createBrandReel({ templatePath, audioPath, isMusic, upload }) {
     return { videoUrl, caption: captions[day % captions.length] };
 }
 
+// Denní reel „Angličtina do práce“ – ručně napsané věty s překladem (žádné AI).
+const PHRASES = [
+    ["I'm looking for a job.", "Hledám práci."],
+    ["When can I start?", "Kdy můžu nastoupit?"],
+    ["How much is the pay per hour?", "Kolik je hodinová mzda?"],
+    ["Is accommodation included?", "Je v tom i ubytování?"],
+    ["What are the working hours?", "Jaká je pracovní doba?"],
+    ["Can I get the contract in writing?", "Můžu dostat smlouvu písemně?"],
+    ["I have experience in a warehouse.", "Mám praxi ve skladu."],
+    ["I can work at weekends.", "Můžu pracovat o víkendech."],
+    ["Where should I go on my first day?", "Kam mám jít první den?"],
+    ["Sorry, I don't understand. Can you show me?", "Promiňte, nerozumím. Můžete mi to ukázat?"],
+    ["When is payday?", "Kdy je výplata?"],
+    ["Do I need safety shoes?", "Potřebuju pracovní boty?"],
+    ["I'm sick today. I can't come to work.", "Dnes jsem nemocný/á. Nemůžu přijít do práce."],
+    ["Could you speak more slowly, please?", "Můžete prosím mluvit pomaleji?"],
+    ["How long is the break?", "Jak dlouhá je pauza?"],
+    ["I'm finished. What should I do next?", "Mám hotovo. Co mám dělat dál?"],
+    ["Is overtime paid extra?", "Platí se přesčasy navíc?"],
+    ["I'm sorry, I'll be late.", "Omlouvám se, přijdu pozdě."],
+    ["Thank you for the opportunity.", "Děkuji za příležitost."],
+    ["Is training provided?", "Bude zaškolení?"],
+    ["How do I get to work?", "Jak se dostanu do práce?"],
+    ["Can I have Friday off?", "Můžu mít v pátek volno?"],
+    ["Where can I find my payslip?", "Kde najdu výplatní pásku?"],
+    ["Who is my supervisor?", "Kdo je můj nadřízený?"]
+];
+
+function phraseOfDay(offset = 0) {
+    const n = dayNumber() + offset;
+    return PHRASES[((n % PHRASES.length) + PHRASES.length) % PHRASES.length];
+}
+
+async function phraseFrame(templatePath, [en, cz], accent) {
+    return brandFrame(templatePath, { a: "ANGLIČTINA DO PRÁCE", b: en.toUpperCase(), rows: ["ČESKY:", cz.toUpperCase()], cta: "ULOŽ SI TO NA POHOVOR" }, accent);
+}
+
+async function createPhraseReel({ templatePath, audioPath, isMusic, upload }) {
+    const p = phraseOfDay();
+    const accent = ACCENTS[(dayNumber() + 1) % ACCENTS.length];
+    const videoUrl = await renderVideo(await phraseFrame(templatePath, p, accent), { audioPath, isMusic, upload });
+    const caption = [
+        "🇬🇧 Angličtina do práce – věta dne",
+        "",
+        `„${p[0]}“`,
+        `= ${p[1]}`,
+        "",
+        "💾 Ulož si to a procvič si ji nahlas.",
+        "👉 Napiš do komentáře zemi, kam chceš jet, a pošlu ti nabídky práce.",
+        "📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN).",
+        "",
+        "#anglictina #pracevzahranici #brigadavzahranici #pracovnitipy"
+    ].join("\n");
+    return { videoUrl, caption };
+}
+
 // Náhledy (jen obrázek, bez videa) pro kontrolu vzhledu.
 async function previewJob(templatePath, data, slot = 0) {
     const COUNTRY = String(data.country || "").toUpperCase();
@@ -228,4 +284,8 @@ async function previewBrand(templatePath, offset = 0) {
     return brandFrame(templatePath, BRAND[((day % BRAND.length) + BRAND.length) % BRAND.length], ACCENTS[(day + 3) % ACCENTS.length]);
 }
 
-module.exports = { createHookReel, createBrandReel, previewJob, previewBrand };
+async function previewPhrase(templatePath, offset = 0) {
+    return phraseFrame(templatePath, phraseOfDay(offset), ACCENTS[(dayNumber() + offset + 1) % ACCENTS.length]);
+}
+
+module.exports = { createHookReel, createBrandReel, createPhraseReel, previewJob, previewBrand, previewPhrase, PHRASES };
