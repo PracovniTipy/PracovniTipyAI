@@ -511,12 +511,12 @@ button.secondary{background:#0f9d58}button:disabled{opacity:.6}
   <a id="cz" target="_blank">⬇️ Stáhnout CV česky (PDF)</a>
   <a id="en" target="_blank">⬇️ Stáhnout CV anglicky (PDF)</a>
   <div id="matchesBox" class="hidden"><h3 style="margin:22px 0 4px;font-size:17px">Nabídky, které sedí k tvé praxi 👇</h3>
-  <p style="margin:0 0 8px;color:#566;font-size:14px">Vybrali jsme je z aktuálních ověřených nabídek. Plný popis, mzdu a kontakt pro přihlášku najdeš na HeroHero.</p>
+  <p style="margin:0 0 8px;color:#566;font-size:14px">Vybrali jsme je z aktuálních nabídek. Plný popis, mzdu a kontakt pro přihlášku najdeš na HeroHero.</p>
   <div id="matches"></div></div>
-  <p style="margin-top:18px">Každý den přidáváme 5 nových ověřených nabídek práce v zahraničí, kam se můžeš hned přihlásit:</p>
+  <p style="margin-top:18px">Každý den přidáváme nové nabídky práce v zahraničí s odkazem, kde se přihlásit:</p>
   <a class="hh" href="${goLink("cv-web")}" target="_blank">🌍 Zobrazit nabídky práce – 3 dny zdarma</a>
 </div>
-<p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme ověřené nabídky</p>
+<p class="small">Pracovní Tipy · práce nezprostředkováváme, jen sdílíme vybrané nabídky</p>
 </div>
 <script>
 const $=id=>document.getElementById(id);const esc=t=>String(t||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));let sid=null;const history=[];let tpl=null;

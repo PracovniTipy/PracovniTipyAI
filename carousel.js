@@ -52,7 +52,7 @@ function slidesFor(c) {
         { title: "4. ÚŘEDNÍ ČÍSLO", body: c.reg },
         { title: "5. OVĚŘ SI NABÍDKU", body: "Nikdy neplať předem za zprostředkování práce. Chtěj písemnou smlouvu se mzdou a pracovní dobou. Firmu si dohledej na internetu." },
         { title: "6. UBYTOVÁNÍ A PENÍZE", body: "Ubytování si domluv ještě před odjezdem. Počítej s rezervou na první měsíc, než ti přijde první výplata." },
-        { cover: true, end: true, title: `NABÍDKY PRÁCE ${c.in}`, body: `Každý den sdílím ověřené nabídky práce v zahraničí. Napiš do komentáře „${c.name}“ a pošlu ti víc.` }
+        { cover: true, end: true, title: `NABÍDKY PRÁCE ${c.in}`, body: `Každý den sdílím nové nabídky práce z oficiálních portálů. Napiš do komentáře „${c.name}“ a pošlu ti víc.` }
     ];
 }
 

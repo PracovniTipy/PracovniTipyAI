@@ -125,12 +125,12 @@ async function jobFrame(templatePath, d, hook, accent) {
 
 // Texty pro reel o účtu – každý den jiný.
 const BRAND = [
-    { a: "PRACOVNÍ TIPY", b: "PRÁCE V ZAHRANIČÍ BEZ HODIN HLEDÁNÍ", rows: ["KAŽDÝ DEN 5 OVĚŘENÝCH NABÍDEK", "FARMY • HOTELY • SKLADY • TOVÁRNY", "STAČÍ ANGLIČTINA, ŽÁDNÁ VÍZA"], cta: "SLEDUJ, AŤ TI NIC NEUTEČE" },
-    { a: "CHCEŠ PRACOVAT", b: "V ZAHRANIČÍ?", rows: ["VYBÍRÁM OVĚŘENÉ NABÍDKY Z CELÉ EVROPY", "S MZDOU, UBYTOVÁNÍM A KONTAKTEM", "NOVÉ NABÍDKY KAŽDÝ DEN"], cta: "SLEDUJ PRACOVNÍ TIPY" },
+    { a: "PRACOVNÍ TIPY", b: "PRÁCE V ZAHRANIČÍ BEZ HODIN HLEDÁNÍ", rows: ["KAŽDÝ DEN NOVÉ NABÍDKY", "FARMY • HOTELY • SKLADY • TOVÁRNY", "STAČÍ ANGLIČTINA, ŽÁDNÁ VÍZA"], cta: "SLEDUJ, AŤ TI NIC NEUTEČE" },
+    { a: "CHCEŠ PRACOVAT", b: "V ZAHRANIČÍ?", rows: ["VYBÍRÁM NABÍDKY Z OFICIÁLNÍCH PORTÁLŮ", "SE MZDOU, MĚSTEM A ODKAZEM NA PŘIHLÁŠKU", "NOVÉ NABÍDKY KAŽDÝ DEN"], cta: "SLEDUJ PRACOVNÍ TIPY" },
     { a: "NEMÁŠ ŽIVOTOPIS", b: "V ANGLIČTINĚ?", rows: ["SESTAV SI HO S AI ZDARMA", "ČESKY I ANGLICKY", "STAČÍ ODPOVĚDĚT NA PÁR OTÁZEK"], cta: "NAPIŠ MI „CV“" },
-    { a: "DO EU NEPOTŘEBUJEŠ", b: "ŽÁDNÁ VÍZA", rows: ["STAČÍ OBČANKA NEBO PAS", "PRÁCE ČEKÁ NA FARMÁCH, V HOTELÍCH I SKLADECH", "IRSKO • NORSKO • MALTA • KYPR A DALŠÍ"], cta: "SLEDUJ PRACOVNÍ TIPY" },
-    { a: "PRÁCI NEZPROSTŘEDKOVÁVÁM", b: "JEN SDÍLÍM OVĚŘENÉ NABÍDKY", rows: ["ŽÁDNÉ POPLATKY ZA ZPROSTŘEDKOVÁNÍ", "PŘIHLAŠUJEŠ SE PŘÍMO U ZAMĚSTNAVATELE", "KAŽDÝ DEN NOVÉ NABÍDKY"], cta: "SLEDUJ, AŤ TI NIC NEUTEČE" },
-    { a: "KAM ZA PRACÍ", b: "TENHLE TÝDEN?", rows: ["NABÍDKY Z IRSKA, MALTY, KYPRU A DALŠÍCH ZEMÍ", "S INFORMACEMI O MZDĚ A UBYTOVÁNÍ", "NAPIŠ ZEMI DO KOMENTÁŘE"], cta: "POŠLU TI NABÍDKY" }
+    { a: "DO EU NEPOTŘEBUJEŠ", b: "ŽÁDNÁ VÍZA", rows: ["STAČÍ OBČANKA NEBO PAS", "PRÁCE ČEKÁ NA FARMÁCH, V HOTELÍCH I SKLADECH", "IRSKO • NIZOZEMSKO • MALTA • KYPR A DALŠÍ"], cta: "SLEDUJ PRACOVNÍ TIPY" },
+    { a: "PRÁCI NEZPROSTŘEDKOVÁVÁM", b: "JEN SDÍLÍM VYBRANÉ NABÍDKY", rows: ["ŽÁDNÉ POPLATKY ZA ZPROSTŘEDKOVÁNÍ", "PŘIHLAŠUJEŠ SE PŘÍMO U ZAMĚSTNAVATELE", "KAŽDÝ DEN NOVÉ NABÍDKY"], cta: "SLEDUJ, AŤ TI NIC NEUTEČE" },
+    { a: "KAM ZA PRACÍ", b: "TENHLE TÝDEN?", rows: ["NABÍDKY Z IRSKA, MALTY, KYPRU A DALŠÍCH ZEMÍ", "SE MZDOU PODLE INZERÁTU", "NAPIŠ ZEMI DO KOMENTÁŘE"], cta: "POŠLU TI NABÍDKY" }
 ];
 
 async function brandFrame(templatePath, b, accent) {
@@ -208,9 +208,9 @@ async function createBrandReel({ templatePath, audioPath, isMusic, upload }) {
     const accent = ACCENTS[(day + 3) % ACCENTS.length];
     const videoUrl = await renderVideo(await brandFrame(templatePath, b, accent), { audioPath, isMusic, upload });
     const captions = [
-        "🌍 Pracovní tipy – každý den ověřené nabídky práce v zahraničí.\n\nFarmy, hotely, sklady, továrny. Stačí angličtina, do EU nepotřebuješ víza.\n\n👉 Sleduj účet, ať ti žádná nabídka neuteče.\n📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN).",
-        "💼 Chceš pracovat v zahraničí, ale nevíš, kde začít?\n\nKaždý den vybírám ověřené nabídky s mzdou, ubytováním a kontaktem.\n\n👉 Napiš do komentáře zemi, která tě zajímá, a pošlu ti nabídky.\n📄 Napiš mi „CV“ a sestav si s AI životopis zdarma.",
-        "📄 Nemáš životopis v angličtině? Napiš mi „CV“.\n\nAI se tě zeptá na pár otázek a sestaví ti životopis česky i anglicky – zdarma.\n\n🌍 Každý den sdílím ověřené nabídky práce v zahraničí."
+        "🌍 Pracovní tipy – každý den nové nabídky práce v zahraničí z oficiálních portálů.\n\nFarmy, hotely, sklady, továrny. Stačí angličtina a jako občan EU nepotřebuješ víza.\n\n👉 Sleduj účet, ať ti žádná nabídka neuteče.\n📄 Napiš mi „CV“ a sestav si s AI životopis zdarma (CZ + EN).",
+        "💼 Chceš pracovat v zahraničí, ale nevíš, kde začít?\n\nKaždý den vybírám nabídky jednoduchých prací – se mzdou podle inzerátu, městem a odkazem na přihlášku.\n\n👉 Napiš do komentáře zemi, která tě zajímá, a pošlu ti nabídky.\n📄 Napiš mi „CV“ a sestav si s AI životopis zdarma.",
+        "📄 Nemáš životopis v angličtině? Napiš mi „CV“.\n\nAI se tě zeptá na pár otázek a sestaví ti životopis česky i anglicky – zdarma.\n\n🌍 Každý den sdílím nové nabídky práce v zahraničí."
     ];
     return { videoUrl, caption: captions[day % captions.length] };
 }
