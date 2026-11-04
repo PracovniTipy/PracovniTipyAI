@@ -292,7 +292,7 @@ function build(){
  P=svg.querySelector('.asph');L=P.getTotalLength();s0=(120+top)/L;e0=1-(120+40)/L;
  const g=document.getElementById('stops');g.innerHTML='';
  stops=secs.map((s,i)=>{const pt=at(i/(secs.length-1)),el=document.createElementNS(NS,'g');el.setAttribute('class','stop');
-  el.innerHTML='<circle cx="'+pt.x+'" cy="'+pt.y+'" r="6"/><text x="'+(pt.x+(pt.x<cx?-24:12))+'" y="'+(pt.y+5)+'">'+(s.dataset.icon||'')+'</text>';g.appendChild(el);return el});
+  el.innerHTML='<circle cx="'+pt.x+'" cy="'+pt.y+'" r="6"/><text x="'+(pt.x+13)+'" y="'+(pt.y+5)+'">'+(s.dataset.icon||'')+'</text>';g.appendChild(el);return el});
  svg.querySelector('.done').style.strokeDasharray=L;
 }
 function at(p){return P.getPointAtLength((s0+p*(e0-s0))*L)}
