@@ -370,6 +370,16 @@ const JOOBLE_WORDS = ["warehouse operative", "fruit picker", "farm worker", "cle
     "production operative", "general operative", "packer", "room attendant", "food production", "picker packer"];
 const ENGLISH_TEXT = /\b(the|and|we are|you will|our|with|for|looking for|experience)\b/gi;
 
+const FOREIGN_LOC = [
+    ["Ireland", /irland|irlanda|ireland|éire/i], ["Netherlands", /olanda|holland|nederland|netherlands|niederlande|pays-bas|países bajos/i],
+    ["Germany", /germania|deutschland|germany|allemagne|alemania|duitsland|tyskland|saksa/i], ["Austria", /austria|österreich|autriche|oostenrijk|itävalta/i],
+    ["Belgium", /belgio|belgien|belgique|belgium|bélgica|belgië/i], ["Denmark", /danimarca|dänemark|danemark|denmark|dinamarca|tanska/i],
+    ["Sweden", /svezia|schweden|suède|sweden|suecia|zweden|ruotsi/i], ["Finland", /finlandia|finnland|finlande|finland|suomi/i],
+    ["Norway", /norvegia|norwegen|norvège|norway|noruega|noorwegen|norja/i], ["Spain", /spagna|spanien|espagne|spain|españa|spanje|espanja/i],
+    ["Italy", /\bitalia\b|italien|italie|italy/i], ["France", /francia|frankreich|\bfrance\b|frankrijk|ranska/i],
+    ["Other", /svizzera|schweiz|suisse|switzerland|polonia|polen|pologne|poland|united kingdom|\buk\b|england|scotland|wales|portugal|czech|tschechien/i]
+];
+
 async function sourceJooble(usedKeys, keys = {}) {
     const out = [];
     const day = Math.floor(Date.now() / 86400000);
@@ -391,6 +401,8 @@ async function sourceJooble(usedKeys, keys = {}) {
                     if (!link || usedKeys.has(linkKey(link)) || out.some(o => o.link === link)) continue;
                     // Ne poptávky zákazníků ("Need carpet cleaning…") a ne nabídky z USA omylem v EU feedu.
                     const loc = String(j.location || "");
+                    // Inzerát z jiné země omylem v národním feedu (např. italský Jooble s lokalitou „Olanda“).
+                    if (FOREIGN_LOC.some(([k, re]) => k !== country && re.test(loc))) continue;
                     if (/^\s*(need|looking for|wanted)\b/i.test(String(j.title || "")) || /county|\busa\b|united states|, [A-Z]{2}\b|miami|florida|california|texas/i.test(`${loc} ${j.title || ""}`)) continue;
                     const snippet = htmlToText(String(j.snippet || ""));
                     // Jen inzeráty psané anglicky (v NL/DE jinak vyžadují místní jazyk).

@@ -333,7 +333,7 @@ module.exports = function setupStart(app, { cloudinary }) {
         const runs = await recentJobs();
         const out = [];
         for (const d of Object.keys(runs).sort().reverse().slice(0, 3)) {
-            for (const j of runs[d].jobs || []) if (j.salary_source && j.city && out.length < 4 && !out.some(o => o.job_title === j.job_title && o.country === j.country)) out.push(j);
+            for (const j of runs[d].jobs || []) if (j.salary_source && j.city && !/olanda|holland|germania|francia|spagna|belgio|svizzera|polonia|irlanda|austria|danimarca|svezia|norvegia|finlandia/i.test(j.city) && out.length < 4 && !out.some(o => o.job_title === j.job_title && o.country === j.country)) out.push(j);
         }
         return out;
     }
