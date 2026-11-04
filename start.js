@@ -20,7 +20,7 @@ const esc = s => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&am
 
 // Hlavní město každé země – jen pro kresbu mapy (zeměpisná délka, šířka).
 const PLACES = {
-    Ireland: ["Dublin", -6.26, 53.35], Netherlands: ["Amsterdam", 4.9, 52.37],
+    Ireland: ["Dublin", -6.26, 53.35], Norway: ["Oslo", 10.75, 59.91], Netherlands: ["Amsterdam", 4.9, 52.37],
     Germany: ["Berlín", 13.4, 52.52], Austria: ["Vídeň", 16.37, 48.21], Denmark: ["Kodaň", 12.57, 55.68],
     Sweden: ["Stockholm", 18.07, 59.33], Finland: ["Helsinky", 24.94, 60.17], Malta: ["Valletta", 14.51, 35.9],
     Cyprus: ["Nikósie", 33.38, 35.17]
@@ -267,17 +267,18 @@ ${sc("doma", "Večer doma", `<h1 class="serif rv d1">Co kdyby to šlo <em>jinde?
 ${sc("zivotopis", "Krok 1", `<h2 class="serif rv d1">Životopis za <em>pár minut.</em></h2>
 <p class="lead rv d2">Napíšeš AI, co umíš. Dostaneš PDF česky i anglicky. Zdarma.</p>
 <div class="row rv d3"><a class="btn" href="${BASE}/cv?src=start-journey">Vytvořit životopis</a></div>`)}
-${sc("kufr", "Krok 2", `<h2 class="serif rv d1">Sbal se na <em>novou kapitolu.</em></h2>
-<div class="row rv d2"><span class="chip">Občanka nebo pas</span><span class="chip">Karta EHIC</span><span class="chip">Pracovní boty</span><span class="chip">Peníze na první týdny</span></div>
-<p class="rule rv d3"><b>Pravidlo č. 1:</b> za nabídku práce se nikdy neplatí.</p>`)}
-${sc("letiste", "Krok 3", `<h2 class="serif rv d1">Letenku až <em>s potvrzenou prací.</em></h2>
-<div class="row rv d2"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a>${INSURANCE_URL ? `<a class="chip" href="${esc(INSURANCE_URL)}" target="_blank" rel="noopener sponsored">Cestovní pojištění</a>` : ""}</div>`)}
-${sc("jahody", "Krok 4", `<h2 class="serif rv d1">První směna. <em>První výplata.</em></h2>
-<p class="lead rv d2">U každé naší nabídky vidíš mzdu z inzerátu, město a kde se přihlásit.</p>`)}
-${sc("prace", "Cíl", `<h2 class="serif rv d1 fin">Tvoje cesta začíná <em>jednou nabídkou.</em></h2>
+${sc("prace", "Krok 2", `<h2 class="serif rv d1 fin">Najdi si práci <em>na HeroHero.</em></h2>
 ${offerHtml}
 <div class="row rv d4"><a class="btn pulse" href="${go("start-final")}">Odemknout nabídky – 3 dny zdarma</a></div>
-<p class="price rv d4">Pak 5 € měsíčně na HeroHero.</p>
+<p class="price rv d4">Pak 5 € měsíčně na HeroHero.</p>`)}
+${sc("kufr", "Krok 3", `<h2 class="serif rv d1">Sbal se na <em>novou kapitolu.</em></h2>
+<div class="row rv d2"><span class="chip">Občanka nebo pas</span><span class="chip">Karta EHIC</span><span class="chip">Pracovní boty</span><span class="chip">Peníze na první týdny</span></div>
+<p class="rule rv d3"><b>Pravidlo č. 1:</b> za nabídku práce se nikdy neplatí.</p>`)}
+${sc("letiste", "Krok 4", `<h2 class="serif rv d1">Letenku až <em>s potvrzenou prací.</em></h2>
+<div class="row rv d2"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a>${INSURANCE_URL ? `<a class="chip" href="${esc(INSURANCE_URL)}" target="_blank" rel="noopener sponsored">Cestovní pojištění</a>` : ""}</div>`)}
+${sc("jahody", "Cíl", `<h2 class="serif rv d1">První směna. <em>První výplata.</em></h2>
+<p class="lead rv d2">U každé naší nabídky vidíš mzdu z inzerátu, město a kde se přihlásit.</p>
+<div class="row rv d3"><a class="btn pulse" href="${go("start-end")}">Chci svou první nabídku</a></div>
 <p class="lands rv d4">Průvodce zeměmi: ${lands}</p>`)}
 <footer>Pracovní tipy · Práci nezprostředkováváme, sdílíme vybrané nabídky z pracovních portálů. Ilustrace jsou vytvořené AI. Podrobnosti si vždy ověř u zaměstnavatele.</footer>`;
     return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -290,7 +291,7 @@ ${offerHtml}
 <style>${JCSS}</style></head><body>${body}${JSCRIPT}</body></html>`;
 }
 
-const SUPPORTED_CZ = { Ireland: "Irsko", Netherlands: "Nizozemsko", Germany: "Německo", Austria: "Rakousko", Denmark: "Dánsko", Sweden: "Švédsko", Finland: "Finsko", Malta: "Malta", Cyprus: "Kypr", Belgium: "Belgie", France: "Francie", Spain: "Španělsko", Italy: "Itálie", Greece: "Řecko", Estonia: "Estonsko" };
+const SUPPORTED_CZ = { Ireland: "Irsko", Norway: "Norsko", Netherlands: "Nizozemsko", Germany: "Německo", Austria: "Rakousko", Denmark: "Dánsko", Sweden: "Švédsko", Finland: "Finsko", Malta: "Malta", Cyprus: "Kypr", Belgium: "Belgie", France: "Francie", Spain: "Španělsko", Italy: "Itálie", Greece: "Řecko", Estonia: "Estonsko" };
 
 module.exports = function setupStart(app, { cloudinary }) {
     const TEMPLATE_FOLDER = path.join(__dirname, "templates");
@@ -394,7 +395,7 @@ module.exports = function setupStart(app, { cloudinary }) {
 <section><div class="facts"><div><h3>Doklady a pobyt</h3><p>Stačí platná občanka nebo pas, žádná víza. ${esc(c.stay)}</p></div><div><h3>Úřední číslo</h3><p>${esc(c.reg)}</p></div></div></section>
 <section style="padding-top:0"><p class="label">Nedávné nabídky</p><h2 class="serif">Práce ${esc(prep(c.in))}.</h2>${jobsHtml}</section>
 <section style="padding-top:0"><p class="label">Jak</p><h2 class="serif">Osm kroků k odjezdu.</h2>${steps(c)}</section>
-<section class="end"><h2 class="serif">Další země.</h2><p>Irsko, Nizozemsko, Německo, Rakousko, Dánsko, Švédsko, Finsko, Malta a Kypr.</p><a class="btn ghost" href="${BASE}/start">Zpět na přehled</a></section>`,
+<section class="end"><h2 class="serif">Další země.</h2><p>Irsko, Norsko, Nizozemsko, Německo, Rakousko, Dánsko, Švédsko, Finsko, Malta a Kypr.</p><a class="btn ghost" href="${BASE}/start">Zpět na přehled</a></section>`,
             `Jak odjet za prací ${prep(c.to)}: doklady, úřady, pojištění, letenky a nedávné nabídky.`));
     });
 };
