@@ -1184,10 +1184,11 @@ async function createReel(imageBuffer) {
     return result.secure_url;
 }
 
+// Hlavní adresa webu → stránka s cestou za prací (200 + přesměrování, aby prošly i health-checky)
 app.get("/", (req, res) => {
-    res.send(
-        "PracovniTipyAI běží"
-    );
+    const q = req.originalUrl.includes("?") ? req.originalUrl.slice(req.originalUrl.indexOf("?")) : "";
+    const to = `/start${q.replace(/[^A-Za-z0-9_=&%.?-]/g, "")}`;
+    res.send(`<!doctype html><html lang="cs"><head><meta charset="utf-8"><title>Pracovní tipy</title><meta http-equiv="refresh" content="0;url=${to}"><link rel="canonical" href="https://pracovnitipyai-production.up.railway.app/start"></head><body style="background:#05070d;color:#fff;font-family:system-ui">PracovniTipyAI běží · <a style="color:#ffc27a" href="${to}">Pracovní tipy</a><script>location.replace(${JSON.stringify(to)})</script></body></html>`);
 });
 
 app.post(
