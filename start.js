@@ -54,7 +54,7 @@ a{color:inherit}
 nav{position:fixed;inset:0 0 auto 0;z-index:10;display:flex;justify-content:space-between;align-items:center;padding:18px clamp(18px,4vw,48px);mix-blend-mode:difference;color:#fff}
 nav b{font-weight:600;letter-spacing:.02em}nav a{text-decoration:none;font-size:14px;opacity:.9}
 .hero{min-height:100svh;background:radial-gradient(120% 90% at 70% 20%,#18233d 0%,var(--ink) 60%);color:#fff;display:grid;grid-template-columns:1fr;align-items:end;padding:110px clamp(18px,5vw,64px) 48px;position:relative;overflow:hidden}
-.map{position:absolute;top:70px;right:0;width:62%;height:calc(100% - 90px);opacity:.95}
+.map{position:absolute;top:70px;right:0;width:52%;height:calc(100% - 90px);opacity:.95}
 @media (max-width:820px){.map{top:64px;width:100%;height:52%}}
 .rt path{fill:none;stroke:#fff;stroke-opacity:.55;stroke-width:1.4;stroke-dasharray:1;stroke-dashoffset:1;animation:draw 1.6s cubic-bezier(.6,0,.2,1) var(--d) forwards}
 .rt circle{fill:var(--accent);opacity:0;animation:pop .5s ease calc(var(--d) + 1.3s) forwards}
@@ -91,6 +91,13 @@ h2{font-size:clamp(36px,5.5vw,76px);line-height:1;margin:0 0 40px}
 .chip{display:inline-block;padding:9px 16px;border-radius:999px;border:1px solid #cfc7bb;text-decoration:none;font-size:15px}
 .chip:hover{background:var(--ink);color:#fff;border-color:var(--ink)}
 .phr b{display:block;font-weight:600;color:var(--ink)}.phr span{font-size:15px}
+.cvx{display:grid;grid-template-columns:1fr 1fr;gap:clamp(32px,6vw,90px);align-items:center;background:#fff}
+.cvx p{color:#444b5a;max-width:460px}
+.paper{position:relative;aspect-ratio:210/297;width:min(100%,440px);justify-self:center;border-radius:6px;overflow:hidden;background:#fff;box-shadow:0 40px 80px -30px rgba(11,15,26,.35),0 0 0 1px rgba(11,15,26,.06);transform:rotate(-2.5deg);transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.paper:hover{transform:rotate(0) scale(1.02)}
+.paper iframe{position:absolute;left:0;top:0;width:794px;height:1123px;border:0;transform-origin:0 0;pointer-events:none}
+.paper i{position:absolute;right:14px;top:14px;font:600 12px Inter,sans-serif;font-style:normal;background:var(--ink);color:#fff;padding:6px 10px;border-radius:999px;letter-spacing:.06em}
+@media (max-width:820px){.cvx{grid-template-columns:1fr}}
 .end{background:var(--ink);color:#fff;text-align:center}
 .end h2{margin-bottom:28px}.end p{color:#c8cedb;max-width:520px;margin:0 auto 32px}
 footer{background:var(--ink);color:#6f7891;font-size:13px;text-align:center;padding:0 20px 36px}
@@ -107,6 +114,8 @@ footer{background:var(--ink);color:#6f7891;font-size:13px;text-align:center;padd
 `;
 
 const SCRIPT = `<script>
+function fitPaper(){document.querySelectorAll('.paper').forEach(p=>{const f=p.querySelector('iframe');if(f)f.style.transform='scale('+(p.clientWidth/794)+')'})}
+addEventListener('resize',fitPaper);addEventListener('load',fitPaper);fitPaper();
 const io=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');io.unobserve(e.target)}}),{threshold:.15});
 document.querySelectorAll('.step').forEach(s=>io.observe(s));
 </script>`;
@@ -124,6 +133,9 @@ ${body}
 ${SCRIPT}</body></html>`;
 }
 
+// Afiliační odkaz na cestovní pojištění (ePojištění.cz) – doplní se, až ho Petr pošle.
+const INSURANCE_URL = process.env.EPOJISTENI_URL || "";
+
 const PHRASES = [
     ["When can I start?", "Kdy můžu nastoupit?"],
     ["Is accommodation provided?", "Je zajištěné ubytování?"],
@@ -138,7 +150,7 @@ function steps(c) {
 ${s("01", "Najdi práci", `<p>Každý den nové nabídky jednoduchých prací ${esc(where)} – sklady, farmy, sběr ovoce, úklid, hotely, výroba. U každé mzda podle inzerátu, město a odkaz, kde se přihlásit.</p><div class="row"><a class="btn dark" href="${go(c ? "start-" + slug(c.name) : "start")}">Zobrazit nabídky – 3 dny zdarma</a></div>`)}
 ${s("02", "Životopis v angličtině", `<p>Odpovíš na pár otázek a AI ti sestaví životopis česky i anglicky. Zdarma, stáhneš si PDF.</p><div class="row"><a class="chip" href="${BASE}/cv?src=start">Vytvořit životopis →</a></div>`)}
 ${s("03", "Ověř si nabídku", `<ul><li>Neplať předem za zprostředkování – agentura práce v Česku nesmí chtít peníze od uchazeče.</li><li>Chtěj písemnou nabídku se mzdou, pracovní dobou a místem.</li><li>Neposílej doklady, dokud si firmu nedohledáš.</li></ul>`)}
-${s("04", "Zdravotní pojištění", `<ul><li>S sebou evropský průkaz zdravotního pojištění (EHIC) od české pojišťovny.</li><li>Když v jiném státě EU začneš pracovat, jsi pojištěný tam. České pojišťovně to podle VZP oznam do 8 dnů.</li></ul>`)}
+${s("04", "Zdravotní pojištění", `<ul><li>S sebou evropský průkaz zdravotního pojištění (EHIC) od české pojišťovny.</li><li>Když v jiném státě EU začneš pracovat, jsi pojištěný tam. České pojišťovně to podle VZP oznam do 8 dnů.</li><li>Na cestu a první dny před nástupem zvaž cestovní pojištění.</li></ul>${INSURANCE_URL ? `<div class="row"><a class="chip" href="${esc(INSURANCE_URL)}" target="_blank" rel="noopener sponsored">Porovnat cestovní pojištění →</a></div>` : ""}`)}
 ${s("05", "Angličtina na pohovor", `<ul class="phr">${PHRASES.map(([en, cz]) => `<li><b>${esc(en)}</b><span>${esc(cz)}</span></li>`).join("")}</ul>`)}
 ${s("06", "Letenka", `<p>Porovnej ceny a zkontroluj zavazadlo. Kupuj až s písemným potvrzením nástupu.</p><div class="row"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a></div>`)}
 ${s("07", "Sbal se", `<p>Občanka nebo pas, EHIC, pevné boty, léky, hotovost na první dny – první výplata obvykle přijde až po několika týdnech.</p>`)}
@@ -185,6 +197,8 @@ module.exports = function setupStart(app, { cloudinary }) {
 <div class="hero-copy"><h1 class="serif">Odjeď za prací.<br><em>Krok za krokem.</em></h1>
 <p>Nové nabídky jednoduchých prací v Evropě každý den, životopis v angličtině zdarma a všechno, co potřebuješ k odjezdu.</p>
 <div class="cta"><a class="btn main" href="${go("start")}">Najít práci</a><a class="btn ghost" href="${BASE}/cv?src=start">Životopis zdarma</a></div></div></header>
+<section class="cvx"><div><p class="label">Zdarma</p><h2 class="serif">Životopis v angličtině za 5 minut.</h2><p>Napíšeš AI, kde jsi pracoval/a – i bez přesných dat. Dostaneš hotový životopis česky i anglicky v PDF a k tomu nabídky, které sedí k tvé praxi.</p><div class="cta" style="margin-top:24px"><a class="btn dark" href="${BASE}/cv?src=start-cv">Vytvořit životopis</a></div></div>
+<a class="paper" href="${BASE}/cv?src=start-cv" aria-label="Ukázka životopisu"><iframe src="${BASE}/cv/template/sidebar" scrolling="no" tabindex="-1" title="Ukázka životopisu"></iframe><i>UKÁZKA</i></a></section>
 <section><p class="label">Kam</p><h2 class="serif">Vyber zemi.</h2><div class="lands">${lands}</div></section>
 <section id="kroky" style="padding-top:0"><p class="label">Jak</p><h2 class="serif">Osm kroků k odjezdu.</h2>${steps(null)}</section>
 <section class="end"><h2 class="serif">Nové nabídky<br>každý den.</h2><p>Mzda podle inzerátu, město a odkaz na přihlášku. Jako občan EU nepotřebuješ víza ani pracovní povolení.</p><a class="btn main" href="${go("start-end")}">Zobrazit nabídky – 3 dny zdarma</a></section>`,
