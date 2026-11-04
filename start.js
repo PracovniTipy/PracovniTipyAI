@@ -164,6 +164,8 @@ ${s("08", "První týden", `<p>Vyřiď registraci a osobní číslo pro práci a
 // Obraz se při posouvání NEhýbe – scény se jen prolínají; pohyb dělá video/živé efekty.
 // ---------------------------------------------------------------------------
 const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscale/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const PLATE = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_gen_remove:prompt_woman;remove-shadow_true/e_upscale/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const GIRL = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_background_removal/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
 const IMG_PLAIN = n => `https://res.cloudinary.com/rfgq6m1z/image/upload/c_scale,w_1536/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
 const VID = n => `https://res.cloudinary.com/rfgq6m1z/video/upload/q_auto/PracovniTipyAI/story/video/${n}.mp4`;
 const INSURANCE_FALLBACK = "https://www.epojisteni.cz/kalkulace-cestovni/";
@@ -180,8 +182,18 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .media{position:fixed;inset:0;z-index:0;overflow:hidden;background:#05070d}
 .m{position:absolute;inset:-2%;opacity:0;transition:opacity 1.3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1);transform:scale(1.08)}
 .m.on{opacity:1;transform:scale(1)}
-.m .in{position:absolute;inset:0;transform:translate(var(--px,0px),var(--py,0px));transition:transform .8s cubic-bezier(.2,.7,.2,1)}
-.m img,.m video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:62% 50%;animation:breathe 16s ease-in-out infinite alternate}
+.m .in,.m .pl,.m .gl{position:absolute;inset:0;transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.m .in{transform:translate(var(--px,0px),var(--py,0px))}
+.m .pl{transform:translate(calc(var(--px,0px)*.5),calc(var(--py,0px)*.5));opacity:0;transition:opacity .8s,transform .8s cubic-bezier(.2,.7,.2,1)}
+.m .gl{transform:translate(calc(var(--px,0px)*1.6),calc(var(--py,0px)*1.4));opacity:0;transition:opacity .8s,transform .8s cubic-bezier(.2,.7,.2,1)}
+.m.deep .pl,.m.deep .gl{opacity:1}.m.deep .in{opacity:0;transition:opacity .8s}
+.m .pl img{filter:blur(1.4px) brightness(.9) saturate(1.1);animation:drift 22s ease-in-out infinite alternate}
+@keyframes drift{to{transform:scale(1.05) translateX(-1.2%)}}
+.m .gl img{filter:drop-shadow(0 30px 40px rgba(0,0,0,.45));transform-origin:72% 100%;animation:sway 6s ease-in-out infinite}
+@keyframes sway{0%,100%{transform:rotate(-.35deg) translateY(0)}50%{transform:rotate(.35deg) translateY(-7px)}}
+.m.on .gl{animation:enter 1.5s cubic-bezier(.2,.9,.2,1) both}
+@keyframes enter{from{opacity:0;translate:70px 0;filter:blur(6px)}to{opacity:1;translate:0 0;filter:none}}
+.m img,.m video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:62% 50%}
 @keyframes breathe{to{transform:scale(1.045)}}
 .m video{opacity:0;transition:opacity 1s}.m video.ready{opacity:1}
 .shade{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(5,7,13,.88) 0%,rgba(5,7,13,.6) 28%,rgba(5,7,13,.1) 46%,transparent 58%),linear-gradient(0deg,rgba(5,7,13,.55),transparent 30%)}
@@ -300,7 +312,7 @@ function drawPoint(){
  const s=secs[active];if(!s){pt.classList.remove('on');return}
  const fx=+s.dataset.fx,fy=+s.dataset.fy,t=s.querySelector('.tgt');
  if(!fx||!t){pt.classList.remove('on');return}
- const a=coverPoint(fx,fy),r=t.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight||a.x<10||a.x<r.right+30){pt.classList.remove('on');return}
+ const a=coverPoint(fx,fy),r=t.getBoundingClientRect();if(layers[active].classList.contains('deep')){a.x+=window.__gx||0;a.y+=window.__gy||0}if(r.bottom<0||r.top>innerHeight||a.x<10||a.x<r.right+30){pt.classList.remove('on');return}
  const b={x:r.right+14,y:r.top+r.height/2},mx=(a.x+b.x)/2,my=Math.min(a.y,b.y)-Math.abs(a.x-b.x)*.22;
  const d='M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+b.x.toFixed(1)+' '+b.y.toFixed(1);
  pt.setAttribute('viewBox','0 0 '+innerWidth+' '+innerHeight);pt.querySelector('.trail').setAttribute('d',d);pt.querySelector('#pp').setAttribute('d',d);
@@ -331,13 +343,15 @@ function frame(){
 addEventListener('scroll',tick,{passive:true});addEventListener('resize',()=>{buildRoad();tick();drawPoint()});
 buildRoad();secs[0].classList.add('on');tick();frame();
 // "jsme tam s ní" – scéna se jemně natáčí za pohledem (myší / natočením telefonu)
-const par=(x,y)=>{layers.forEach(m=>{const n=m.querySelector('.in');n.style.setProperty('--px',(x*-18).toFixed(1)+'px');n.style.setProperty('--py',(y*-12).toFixed(1)+'px')})};
-addEventListener('pointermove',e=>par(e.clientX/innerWidth-.5,e.clientY/innerHeight-.5),{passive:true});
+const par=(x,y)=>{window.__gx=x*-18*1.6;window.__gy=y*-12*1.4;layers.forEach(m=>{const n=m.querySelector('.in');n.style.setProperty('--px',(x*-18).toFixed(1)+'px');n.style.setProperty('--py',(y*-12).toFixed(1)+'px')})};
+addEventListener('pointermove',e=>{par(e.clientX/innerWidth-.5,e.clientY/innerHeight-.5);if(pt.classList.contains('on'))setTimeout(drawPoint,200)},{passive:true});
 addEventListener('deviceorientation',e=>{if(e.gamma!=null)par(Math.max(-1,Math.min(1,e.gamma/30))*.5,Math.max(-1,Math.min(1,(e.beta-45)/30))*.5)},{passive:true});
 // videa: načíst až když jsou blízko, zobrazit až když hrají
 layers.forEach(m=>{const v=m.querySelector('video');if(v)v.addEventListener('playing',()=>v.classList.add('ready'))});
 // pojistka: když upscale ještě není hotový (Cloudinary vrátí malý náhled), použij originál
 document.querySelectorAll('.m img').forEach(im=>{const fix=()=>{if(im.naturalWidth&&im.naturalWidth<600&&im.dataset.plain&&im.src!==im.dataset.plain){im.removeAttribute('srcset');im.src=im.dataset.plain}};im.addEventListener('load',fix);im.addEventListener('error',()=>{im.removeAttribute('srcset');im.src=im.dataset.plain});if(im.complete)fix()});
+// 3D hloubka: pozadí bez postavy + postava zvlášť (až když jsou obě vrstvy načtené)
+layers.forEach(m=>{const ly=[...m.querySelectorAll('img.ly')];let ok=0;ly.forEach(im=>{const done=()=>{if(im.naturalWidth>600&&++ok===ly.length)m.classList.add('deep')};if(im.complete&&im.naturalWidth)done();else im.addEventListener('load',done,{once:true})})});
 // poletující světlušky
 const mo=document.querySelector('.motes');for(let i=0;i<26;i++){const e=document.createElement('i');e.style.left=(Math.random()*100)+'%';e.style.top=(40+Math.random()*70)+'%';e.style.setProperty('--dx',((Math.random()-.5)*120)+'px');e.style.animationDuration=(8+Math.random()*10)+'s';e.style.animationDelay=(-Math.random()*12)+'s';mo.appendChild(e)}
 // odletová tabule
@@ -392,7 +406,8 @@ function journeyPage(offers) {
 <div class="row rv d3"><a class="btn tgt" href="${go("start-end")}"><span>Chci svou první nabídku</span></a></div>
 <p class="lands rv d4">Průvodce zeměmi: ${lands}</p>`],
     ];
-    const media = SC.map(([n], i) => { const img = `w-${n}`; return `<div class="m${i === 0 ? " on" : ""}"><div class="in"><img data-plain="${IMG_PLAIN(img)}" src="${IMG(img, 1920)}" srcset="${IMG(img, 1200)} 1200w, ${IMG(img, 1920)} 1920w, ${IMG(img, 2600)} 2600w" sizes="100vw" alt="" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>${STORY_VIDEOS.has(img) ? `<video muted loop playsinline autoplay preload="${i === 0 ? "auto" : "metadata"}" poster="${IMG(img, 1200)}" src="${VID(img)}"></video>` : ""}</div></div>`; }).join("");
+    const media = SC.map(([n], i) => { const img = `w-${n}`; const lazy = i === 0 ? 'fetchpriority="high"' : 'loading="lazy"';
+        return `<div class="m${i === 0 ? " on" : ""}"><div class="in"><img data-plain="${IMG_PLAIN(img)}" src="${IMG(img, 1920)}" srcset="${IMG(img, 1200)} 1200w, ${IMG(img, 1920)} 1920w, ${IMG(img, 2600)} 2600w" sizes="100vw" alt="" ${lazy}></div><div class="pl"><img class="ly" src="${PLATE(img, 2200)}" alt="" ${lazy}></div><div class="gl"><img class="ly" src="${GIRL(img, 1920)}" alt="" ${lazy}></div></div>`; }).join("");
     const secs = SC.map(([n, tint, ch, inner]) => { const f = FINGER[`w-${n}`] || []; return `<section class="sc" data-s="${n}" data-tint="${tint}" data-fx="${f[0] || ""}" data-fy="${f[1] || ""}"><div class="st"><div class="tx"><p class="ch">${ch}</p>${inner}</div></div></section>`; }).join("\n");
     const body = `
 <div class="intro"><div><b><span>Pracovní</span> <span>tipy</span></b><i></i></div></div>
