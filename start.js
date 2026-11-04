@@ -476,6 +476,17 @@ module.exports = function setupStart(app, { cloudinary }) {
         } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
     });
 
+    // Diagnostika: je Sora (video API) pro tento OpenAI klíč dostupná?
+    app.get("/admin/openai-probe", async (req, res) => {
+        if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        const H = { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` };
+        const out = {};
+        for (const [k, u] of [["videos", "https://api.openai.com/v1/videos?limit=1"], ["sora2", "https://api.openai.com/v1/models/sora-2"], ["sora2pro", "https://api.openai.com/v1/models/sora-2-pro"]]) {
+            try { const r = await fetch(u, { headers: H }); out[k] = { status: r.status, reqId: r.headers.get("x-request-id"), body: (await r.text()).slice(0, 400) }; } catch (e) { out[k] = { err: e.message }; }
+        }
+        res.json(out);
+    });
+
     app.get("/admin/models", async (req, res) => {
         if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
         const r = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
