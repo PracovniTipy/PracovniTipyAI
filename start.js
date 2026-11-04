@@ -167,7 +167,7 @@ const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscal
 const IMG_LO = n => `https://res.cloudinary.com/rfgq6m1z/image/upload/f_auto,q_auto,w_60/PracovniTipyAI/story/${n}.png`;
 const INSURANCE_FALLBACK = "https://www.epojisteni.cz/kalkulace-cestovni/";
 const JCSS = `
-:root{--a:#ff6b4a;--a2:#ffc27a;--road:clamp(46px,6vw,88px);--tint:#ff8a4a}
+:root{--a:#ff6b4a;--a2:#ffc27a;--road:0px;--tint:#ff8a4a}
 *{box-sizing:border-box}html{scroll-behavior:auto}
 body{margin:0;background:#05070d;color:#fff;font:400 17px/1.55 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter-spacing:-.03em}
@@ -193,12 +193,19 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 #road .stop circle{fill:#05070d;stroke:rgba(255,255,255,.5);stroke-width:2;transition:all .4s}
 #road .stop text{font-size:13px;opacity:.35;transition:opacity .4s}
 #road .stop.on circle{fill:var(--a);stroke:#fff;filter:drop-shadow(0 0 6px var(--a))}#road .stop.on text{opacity:1}
-#car .beam{fill:url(#beam);opacity:.85}
+.rd{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
+.rd .edge{fill:none;stroke:rgba(255,255,255,.07);stroke-width:clamp(34px,4.4vw,58px);stroke-linecap:round}
+.rd .asph{fill:none;stroke:rgba(10,12,20,.74);stroke-width:clamp(26px,3.4vw,46px);stroke-linecap:round}
+.rd .mid{fill:none;stroke:#fff;stroke-opacity:.42;stroke-width:2;stroke-dasharray:16 18}
+.rd .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
+.rd .car{filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+#car .beam,#carS .beam{fill:url(#beam);opacity:.85}
 #car .body{filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
 .sc{position:relative;height:175svh;z-index:3}
 .st{position:sticky;top:0;height:100svh;overflow:hidden;display:grid;grid-template-columns:1fr auto;align-items:center;gap:clamp(24px,5vw,80px);padding:80px clamp(22px,6vw,110px) 50px calc(var(--road) + clamp(26px,5vw,90px))}
 .bg{position:absolute;inset:-8%;background-size:cover;background-position:center;filter:blur(42px) saturate(1.35) brightness(.4);transform:scale(calc(1.18 - var(--k,0)*.12))}
 .tx{position:relative;max-width:640px;z-index:3}
+.bg{z-index:0}
 .ch{font-size:12px;letter-spacing:.26em;text-transform:uppercase;margin:0 0 18px;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .8s}
 .ch:before{content:"";width:34px;height:1px;background:currentColor;opacity:.6}
 .on .ch{opacity:.7}
@@ -271,7 +278,8 @@ footer{position:relative;z-index:3;padding:28px 22px 40px calc(var(--road) + 22p
 @media (max-height:760px) and (min-width:861px){.offer:nth-child(3){display:none}.h{font-size:clamp(40px,5.4vw,84px)}}
 @media (max-width:860px){
  .st{grid-template-columns:1fr;align-items:end;padding:0 18px 30px calc(var(--road) + 10px)}
- .stage{position:absolute;inset:0;perspective:none}
+ .stage{position:absolute;inset:0;perspective:none;z-index:1}
+ .rd{z-index:2}
  .card{height:100%;width:100%;aspect-ratio:auto;border-radius:0;box-shadow:none;transform:none}
  .card:before{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,transparent 22%,transparent 38%,rgba(4,6,12,.94) 76%)}
  .bg,.glow,.rings{display:none}.h{font-size:clamp(36px,10.5vw,54px)}.lead{font-size:16px}
@@ -282,33 +290,27 @@ footer{position:relative;z-index:3;padding:28px 22px 40px calc(var(--road) + 22p
 
 const JSCRIPT = `<script>
 (function(){
-const secs=[...document.querySelectorAll('.sc')],svg=document.getElementById('road'),NS='http://www.w3.org/2000/svg',chap=document.getElementById('chap'),R=document.documentElement;
-let P,L,stops=[],cur=0,tgt=0,s0=0,e0=1;
+const secs=[...document.querySelectorAll('.sc')],chap=document.getElementById('chap'),R=document.documentElement;
+// každá scéna má vlastní úsek klikaté silnice přes celou šířku; úseky na sebe navazují uprostřed
+const roads=secs.map((s,i)=>({s,svg:s.querySelector('.rd'),dir:i%2?-1:1,cur:0,tgt:0,P:null,L:0}));
 function build(){
- const w=svg.clientWidth,h=svg.clientHeight;svg.setAttribute('viewBox','0 0 '+w+' '+h);
- const top=70,bot=h-40,amp=w*.27,cx=w/2,turns=secs.length*.75;let d='M'+cx+' -120';
- for(let i=0;i<=160;i++){const t=i/160,y=top+t*(bot-top),x=cx+amp*Math.sin(t*Math.PI*turns);d+=' L'+x.toFixed(1)+' '+y.toFixed(1)}
- d+=' L'+cx+' '+(h+120);
- svg.querySelectorAll('path.p').forEach(p=>p.setAttribute('d',d));
- P=svg.querySelector('.asph');L=P.getTotalLength();s0=(120+top)/L;e0=1-(120+40)/L;
- const g=document.getElementById('stops');g.innerHTML='';
- stops=secs.map((s,i)=>{const pt=at(i/(secs.length-1)),el=document.createElementNS(NS,'g');el.setAttribute('class','stop');
-  el.innerHTML='<circle cx="'+pt.x+'" cy="'+pt.y+'" r="6"/><text x="'+(pt.x+13)+'" y="'+(pt.y+5)+'">'+(s.dataset.icon||'')+'</text>';g.appendChild(el);return el});
- svg.querySelector('.done').style.strokeDasharray=L;
+ const w=innerWidth,h=innerHeight,amp=w*(w<861?.3:.4);
+ roads.forEach(r=>{r.svg.setAttribute('viewBox','0 0 '+w+' '+h);let d='';
+  for(let i=0;i<=180;i++){const t=i/180,x=w/2+r.dir*amp*Math.sin(t*Math.PI*3),y=-80+t*(h+160);d+=(i?' L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
+  r.svg.querySelectorAll('path').forEach(p=>p.setAttribute('d',d));r.P=r.svg.querySelector('.asph');r.L=r.P.getTotalLength();
+  r.svg.querySelector('.done').style.strokeDasharray=r.L});
 }
-function at(p){return P.getPointAtLength((s0+p*(e0-s0))*L)}
 function frame(){
- cur+=(tgt-cur)*.12;if(Math.abs(tgt-cur)<.0001)cur=tgt;
- if(P){const a=at(cur),b=at(Math.min(1,cur+.003)),ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI;
-  document.getElementById('car').setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+(isFinite(ang)?ang:90).toFixed(1)+')');
-  svg.querySelector('.done').style.strokeDashoffset=(L-(s0+cur*(e0-s0))*L).toFixed(1);}
+ roads.forEach(r=>{if(!r.P)return;r.cur+=(r.tgt-r.cur)*.1;
+  const t=.04+r.cur*.92,a=r.P.getPointAtLength(t*r.L),b=r.P.getPointAtLength(Math.min(r.L,t*r.L+3)),ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,sc=innerWidth<861?1.3:1.8;
+  r.svg.querySelector('.car').setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+sc+')');
+  r.svg.querySelector('.done').style.strokeDashoffset=(r.L*(1-t)).toFixed(1)});
  requestAnimationFrame(frame);
 }
 function tick(){
- const vh=innerHeight,max=R.scrollHeight-vh;tgt=Math.min(1,Math.max(0,scrollY/max));R.style.setProperty('--p',tgt.toFixed(4));
- let c=0;secs.forEach((s,i)=>{const r=s.getBoundingClientRect(),k=Math.min(1,Math.max(0,-r.top/(r.height-vh)));s.style.setProperty('--k',k.toFixed(3));
-  if(r.top<vh*.5&&r.bottom>vh*.5){c=i;s.classList.add('on')}
-  if(stops[i])stops[i].classList.toggle('on',tgt>=i/(secs.length-1)-.004)});
+ const vh=innerHeight,max=R.scrollHeight-vh,p=Math.min(1,Math.max(0,scrollY/max));R.style.setProperty('--p',p.toFixed(4));
+ let c=0;roads.forEach((r,i)=>{const b=r.s.getBoundingClientRect(),k=Math.min(1,Math.max(0,-b.top/(b.height-vh)));r.s.style.setProperty('--k',k.toFixed(3));r.tgt=k;
+  if(b.top<vh*.5&&b.bottom>vh*.5){c=i;r.s.classList.add('on')}});
  chap.textContent=String(c+1).padStart(2,'0')+' / '+String(secs.length).padStart(2,'0');
  R.style.setProperty('--tint',secs[c].dataset.tint);
 }
@@ -344,15 +346,15 @@ function journeyPage(offers) {
     const flap = n => `<div class="f">${"<span> </span>".repeat(n)}</div>`;
     const sc = (img, icon, tint, ch, inner, opt = {}) => `<section class="sc" data-icon="${icon}" data-tint="${tint}"><div class="st">
 <div class="bg" style="background-image:url('${IMG_LO(img)}')"></div>${opt.back || ""}
+<svg class="rd" aria-hidden="true"><path class="edge"/><path class="asph"/><path class="mid"/><path class="done"/><use class="car" href="#carS"/></svg>
 <div class="tx"><p class="ch">${ch}</p>${inner}</div>
 <div class="stage">${opt.stage || ""}<div class="card"><img src="${IMG(img, 1400)}" srcset="${IMG(img, 900)} 900w, ${IMG(img, 1400)} 1400w, ${IMG(img, 2000)} 2000w" sizes="(max-width:860px) 100vw, 46vh" alt="" ${img === "doma" ? 'fetchpriority="high"' : 'loading="lazy"'}>${opt.inCard || ""}<div class="dust"></div><div class="gl"></div><div class="sh"></div></div></div>${opt.extra || ""}</div></section>`;
     const body = `
 <div class="intro"><div><b><span>Pracovní</span> <span>tipy</span></b><i></i></div></div>
 <div class="amb"></div><div class="glow"></div><div class="grain"></div><div class="vig"></div><div class="bar"></div>
-<svg id="road" aria-hidden="true"><defs><linearGradient id="gr" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc27a"/><stop offset="1" stop-color="#ff6b4a"/></linearGradient>
-<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient></defs>
-<path class="p edge"/><path class="p asph"/><path class="p mid"/><path class="p done"/><g id="stops"></g>
-<g id="car"><path class="beam" d="M13,-5 L62,-22 L62,22 L13,5 Z"/><g class="body"><rect x="-14" y="-8" width="28" height="16" rx="5.5" fill="#ff6b4a"/><rect x="-14" y="-8" width="28" height="7" rx="4" fill="#ff8a63"/><rect x="-2" y="-6.5" width="9" height="13" rx="2.5" fill="#141a2a"/><rect x="-11" y="-6.5" width="6" height="13" rx="2" fill="#141a2a" opacity=".85"/><circle cx="13" cy="-5" r="1.8" fill="#fff6c8"/><circle cx="13" cy="5" r="1.8" fill="#fff6c8"/><rect x="-15" y="-6" width="1.6" height="3" fill="#ff2a2a"/><rect x="-15" y="3" width="1.6" height="3" fill="#ff2a2a"/></g></g></svg>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc27a"/><stop offset="1" stop-color="#ff6b4a"/></linearGradient>
+<linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>
+<g id="carS"><path class="beam" d="M13,-5 L62,-22 L62,22 L13,5 Z"/><rect x="-14" y="-8" width="28" height="16" rx="5.5" fill="#ff6b4a"/><rect x="-14" y="-8" width="28" height="7" rx="4" fill="#ff8a63"/><rect x="-2" y="-6.5" width="9" height="13" rx="2.5" fill="#141a2a"/><rect x="-11" y="-6.5" width="6" height="13" rx="2" fill="#141a2a" opacity=".85"/><circle cx="13" cy="-5" r="1.8" fill="#fff6c8"/><circle cx="13" cy="5" r="1.8" fill="#fff6c8"/><rect x="-15" y="-6" width="1.6" height="3" fill="#ff2a2a"/><rect x="-15" y="3" width="1.6" height="3" fill="#ff2a2a"/></g></defs></svg>
 <div class="top"><b>Pracovní tipy</b><span id="chap">01 / 08</span></div>
 ${sc("doma", "🏠", "#3a5bd9", "Prolog", `${HD("h1", "Co kdyby to šlo", "jinde?")}
 <p class="lead rv d2">Sklady, farmy, sběr ovoce, hotely, úklid. Jako občan EU nepotřebuješ víza ani pracovní povolení.</p>`, { inCard: `<div class="stars"></div>`, extra: `<div class="hint">Posouvej</div>` })}
