@@ -129,7 +129,7 @@ function page(title, body, desc) {
 <style>${CSS}</style></head><body>
 <nav><a href="${BASE}/start"><b>Pracovní tipy</b></a><a href="${go("start-nav")}">Nabídky →</a></nav>
 ${body}
-<footer>Pracovní tipy · Práci nezprostředkováváme, sdílíme vybrané nabídky z oficiálních pracovních portálů. Informace jsou orientační – podrobnosti si vždy ověř u zaměstnavatele a na úřadech dané země.</footer>
+<footer><a href="${BASE}/doporucujeme">Doporučujeme</a> · <a href="${BASE}/partneri">Partnerský program – 30 % napořád</a><br>Pracovní tipy · Práci nezprostředkováváme, sdílíme vybrané nabídky z oficiálních pracovních portálů. Informace jsou orientační – podrobnosti si vždy ověř u zaměstnavatele a na úřadech dané země.</footer>
 ${SCRIPT}</body></html>`;
 }
 
