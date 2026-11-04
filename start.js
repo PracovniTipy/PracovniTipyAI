@@ -310,7 +310,7 @@ module.exports = function setupStart(app, { cloudinary }) {
         try {
             const refFile = path.join(TEMPLATE_FOLDER, b.ref || "reel/Irsko reel.png");
             const form = new FormData();
-            form.append("model", "gpt-image-1");
+            form.append("model", String(b.model || "gpt-image-1"));
             form.append("prompt", String(b.prompt));
             form.append("size", b.size || "1024x1536");
             form.append("quality", "high");
@@ -323,6 +323,13 @@ module.exports = function setupStart(app, { cloudinary }) {
         } catch (err) {
             res.status(500).json({ ok: false, error: err.message });
         }
+    });
+
+    app.get("/admin/models", async (req, res) => {
+        if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        const r = await fetch("https://api.openai.com/v1/models", { headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` } });
+        const j = await r.json();
+        res.json((j.data || []).map(m => m.id).filter(id => /image|dall|sora|video/i.test(id)));
     });
 
     app.get("/img/zeme/:slug", (req, res) => {
