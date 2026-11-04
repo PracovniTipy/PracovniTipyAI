@@ -159,113 +159,109 @@ ${s("08", "První týden", `<p>Vyřiď registraci a osobní číslo pro práci a
 }
 
 // ---------------------------------------------------------------------------
-// /start = CESTA. Jedna žena (brandová AI postava z reelů), jeden příběh:
-// doma → životopis → práce (HeroHero) → letenka → pojištění → kufr → odlet → první směna.
-// Obrázky jsou AI upscalované na 4K (Cloudinary e_upscale), vlevo klikatá silnice s autem.
+// /start = CESTA. Jsme "tam s ní": celá obrazovka je scéna s brandovou AI postavou,
+// která se dívá na nás a ukazuje, kam kliknout (světelná stopa od jejího prstu k tlačítku).
+// Obraz se při posouvání NEhýbe – scény se jen prolínají; pohyb dělá video/živé efekty.
 // ---------------------------------------------------------------------------
 const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscale/c_scale,w_${w}/f_auto,q_auto:good/PracovniTipyAI/story/${n}.png`;
-const IMG_LO = n => `https://res.cloudinary.com/rfgq6m1z/image/upload/f_auto,q_auto,w_60/PracovniTipyAI/story/${n}.png`;
+const VID = n => `https://res.cloudinary.com/rfgq6m1z/video/upload/q_auto/PracovniTipyAI/story/video/${n}.mp4`;
 const INSURANCE_FALLBACK = "https://www.epojisteni.cz/kalkulace-cestovni/";
+// Které scény už mají AI video (Sora) – doplňuje se po vygenerování.
+const STORY_VIDEOS = new Set((process.env.STORY_VIDEOS || "").split(",").filter(Boolean));
+// Poloha špičky prstu v obrázku (0–1) – odkud vede světelná stopa k tlačítku.
+const FINGER = { "w-doma": [0.51, 0.43], "w-zivotopis": [0.43, 0.41], "w-prace": [0.43, 0.36], "w-letenky": [0.445, 0.40], "w-pojisteni": [0.48, 0.405], "w-kufr": [0.454, 0.296], "w-letiste": [0.518, 0.293], "w-jahody": [0.443, 0.352] };
+
 const JCSS = `
-:root{--a:#ff6b4a;--a2:#ffc27a;--road:0px;--tint:#ff8a4a}
-*{box-sizing:border-box}html{scroll-behavior:auto}
+:root{--a:#ff6b4a;--a2:#ffc27a;--tint:#ff8a4a}
+*{box-sizing:border-box}
 body{margin:0;background:#05070d;color:#fff;font:400 17px/1.55 Inter,system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter-spacing:-.03em}
-.amb{position:fixed;inset:-20%;z-index:0;pointer-events:none;background:radial-gradient(40% 50% at 72% 45%,var(--tint),transparent 70%);opacity:.22;transition:background 1.2s ease;filter:blur(40px)}
-.grain{position:fixed;inset:-50%;z-index:40;pointer-events:none;opacity:.07;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:gr 1s steps(4) infinite}
+.media{position:fixed;inset:0;z-index:0;overflow:hidden;background:#05070d}
+.m{position:absolute;inset:-2%;opacity:0;transition:opacity 1.3s ease,transform 2.4s cubic-bezier(.2,.7,.2,1);transform:scale(1.08)}
+.m.on{opacity:1;transform:scale(1)}
+.m .in{position:absolute;inset:0;transform:translate(var(--px,0px),var(--py,0px));transition:transform .8s cubic-bezier(.2,.7,.2,1)}
+.m img,.m video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:62% 50%;animation:breathe 16s ease-in-out infinite alternate}
+@keyframes breathe{to{transform:scale(1.045)}}
+.m video{opacity:0;transition:opacity 1s}.m video.ready{opacity:1}
+.shade{position:fixed;inset:0;z-index:1;pointer-events:none;background:linear-gradient(90deg,rgba(5,7,13,.88) 0%,rgba(5,7,13,.6) 28%,rgba(5,7,13,.1) 46%,transparent 58%),linear-gradient(0deg,rgba(5,7,13,.55),transparent 30%)}
+.rays{position:fixed;inset:0;z-index:1;pointer-events:none;background:repeating-conic-gradient(from 200deg at 85% -10%,rgba(255,220,170,.07) 0 6deg,transparent 6deg 14deg);mix-blend-mode:screen;animation:rays 18s ease-in-out infinite alternate;opacity:.8}
+@keyframes rays{to{transform:rotate(4deg) scale(1.05);opacity:.4}}
+.motes{position:fixed;inset:0;z-index:1;pointer-events:none}
+.motes i{position:absolute;width:3px;height:3px;border-radius:50%;background:#ffe2b0;box-shadow:0 0 8px #ffcf8a;opacity:0;animation:mote linear infinite}
+@keyframes mote{0%{opacity:0;transform:translate(0,0)}15%{opacity:.9}100%{opacity:0;transform:translate(var(--dx),-60vh)}}
+.grain{position:fixed;inset:-50%;z-index:40;pointer-events:none;opacity:.06;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");animation:gr 1s steps(4) infinite}
 @keyframes gr{25%{transform:translate(-3%,2%)}50%{transform:translate(2%,-3%)}75%{transform:translate(-2%,-1%)}}
-.vig{position:fixed;inset:0;z-index:39;pointer-events:none;background:radial-gradient(ellipse at center,transparent 55%,rgba(0,0,0,.55))}
-.glow{position:fixed;left:0;top:0;width:420px;height:420px;margin:-210px 0 0 -210px;border-radius:50%;z-index:2;pointer-events:none;background:radial-gradient(circle,rgba(255,190,130,.16),transparent 65%);transform:translate(var(--mx,-999px),var(--my,-999px));transition:transform .25s ease-out}
 .intro{position:fixed;inset:0;z-index:60;background:#05070d;display:grid;place-items:center;animation:out 1s cubic-bezier(.7,0,.2,1) 1.5s forwards;pointer-events:none}
 .intro b{font:400 clamp(34px,6vw,72px)/1 Fraunces,Georgia,serif;letter-spacing:-.03em;overflow:hidden;display:block}
 .intro b span{display:inline-block;transform:translateY(110%);animation:up .9s cubic-bezier(.2,.8,.2,1) forwards}
 .intro b span:nth-child(2){animation-delay:.12s;font-style:italic;background:linear-gradient(90deg,var(--a2),var(--a));-webkit-background-clip:text;background-clip:text;color:transparent}
 .intro i{display:block;height:2px;margin-top:18px;background:linear-gradient(90deg,var(--a2),var(--a));transform-origin:left;animation:line 1.3s cubic-bezier(.6,0,.2,1) .2s both}
 @keyframes up{to{transform:none}}@keyframes line{from{transform:scaleX(0)}}@keyframes out{to{clip-path:inset(0 0 100% 0)}}
-.top{position:fixed;inset:0 0 auto 0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:16px clamp(18px,3vw,36px) 16px calc(var(--road) + 18px);font-size:14px;pointer-events:none;mix-blend-mode:difference}
+.top{position:fixed;inset:0 0 auto 0;z-index:30;display:flex;justify-content:space-between;align-items:center;padding:16px clamp(18px,3vw,36px);font-size:14px;pointer-events:none}
 .top b{font-weight:600;letter-spacing:.03em}.top span{opacity:.8;font-variant-numeric:tabular-nums}
 .bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--a2),var(--a));width:calc(var(--p,0)*100%);z-index:31;box-shadow:0 0 12px var(--a)}
-#road{position:fixed;left:0;top:0;width:var(--road);height:100svh;z-index:25;pointer-events:none;overflow:visible}
-#road .edge{fill:none;stroke:rgba(255,255,255,.08);stroke-width:22;stroke-linecap:round}
-#road .asph{fill:none;stroke:#11141f;stroke-width:17;stroke-linecap:round}
-#road .mid{fill:none;stroke:#fff;stroke-opacity:.5;stroke-width:1.4;stroke-dasharray:7 9}
-#road .done{fill:none;stroke:url(#gr);stroke-width:3;stroke-linecap:round;filter:drop-shadow(0 0 6px rgba(255,107,74,.9))}
-#road .stop circle{fill:#05070d;stroke:rgba(255,255,255,.5);stroke-width:2;transition:all .4s}
-#road .stop text{font-size:13px;opacity:.35;transition:opacity .4s}
-#road .stop.on circle{fill:var(--a);stroke:#fff;filter:drop-shadow(0 0 6px var(--a))}#road .stop.on text{opacity:1}
-.rd{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
-.rd .edge{fill:none;stroke:rgba(255,255,255,.07);stroke-width:clamp(34px,4.4vw,58px);stroke-linecap:round}
-.rd .asph{fill:none;stroke:rgba(10,12,20,.74);stroke-width:clamp(26px,3.4vw,46px);stroke-linecap:round}
-.rd .mid{fill:none;stroke:#fff;stroke-opacity:.42;stroke-width:2;stroke-dasharray:16 18}
-.rd .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
-.rd.rc{z-index:4}
-.rd .car{filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
-#car .beam,#carS .beam{fill:url(#beam);opacity:.85}
-#car .body{filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
-.sc{position:relative;height:175svh;z-index:3}
-.st{position:sticky;top:0;height:100svh;overflow:hidden;display:grid;grid-template-columns:1fr auto;align-items:center;gap:clamp(24px,5vw,80px);padding:80px clamp(22px,6vw,110px) 50px calc(var(--road) + clamp(26px,5vw,90px))}
-.bg{position:absolute;inset:-8%;background-size:cover;background-position:center;filter:blur(42px) saturate(1.35) brightness(.4);transform:scale(calc(1.18 - var(--k,0)*.12))}
-.tx{position:relative;max-width:640px;z-index:3}
-.bg{z-index:0}
+#road{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
+#road .edge{fill:none;stroke:rgba(255,255,255,.06);stroke-width:clamp(30px,3.6vw,50px);stroke-linecap:round}
+#road .asph{fill:none;stroke:rgba(10,12,20,.55);stroke-width:clamp(22px,2.8vw,40px);stroke-linecap:round}
+#road .mid{fill:none;stroke:#fff;stroke-opacity:.38;stroke-width:2;stroke-dasharray:14 18}
+#road .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
+#road path{transition:opacity .6s}#road.swap path{opacity:0}
+#car{filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
+#car .beam{fill:url(#beam);opacity:.85}
+#point{position:fixed;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible}
+#point .trail{fill:none;stroke:url(#pg);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:3 10;filter:drop-shadow(0 0 6px rgba(255,200,140,.9));animation:dash 1.2s linear infinite}
+@keyframes dash{to{stroke-dashoffset:-26}}
+#point .tip{fill:#fff;filter:drop-shadow(0 0 10px #ffd9a0) drop-shadow(0 0 22px #ff9a4a)}
+#point .spark{fill:#fff6d8;filter:drop-shadow(0 0 6px #ffcf8a)}
+#point{opacity:0;transition:opacity .8s}#point.on{opacity:1}
+.tgt{position:relative}
+.tgt:before{content:"";position:absolute;inset:-8px;border-radius:999px;border:2px solid rgba(255,214,150,.9);animation:ring 1.8s ease-out infinite;pointer-events:none}
+.tgt.nr:before{display:none}
+@keyframes ring{0%{transform:scale(.92);opacity:.95}100%{transform:scale(1.25);opacity:0}}
+.sc{position:relative;height:150svh;z-index:5}
+.st{position:sticky;top:0;height:100svh;display:flex;align-items:center;padding:80px clamp(22px,6vw,110px) 50px}
+.tx{max-width:min(560px,40vw)}
 .ch{font-size:12px;letter-spacing:.26em;text-transform:uppercase;margin:0 0 18px;display:flex;align-items:center;gap:12px;opacity:0;transition:opacity .8s}
 .ch:before{content:"";width:34px;height:1px;background:currentColor;opacity:.6}
-.on .ch{opacity:.7}
-.h{font-size:clamp(42px,6.2vw,98px);line-height:1;margin:0 0 22px}
+.on .ch{opacity:.75}
+.h{font-size:clamp(42px,5.8vw,92px);line-height:1;margin:0 0 22px;text-shadow:0 4px 40px rgba(0,0,0,.5)}
 .h .w{display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.08em;margin-bottom:-.08em}
 .h .w>span{display:inline-block;transform:translateY(105%) rotate(4deg);transition:transform 1s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--i)*55ms + 80ms)}
 .on .h .w>span{transform:none}
 .h .em>span{font-style:italic;background:linear-gradient(90deg,var(--a2),var(--a));-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:.06em}
-.lead{font-size:clamp(17px,1.5vw,20px);opacity:.82;margin:0;max-width:520px}
+.lead{font-size:clamp(17px,1.4vw,20px);opacity:.88;margin:0;max-width:500px;text-shadow:0 2px 20px rgba(0,0,0,.6)}
 .rv{opacity:0;transform:translateY(30px);filter:blur(8px);transition:opacity .9s ease,transform 1.1s cubic-bezier(.2,.7,.2,1),filter .9s ease}
 .on .rv{opacity:1;transform:none;filter:none}.on .d1{transition-delay:.35s}.on .d2{transition-delay:.5s}.on .d3{transition-delay:.65s}.on .d4{transition-delay:.8s}
-.stage{position:relative;perspective:1200px;z-index:2}
-.card{position:relative;height:min(74svh,860px);aspect-ratio:2/3;border-radius:32px;overflow:hidden;transform-style:preserve-3d;box-shadow:0 70px 140px -40px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.1),0 0 90px -20px var(--tint);transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(calc((.5 - var(--k,0))*70px));transition:transform .5s cubic-bezier(.2,.7,.2,1),box-shadow 1s}
-.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(calc(1.2 - var(--k,0)*.17)) translateY(calc((var(--k,0) - .5)*-4%));will-change:transform}
-.card .gl{position:absolute;inset:0;background:radial-gradient(circle at var(--gx,30%) var(--gy,20%),rgba(255,255,255,.28),transparent 45%);mix-blend-mode:overlay;pointer-events:none}
-.card .sh{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.2) 50%,transparent 60%);background-size:260% 100%;animation:shine 8s ease-in-out infinite;pointer-events:none}
-@keyframes shine{0%,72%{background-position:160% 0}100%{background-position:-60% 0}}
-.dust{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(2px 2px at 20% 30%,#ffd9a0cc,transparent),radial-gradient(1.5px 1.5px at 70% 70%,#fffa,transparent),radial-gradient(2px 2px at 40% 85%,#ffcf8aaa,transparent),radial-gradient(1.5px 1.5px at 85% 25%,#fffb,transparent),radial-gradient(2.5px 2.5px at 55% 50%,#ffe2b088,transparent),radial-gradient(1.5px 1.5px at 12% 65%,#fff9,transparent);background-size:100% 50%;animation:float 12s linear infinite}
-@keyframes float{from{background-position:0 0}to{background-position:0 -100%}}
-.stars{position:absolute;inset:0;pointer-events:none;background-image:radial-gradient(1px 1px at 12% 22%,#fff,transparent),radial-gradient(1px 1px at 72% 14%,#fff,transparent),radial-gradient(1.5px 1.5px at 40% 60%,#fffc,transparent),radial-gradient(1px 1px at 86% 58%,#fff,transparent),radial-gradient(1px 1px at 28% 84%,#fffa,transparent),radial-gradient(1.5px 1.5px at 58% 32%,#fff,transparent),radial-gradient(1px 1px at 93% 86%,#fffa,transparent);animation:tw 3s ease-in-out infinite alternate}
-@keyframes tw{to{opacity:.3}}
-.btn{display:inline-flex;align-items:center;gap:10px;padding:18px 28px;border-radius:999px;text-decoration:none;font-weight:600;font-size:16px;background:linear-gradient(90deg,#ff9a4a,var(--a));color:#fff;box-shadow:0 14px 40px -10px rgba(255,107,74,.75);transition:transform .25s;position:relative;overflow:hidden}
-.btn:after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 35%,rgba(255,255,255,.45) 50%,transparent 65%);transform:translateX(-120%);animation:sweep 3.2s ease-in-out infinite}
-@keyframes sweep{60%,100%{transform:translateX(120%)}}
+.btn{display:inline-flex;align-items:center;gap:10px;padding:18px 28px;border-radius:999px;text-decoration:none;font-weight:600;font-size:16px;background:linear-gradient(90deg,#ff9a4a,var(--a));color:#fff;box-shadow:0 14px 40px -10px rgba(255,107,74,.75);transition:transform .25s;overflow:visible}
+.btn span{position:relative;z-index:1}
 .btn:hover{transform:translateY(-3px) scale(1.03)}
 .btn.teal{background:linear-gradient(90deg,#3ad1c2,#1f9fd6);box-shadow:0 14px 40px -10px rgba(40,190,210,.75)}
 .row{display:flex;gap:10px;flex-wrap:wrap;margin-top:26px}
-.chip{display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.09);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(12px);text-decoration:none;font-size:15px;transition:background .3s,transform .3s}
-a.chip:hover{background:rgba(255,255,255,.2);transform:translateY(-2px)}
+.chip{display:inline-block;padding:10px 16px;border-radius:999px;background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(12px);text-decoration:none;font-size:15px;transition:background .3s,transform .3s}
+a.chip:hover{background:rgba(255,255,255,.22);transform:translateY(-2px)}
 .drop .chip{opacity:0;transform:translateY(-40px) rotate(-6deg)}
 .on .drop .chip{animation:drop .8s cubic-bezier(.3,1.6,.5,1) forwards}
 .on .drop .chip:nth-child(1){animation-delay:.5s}.on .drop .chip:nth-child(2){animation-delay:.62s}.on .drop .chip:nth-child(3){animation-delay:.74s}.on .drop .chip:nth-child(4){animation-delay:.86s}
 @keyframes drop{to{opacity:1;transform:none}}
-.note{margin-top:20px;font-size:15px;opacity:.85}.note b{color:var(--a2)}
-.live{display:inline-flex;align-items:center;gap:10px;font-size:14px;opacity:.85;margin-bottom:6px}
-.live i{width:8px;height:8px;border-radius:50%;background:#3ddc84;box-shadow:0 0 0 0 rgba(61,220,132,.7);animation:ping 1.8s infinite}
-@keyframes ping{70%{box-shadow:0 0 0 10px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
+.note{margin-top:20px;font-size:15px;opacity:.9}.note b{color:var(--a2)}
+.live{display:inline-flex;align-items:center;gap:10px;font-size:14px;opacity:.9;margin-bottom:4px}
+.live i{width:8px;height:8px;border-radius:50%;background:#3ddc84;animation:ping 1.8s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(61,220,132,.7)}70%{box-shadow:0 0 0 10px rgba(61,220,132,0)}100%{box-shadow:0 0 0 0 rgba(61,220,132,0)}}
 .offers{display:grid;gap:10px;margin-top:18px}
-.offer{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:15px 18px;border-radius:16px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(14px);text-decoration:none;opacity:0;transform:translateX(-40px);transition:all .8s cubic-bezier(.2,.7,.2,1),background .3s}
+.offer{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:13px 16px;border-radius:16px;background:rgba(10,12,20,.45);border:1px solid rgba(255,255,255,.14);backdrop-filter:blur(14px);text-decoration:none;opacity:0;transform:translateX(-40px);transition:all .8s cubic-bezier(.2,.7,.2,1),background .3s}
 .on .offer{opacity:1;transform:none}.on .offer:nth-child(2){transition-delay:.12s}.on .offer:nth-child(3){transition-delay:.24s}
 .offer:hover{background:rgba(255,255,255,.14)}
-.offer b{font-weight:600}.offer small{display:block;opacity:.72;font-size:14px;margin-top:2px}
-.offer em{font-style:normal;font-size:13px;white-space:nowrap;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.22),rgba(255,255,255,.08));background-size:200% 100%;animation:shim 2.4s linear infinite}
+.offer b{font-weight:600}.offer small{display:block;opacity:.75;font-size:14px;margin-top:2px}
+.offer em{font-style:normal;font-size:13px;white-space:nowrap;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.24),rgba(255,255,255,.08));background-size:200% 100%;animation:shim 2.4s linear infinite}
 @keyframes shim{to{background-position:-200% 0}}
-.price{opacity:.7;font-size:14px;margin-top:12px}
-.lands{margin-top:24px;font-size:14px;opacity:.75;line-height:2}.lands a{margin-right:12px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.35)}
-.hint{position:absolute;bottom:26px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.6;z-index:3}
+.price{opacity:.75;font-size:14px;margin-top:12px}
+.lands{margin-top:24px;font-size:14px;opacity:.8;line-height:2}.lands a{margin-right:12px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.35)}
+.hint{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.7;z-index:6;transition:opacity .6s}
 .hint:after{content:"";display:block;width:1px;height:36px;margin:10px auto 0;background:linear-gradient(#fff,transparent);animation:drip 1.8s ease-in-out infinite;transform-origin:top}
 @keyframes drip{0%{transform:scaleY(0)}50%{transform:scaleY(1)}100%{transform:scaleY(1);opacity:0}}
-.flight{position:absolute;left:-10%;top:8%;width:120%;height:60%;pointer-events:none;z-index:1;opacity:.9}
-.flight path{fill:none;stroke:rgba(255,255,255,.35);stroke-width:1.5;stroke-dasharray:6 10;stroke-dashoffset:600;transition:stroke-dashoffset 3s ease}
-.on .flight path{stroke-dashoffset:0}
-.plane{position:absolute;left:0;top:0;font-size:34px;offset-path:path("M0,260 C300,40 700,20 1200,180");offset-rotate:auto;offset-distance:0%;opacity:0;z-index:4;pointer-events:none}
-.on .plane{animation:flyp 7s cubic-bezier(.45,0,.2,1) .3s infinite}
+.plane{position:fixed;left:0;top:0;font-size:34px;offset-path:path("M-60,300 C400,60 900,40 1600,220");offset-rotate:auto;z-index:3;pointer-events:none;opacity:0}
+body[data-s="letenky"] .plane{animation:flyp 7s cubic-bezier(.45,0,.2,1) .3s infinite}
 @keyframes flyp{0%{offset-distance:0%;opacity:0}10%{opacity:1}85%{opacity:1}100%{offset-distance:100%;opacity:0}}
-.rings{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;z-index:-1}
-.rings span{position:absolute;width:100%;height:100%;border-radius:40px;border:2px solid rgba(80,220,210,.6);animation:ring 3.2s ease-out infinite;opacity:0}
-.rings span:nth-child(2){animation-delay:1.05s}.rings span:nth-child(3){animation-delay:2.1s}
-@keyframes ring{0%{transform:scale(.95);opacity:.8}100%{transform:scale(1.35);opacity:0}}
 .board{margin-top:26px;display:inline-grid;gap:6px;padding:16px 18px;border-radius:16px;background:rgba(10,12,20,.75);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(10px);font:600 clamp(15px,1.6vw,20px)/1 ui-monospace,SFMono-Regular,Menlo,monospace}
 .board .r{display:flex;gap:12px;align-items:center}.board .r small{font-size:11px;opacity:.5;width:44px;letter-spacing:.1em}
 .board .f{display:flex;gap:3px}
@@ -273,54 +269,72 @@ a.chip:hover{background:rgba(255,255,255,.2);transform:translateY(-2px)}
 .board .f span:after{content:"";position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(0,0,0,.6)}
 .board .f span.fl{animation:flip .28s ease}
 @keyframes flip{0%{transform:rotateX(0)}50%{transform:rotateX(90deg)}100%{transform:rotateX(0)}}
-.flare{position:absolute;right:-20%;top:-30%;width:90vmin;height:90vmin;border-radius:50%;background:radial-gradient(circle,rgba(255,214,150,.55),rgba(255,140,80,.12) 40%,transparent 65%);animation:breathe 6s ease-in-out infinite;pointer-events:none;z-index:1}
-@keyframes breathe{50%{transform:scale(1.12) translate(-3%,3%);opacity:.75}}
-footer{position:relative;z-index:3;padding:28px 22px 40px calc(var(--road) + 22px);font-size:12px;opacity:.5;background:#05070d}
-@media (max-height:760px) and (min-width:861px){.offer:nth-child(3){display:none}.h{font-size:clamp(40px,5.4vw,84px)}}
+footer{position:relative;z-index:5;padding:28px 22px 40px;font-size:12px;opacity:.6;background:#05070d}
 @media (max-width:860px){
- .st{grid-template-columns:1fr;align-items:end;padding:0 18px 30px calc(var(--road) + 10px)}
- .stage{position:absolute;inset:0;perspective:none;z-index:1}
- .rd{z-index:2}
- .card{height:100%;width:100%;aspect-ratio:auto;border-radius:0;box-shadow:none;transform:none}
- .card:before{content:"";position:absolute;inset:0;z-index:2;background:linear-gradient(180deg,rgba(0,0,0,.35) 0%,transparent 22%,transparent 38%,rgba(4,6,12,.94) 76%)}
- .bg,.glow,.rings{display:none}.h{font-size:clamp(36px,10.5vw,54px)}.lead{font-size:16px}
- .offer{padding:11px 13px}.offer small{font-size:13px}.flight,.plane{display:none}.board{margin-top:16px}
+ .m img,.m video{object-position:70% 50%}
+ .shade{background:linear-gradient(180deg,rgba(5,7,13,.3) 0%,transparent 25%,transparent 42%,rgba(5,7,13,.93) 74%)}
+ .st{align-items:flex-end;padding:0 18px 34px}.tx{max-width:100%}
+ .h{font-size:clamp(36px,10.5vw,54px)}.lead{font-size:16px}.offer{padding:10px 12px}.offer small{font-size:13px}
+ .plane,.rays{display:none}.board{margin-top:16px}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.rv,.offer,.drop .chip{opacity:1;transform:none;filter:none}.h .w>span{transform:none}.intro{display:none}}
 `;
 
 const JSCRIPT = `<script>
 (function(){
-const secs=[...document.querySelectorAll('.sc')],chap=document.getElementById('chap'),R=document.documentElement;
-// každá scéna má vlastní úsek klikaté silnice přes celou šířku; úseky na sebe navazují uprostřed
-const roads=secs.map((s,i)=>({s,svg:s.querySelector('.rd'),car:s.querySelector('.rc'),dir:i%2?-1:1,cur:0,tgt:0,P:null,L:0}));
-function build(){
- const w=innerWidth,h=innerHeight,amp=w*(w<861?.3:.4);
- roads.forEach(r=>{r.svg.setAttribute('viewBox','0 0 '+w+' '+h);r.car.setAttribute('viewBox','0 0 '+w+' '+h);let d='';
-  for(let i=0;i<=180;i++){const t=i/180,x=w/2+r.dir*amp*Math.sin(t*Math.PI*3),y=-80+t*(h+160);d+=(i?' L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
-  r.svg.querySelectorAll('path').forEach(p=>p.setAttribute('d',d));r.P=r.svg.querySelector('.asph');r.L=r.P.getTotalLength();
-  r.svg.querySelector('.done').style.strokeDasharray=r.L});
+const secs=[...document.querySelectorAll('.sc')],layers=[...document.querySelectorAll('.m')],chap=document.getElementById('chap'),R=document.documentElement,B=document.body;
+const road=document.getElementById('road'),car=document.getElementById('car'),pt=document.getElementById('point'),hint=document.querySelector('.hint');
+let active=-1,P,L,cur=0,tgt=0,dir=1;
+// silnice přes celou obrazovku (vyhýbá se postavě vpravo), při každé scéně se zrcadlí
+function buildRoad(){
+ const w=innerWidth,h=innerHeight,mob=w<861,x0=mob?w*.5:w*.30,amp=mob?w*.38:w*.27;road.setAttribute('viewBox','0 0 '+w+' '+h);let d='';
+ for(let i=0;i<=180;i++){const t=i/180,x=x0+dir*amp*Math.sin(t*Math.PI*3),y=-80+t*(h+160);d+=(i?' L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
+ road.querySelectorAll('path.p').forEach(p=>p.setAttribute('d',d));P=road.querySelector('.asph');L=P.getTotalLength();road.querySelector('.done').style.strokeDasharray=L;
 }
-function frame(){
- roads.forEach(r=>{if(!r.P)return;r.cur+=(r.tgt-r.cur)*.1;
-  const t=.04+r.cur*.92,a=r.P.getPointAtLength(t*r.L),b=r.P.getPointAtLength(Math.min(r.L,t*r.L+3)),ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,sc=innerWidth<861?1.3:1.8;
-  r.car.querySelector('.car').setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+sc+')');
-  r.svg.querySelector('.done').style.strokeDashoffset=(r.L*(1-t)).toFixed(1)});
- requestAnimationFrame(frame);
+// světelná stopa od prstu postavy k tomu, na co máme kliknout
+function coverPoint(fx,fy){const w=innerWidth,h=innerHeight,iw=1536,ih=1024,s=Math.max(w/iw,h/ih),ox=(w-iw*s)*(w<861?.70:.62),oy=(h-ih*s)*.5;return{x:ox+fx*iw*s,y:oy+fy*ih*s}}
+function drawPoint(){
+ const s=secs[active];if(!s){pt.classList.remove('on');return}
+ const fx=+s.dataset.fx,fy=+s.dataset.fy,t=s.querySelector('.tgt');
+ if(!fx||!t){pt.classList.remove('on');return}
+ const a=coverPoint(fx,fy),r=t.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight||a.x<10||a.x<r.right+30){pt.classList.remove('on');return}
+ const b={x:r.right+14,y:r.top+r.height/2},mx=(a.x+b.x)/2,my=Math.min(a.y,b.y)-Math.abs(a.x-b.x)*.22;
+ const d='M'+a.x.toFixed(1)+' '+a.y.toFixed(1)+' Q'+mx.toFixed(1)+' '+my.toFixed(1)+' '+b.x.toFixed(1)+' '+b.y.toFixed(1);
+ pt.setAttribute('viewBox','0 0 '+innerWidth+' '+innerHeight);pt.querySelector('.trail').setAttribute('d',d);pt.querySelector('#pp').setAttribute('d',d);
+ pt.querySelector('.tip').setAttribute('cx',a.x);pt.querySelector('.tip').setAttribute('cy',a.y);pt.classList.add('on');
+}
+function setActive(i){
+ if(i===active)return;active=i;layers.forEach((m,j)=>m.classList.toggle('on',j===i));
+ const s=secs[i];R.style.setProperty('--tint',s.dataset.tint);B.dataset.s=s.dataset.s;
+ const v=layers[i].querySelector('video');if(v){v.play().catch(()=>{})}
+ road.classList.add('swap');setTimeout(()=>{dir=i%2?-1:1;buildRoad();road.classList.remove('swap')},350);
+ pt.classList.remove('on');setTimeout(drawPoint,1100);
 }
 function tick(){
  const vh=innerHeight,max=R.scrollHeight-vh,p=Math.min(1,Math.max(0,scrollY/max));R.style.setProperty('--p',p.toFixed(4));
- let c=0;roads.forEach((r,i)=>{const b=r.s.getBoundingClientRect(),k=Math.min(1,Math.max(0,-b.top/(b.height-vh)));r.s.style.setProperty('--k',k.toFixed(3));r.tgt=k;
-  if(b.top<vh*.5&&b.bottom>vh*.5){c=i;r.s.classList.add('on')}});
- chap.textContent=String(c+1).padStart(2,'0')+' / '+String(secs.length).padStart(2,'0');
- R.style.setProperty('--tint',secs[c].dataset.tint);
+ let c=0;secs.forEach((s,i)=>{const b=s.getBoundingClientRect();if(b.top<vh*.5&&b.bottom>vh*.5){c=i;s.classList.add('on')}
+  if(i===c){tgt=Math.min(1,Math.max(0,-b.top/(b.height-vh)))}});
+ setActive(c);chap.textContent=String(c+1).padStart(2,'0')+' / '+String(secs.length).padStart(2,'0');
+ if(hint)hint.style.opacity=scrollY>40?0:.7;
+ if(pt.classList.contains('on'))drawPoint();
 }
-addEventListener('scroll',tick,{passive:true});addEventListener('resize',()=>{build();tick()});
-build();tick();secs[0].classList.add('on');frame();
-// světlo za kurzorem + 3D náklon karty
-addEventListener('pointermove',e=>{R.style.setProperty('--mx',e.clientX+'px');R.style.setProperty('--my',e.clientY+'px');
- document.querySelectorAll('.sc.on .card').forEach(c=>{const r=c.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight)return;
-  const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;c.style.setProperty('--ry',((x-.5)*10).toFixed(2)+'deg');c.style.setProperty('--rx',((.5-y)*8).toFixed(2)+'deg');c.style.setProperty('--gx',(x*100).toFixed(0)+'%');c.style.setProperty('--gy',(y*100).toFixed(0)+'%')})},{passive:true});
+function frame(){
+ cur+=(tgt-cur)*.1;
+ if(P){const t=.04+cur*.92,a=P.getPointAtLength(t*L),b=P.getPointAtLength(Math.min(L,t*L+3)),ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,sc=innerWidth<861?1.3:1.7;
+  car.setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+sc+')');
+  road.querySelector('.done').style.strokeDashoffset=(L*(1-t)).toFixed(1)}
+ requestAnimationFrame(frame);
+}
+addEventListener('scroll',tick,{passive:true});addEventListener('resize',()=>{buildRoad();tick();drawPoint()});
+buildRoad();secs[0].classList.add('on');tick();frame();
+// "jsme tam s ní" – scéna se jemně natáčí za pohledem (myší / natočením telefonu)
+const par=(x,y)=>{layers.forEach(m=>{const n=m.querySelector('.in');n.style.setProperty('--px',(x*-18).toFixed(1)+'px');n.style.setProperty('--py',(y*-12).toFixed(1)+'px')})};
+addEventListener('pointermove',e=>par(e.clientX/innerWidth-.5,e.clientY/innerHeight-.5),{passive:true});
+addEventListener('deviceorientation',e=>{if(e.gamma!=null)par(Math.max(-1,Math.min(1,e.gamma/30))*.5,Math.max(-1,Math.min(1,(e.beta-45)/30))*.5)},{passive:true});
+// videa: načíst až když jsou blízko, zobrazit až když hrají
+layers.forEach(m=>{const v=m.querySelector('video');if(v)v.addEventListener('playing',()=>v.classList.add('ready'))});
+// poletující světlušky
+const mo=document.querySelector('.motes');for(let i=0;i<26;i++){const e=document.createElement('i');e.style.left=(Math.random()*100)+'%';e.style.top=(40+Math.random()*70)+'%';e.style.setProperty('--dx',((Math.random()-.5)*120)+'px');e.style.animationDuration=(8+Math.random()*10)+'s';e.style.animationDelay=(-Math.random()*12)+'s';mo.appendChild(e)}
 // odletová tabule
 const D=JSON.parse(document.getElementById('dest').textContent);let di=0;
 function setRow(el,txt){const n=el.children.length;txt=(txt+' '.repeat(n)).slice(0,n);[...el.children].forEach((sp,i)=>{const ch=txt[i];if(sp.textContent!==ch){setTimeout(()=>{sp.textContent=ch;sp.classList.remove('fl');void sp.offsetWidth;sp.classList.add('fl')},i*45)}})}
@@ -334,67 +348,74 @@ if(rows.length){board();setInterval(board,2600)}
 function HD(tag, plain, em) {
     let i = 0;
     // jednopísmenné předložky/spojky nesmí zůstat na konci řádku (česká typografie)
-    const words = (s, cls) => String(s).replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2\u00a0").replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2\u00a0").split(" ").filter(Boolean).map(w => `<span class="w${cls}" style="--i:${i++}"><span>${esc(w)}</span></span>`).join(" ");
+    const words = (s, cls) => String(s).replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2 ").replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2 ").split(" ").filter(Boolean).map(w => `<span class="w${cls}" style="--i:${i++}"><span>${esc(w)}</span></span>`).join(" ");
     return `<${tag} class="h serif">${words(plain, "")}${em ? " " + words(em, " em") : ""}</${tag}>`;
 }
 
 function journeyPage(offers) {
     const q = encodeURIComponent("Flights from Prague to Europe");
     const ins = INSURANCE_URL || INSURANCE_FALLBACK;
-    const offerHtml = offers.length ? `<div class="offers">${offers.map(o => `<a class="offer" href="${go("start-offer")}"><div><b>${esc(o.job_title)}</b><small>${esc([o.city, SUPPORTED_CZ[o.country] || o.country].filter(Boolean).join(", "))}${o.salary_source ? " · " + esc(o.salary_source) : ""}</small></div><em>🔒 kontakt</em></a>`).join("")}</div>` : "";
+    const offerHtml = offers.length ? `<div class="offers rv d4">${offers.map(o => `<a class="offer" href="${go("start-offer")}"><div><b>${esc(o.job_title)}</b><small>${esc([o.city, SUPPORTED_CZ[o.country] || o.country].filter(Boolean).join(", "))}${o.salary_source ? " · " + esc(o.salary_source) : ""}</small></div><em>🔒 kontakt</em></a>`).join("")}</div>` : "";
     const lands = COUNTRIES.map(c => `<a href="${BASE}/start/${slug(c.name)}">${esc(c.name)}</a>`).join("");
     const DEST = ["DUBLIN", "OSLO", "AMSTERDAM", "VIDEN", "KODAN", "STOCKHOLM", "HELSINKY", "VALLETTA", "LARNAKA", "BERLIN"];
     const flap = n => `<div class="f">${"<span> </span>".repeat(n)}</div>`;
-    const sc = (img, icon, tint, ch, inner, opt = {}) => `<section class="sc" data-icon="${icon}" data-tint="${tint}"><div class="st">
-<div class="bg" style="background-image:url('${IMG_LO(img)}')"></div>${opt.back || ""}
-<svg class="rd" aria-hidden="true"><path class="edge"/><path class="asph"/><path class="mid"/><path class="done"/></svg><svg class="rd rc" aria-hidden="true"><use class="car" href="#carS"/></svg>
-<div class="tx"><p class="ch">${ch}</p>${inner}</div>
-<div class="stage">${opt.stage || ""}<div class="card"><img src="${IMG(img, 1400)}" srcset="${IMG(img, 900)} 900w, ${IMG(img, 1400)} 1400w, ${IMG(img, 2000)} 2000w" sizes="(max-width:860px) 100vw, 46vh" alt="" ${img === "doma" ? 'fetchpriority="high"' : 'loading="lazy"'}>${opt.inCard || ""}<div class="dust"></div><div class="gl"></div><div class="sh"></div></div></div>${opt.extra || ""}</div></section>`;
+    const SC = [
+        ["doma", "#3a5bd9", "Prolog", `${HD("h1", "Co kdyby to šlo", "jinde?")}
+<p class="lead rv d2 tgt nr">Sklady, farmy, sběr ovoce, hotely, úklid. Jako občan EU nepotřebuješ víza ani pracovní povolení.</p>`],
+        ["zivotopis", "#8a5cf0", "Krok 1 · Životopis", `${HD("h2", "Životopis za", "pár minut.")}
+<p class="lead rv d2">Napíšeš AI, co umíš. Dostaneš PDF česky i anglicky. Zdarma.</p>
+<div class="row rv d3"><a class="btn tgt" href="${BASE}/cv?src=start-journey"><span>Vytvořit životopis</span></a></div>`],
+        ["prace", "#ff8a4a", "Krok 2 · Práce", `${HD("h2", "Vyber si práci", "na HeroHero.")}
+<p class="live rv d1"><i></i>Nové nabídky každý den · mzda, město, odkaz na přihlášku</p>
+<div class="row rv d2"><a class="btn tgt" href="${go("start-work")}"><span>Odemknout nabídky – 3 dny zdarma</span></a></div>
+<p class="price rv d3">Pak 5 € měsíčně na HeroHero.</p>${offerHtml}`],
+        ["letenky", "#4a8cff", "Krok 3 · Letenka", `${HD("h2", "Letenku kupuj až", "s potvrzenou prací.")}
+<p class="lead rv d2">Porovnej ceny a zkontroluj, kolik stojí zavazadlo.</p>
+<div class="row rv d3"><a class="chip tgt" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a></div>`],
+        ["pojisteni", "#2fc9c0", "Krok 4 · Pojištění", `${HD("h2", "Klidná hlava", "i v cizině.")}
+<p class="lead rv d2">Karta EHIC nekryje všechno – třeba převoz domů. Cestovní pojištění srovnáš a sjednáš online za pár minut.</p>
+<div class="row rv d3"><a class="btn teal tgt" href="${esc(ins)}" target="_blank" rel="noopener sponsored"><span>Spočítat cenu pojištění</span></a></div>
+<p class="note rv d4"><b>Tip:</b> ověř si, že pojištění kryje i manuální práci.</p>`],
+        ["kufr", "#ffb35c", "Krok 5 · Kufr", `${HD("h2", "Sbal se na", "novou kapitolu.")}
+<div class="row drop tgt nr"><span class="chip">Občanka nebo pas</span><span class="chip">Karta EHIC</span><span class="chip">Pracovní boty</span><span class="chip">Peníze na první týdny</span></div>
+<p class="note rv d4"><b>Pravidlo č. 1:</b> za nabídku práce se nikdy neplatí.</p>`],
+        ["letiste", "#ff9a3c", "Krok 6 · Odlet", `${HD("h2", "Odlet.", "Nová kapitola.")}
+<div class="board rv d2 tgt nr"><div class="r"><small>PRG →</small>${flap(9)}</div><div class="r"><small>PRG →</small>${flap(9)}</div><div class="r"><small>PRG →</small>${flap(9)}</div></div>
+<script type="application/json" id="dest">${JSON.stringify(DEST)}</script>`],
+        ["jahody", "#ff5a5a", "Cíl", `${HD("h2", "První směna.", "První výplata.")}
+<p class="lead rv d2">Tvoje cesta začíná jednou nabídkou.</p>
+<div class="row rv d3"><a class="btn tgt" href="${go("start-end")}"><span>Chci svou první nabídku</span></a></div>
+<p class="lands rv d4">Průvodce zeměmi: ${lands}</p>`],
+    ];
+    const media = SC.map(([n], i) => { const img = `w-${n}`; return `<div class="m${i === 0 ? " on" : ""}"><div class="in"><img src="${IMG(img, 1920)}" srcset="${IMG(img, 1200)} 1200w, ${IMG(img, 1920)} 1920w, ${IMG(img, 2600)} 2600w" sizes="100vw" alt="" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>${STORY_VIDEOS.has(img) ? `<video muted loop playsinline autoplay preload="${i === 0 ? "auto" : "metadata"}" poster="${IMG(img, 1200)}" src="${VID(img)}"></video>` : ""}</div></div>`; }).join("");
+    const secs = SC.map(([n, tint, ch, inner]) => { const f = FINGER[`w-${n}`] || []; return `<section class="sc" data-s="${n}" data-tint="${tint}" data-fx="${f[0] || ""}" data-fy="${f[1] || ""}"><div class="st"><div class="tx"><p class="ch">${ch}</p>${inner}</div></div></section>`; }).join("\n");
     const body = `
 <div class="intro"><div><b><span>Pracovní</span> <span>tipy</span></b><i></i></div></div>
-<div class="amb"></div><div class="glow"></div><div class="grain"></div><div class="vig"></div><div class="bar"></div>
+<div class="media">${media}</div><div class="rays"></div><div class="shade"></div><div class="motes"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc27a"/><stop offset="1" stop-color="#ff6b4a"/></linearGradient>
 <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>
-<g id="carS"><path class="beam" d="M13,-5 L62,-22 L62,22 L13,5 Z"/><rect x="-14" y="-8" width="28" height="16" rx="5.5" fill="#ff6b4a"/><rect x="-14" y="-8" width="28" height="7" rx="4" fill="#ff8a63"/><rect x="-2" y="-6.5" width="9" height="13" rx="2.5" fill="#141a2a"/><rect x="-11" y="-6.5" width="6" height="13" rx="2" fill="#141a2a" opacity=".85"/><circle cx="13" cy="-5" r="1.8" fill="#fff6c8"/><circle cx="13" cy="5" r="1.8" fill="#fff6c8"/><rect x="-15" y="-6" width="1.6" height="3" fill="#ff2a2a"/><rect x="-15" y="3" width="1.6" height="3" fill="#ff2a2a"/></g></defs></svg>
+<linearGradient id="pg" x1="1" y1="0" x2="0" y2="0"><stop offset="0" stop-color="#fff6d8"/><stop offset="1" stop-color="#ff9a4a"/></linearGradient></defs></svg>
+<svg id="road" aria-hidden="true"><path class="p edge"/><path class="p asph"/><path class="p mid"/><path class="p done"/>
+<g id="car"><path class="beam" d="M13,-5 L62,-22 L62,22 L13,5 Z"/><rect x="-14" y="-8" width="28" height="16" rx="5.5" fill="#ff6b4a"/><rect x="-14" y="-8" width="28" height="7" rx="4" fill="#ff8a63"/><rect x="-2" y="-6.5" width="9" height="13" rx="2.5" fill="#141a2a"/><rect x="-11" y="-6.5" width="6" height="13" rx="2" fill="#141a2a" opacity=".85"/><circle cx="13" cy="-5" r="1.8" fill="#fff6c8"/><circle cx="13" cy="5" r="1.8" fill="#fff6c8"/><rect x="-15" y="-6" width="1.6" height="3" fill="#ff2a2a"/><rect x="-15" y="3" width="1.6" height="3" fill="#ff2a2a"/></g></svg>
+<svg id="point" aria-hidden="true"><path id="pp" fill="none"/><path class="trail"/><circle class="tip" r="7"/>
+<circle class="spark" r="3.5"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#pp"/></animateMotion></circle>
+<circle class="spark" r="2.5"><animateMotion dur="1.6s" begin=".55s" repeatCount="indefinite"><mpath href="#pp"/></animateMotion></circle>
+<circle class="spark" r="2"><animateMotion dur="1.6s" begin="1.1s" repeatCount="indefinite"><mpath href="#pp"/></animateMotion></circle></svg>
+<div class="plane">✈︎</div>
+<div class="bar"></div><div class="grain"></div>
 <div class="top"><b>Pracovní tipy</b><span id="chap">01 / 08</span></div>
-${sc("doma", "🏠", "#3a5bd9", "Prolog", `${HD("h1", "Co kdyby to šlo", "jinde?")}
-<p class="lead rv d2">Sklady, farmy, sběr ovoce, hotely, úklid. Jako občan EU nepotřebuješ víza ani pracovní povolení.</p>`, { inCard: `<div class="stars"></div>`, extra: `<div class="hint">Posouvej</div>` })}
-${sc("zivotopis", "📄", "#8a5cf0", "Krok 1 · Životopis", `${HD("h2", "Životopis za", "pár minut.")}
-<p class="lead rv d2">Napíšeš AI, co umíš. Dostaneš PDF česky i anglicky. Zdarma.</p>
-<div class="row rv d3"><a class="btn" href="${BASE}/cv?src=start-journey">Vytvořit životopis</a></div>`)}
-${sc("prace", "💼", "#ff8a4a", "Krok 2 · Práce", `${HD("h2", "Vyber si práci", "na HeroHero.")}
-<p class="live rv d1"><i></i>Nové nabídky každý den · mzda, město, odkaz na přihlášku</p>
-<div class="row rv d2"><a class="btn" href="${go("start-work")}">Odemknout nabídky – 3 dny zdarma</a></div>
-<p class="price rv d3">Pak 5 € měsíčně na HeroHero.</p>
-${offerHtml}`)}
-${sc("letenky", "🎫", "#4a8cff", "Krok 3 · Letenka", `${HD("h2", "Letenku kupuj až", "s potvrzenou prací.")}
-<p class="lead rv d2">Porovnej ceny a zkontroluj, kolik stojí zavazadlo.</p>
-<div class="row rv d3"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a></div>`,
-        { back: `<svg class="flight" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0,260 C300,40 700,20 1200,180"/></svg><div class="plane">✈︎</div>` })}
-${sc("pojisteni", "🛡️", "#2fc9c0", "Krok 4 · Pojištění", `${HD("h2", "Klidná hlava", "i v cizině.")}
-<p class="lead rv d2">Karta EHIC nekryje všechno – třeba převoz domů. Cestovní pojištění srovnáš a sjednáš online za pár minut.</p>
-<div class="row rv d3"><a class="btn teal" href="${esc(ins)}" target="_blank" rel="noopener sponsored">Spočítat cenu pojištění</a></div>
-<p class="note rv d4"><b>Tip:</b> ověř si, že pojištění kryje i manuální práci.</p>`, { stage: `<div class="rings"><span></span><span></span><span></span></div>` })}
-${sc("kufr", "🧳", "#ffb35c", "Krok 5 · Kufr", `${HD("h2", "Sbal se na", "novou kapitolu.")}
-<div class="row drop"><span class="chip">Občanka nebo pas</span><span class="chip">Karta EHIC</span><span class="chip">Pracovní boty</span><span class="chip">Peníze na první týdny</span></div>
-<p class="note rv d4"><b>Pravidlo č. 1:</b> za nabídku práce se nikdy neplatí.</p>`)}
-${sc("letiste", "🛫", "#ff9a3c", "Krok 6 · Odlet", `${HD("h2", "Odlet.", "Nová kapitola.")}
-<div class="board rv d2"><div class="r"><small>PRG →</small>${flap(9)}</div><div class="r"><small>PRG →</small>${flap(9)}</div><div class="r"><small>PRG →</small>${flap(9)}</div></div>
-<script type="application/json" id="dest">${JSON.stringify(DEST)}</script>`)}
-${sc("jahody", "🍓", "#ff5a5a", "Cíl", `${HD("h2", "První směna.", "První výplata.")}
-<p class="lead rv d2">Tvoje cesta začíná jednou nabídkou.</p>
-<div class="row rv d3"><a class="btn" href="${go("start-end")}">Chci svou první nabídku</a></div>
-<p class="lands rv d4">Průvodce zeměmi: ${lands}</p>`, { back: `<div class="flare"></div>` })}
-<footer>Pracovní tipy · Práci nezprostředkováváme, sdílíme vybrané nabídky z pracovních portálů. Ilustrace jsou vytvořené AI. Odkaz na pojištění je partnerský. Podrobnosti si vždy ověř u zaměstnavatele.</footer>`;
+<div class="hint">Posouvej</div>
+${secs}
+<footer>Pracovní tipy · Práci nezprostředkováváme, sdílíme vybrané nabídky z pracovních portálů. Ilustrace a videa jsou vytvořené AI. Odkaz na pojištění je partnerský. Podrobnosti si vždy ověř u zaměstnavatele.</footer>`;
     return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Cesta za prací do zahraničí | Pracovní tipy</title>
 <meta name="description" content="Od nápadu po první směnu: životopis zdarma, nabídky jednoduchých prací v Evropě se mzdou a městem, letenka, pojištění a co sbalit.">
-<meta property="og:image" content="${IMG("letiste", 1200)}">
+<meta property="og:image" content="${IMG("w-letiste", 1200)}">
 <meta name="theme-color" content="#05070d">
 <link rel="preconnect" href="https://res.cloudinary.com"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="image" href="${IMG("doma", 1400)}">
+<link rel="preload" as="image" href="${IMG("w-doma", 1920)}">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;1,9..144,400&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-<style>${JCSS}</style></head><body>${body}${JSCRIPT}</body></html>`;
+<style>${JCSS}</style></head><body data-s="doma">${body}${JSCRIPT}</body></html>`;
 }
 
 const SUPPORTED_CZ = { Ireland: "Irsko", Norway: "Norsko", Netherlands: "Nizozemsko", Germany: "Německo", Austria: "Rakousko", Denmark: "Dánsko", Sweden: "Švédsko", Finland: "Finsko", Malta: "Malta", Cyprus: "Kypr", Belgium: "Belgie", France: "Francie", Spain: "Španělsko", Italy: "Itálie", Greece: "Řecko", Estonia: "Estonsko" };
@@ -425,6 +446,39 @@ module.exports = function setupStart(app, { cloudinary }) {
         } catch (err) {
             res.status(500).json({ ok: false, error: err.message });
         }
+    });
+
+    // AI video (Sora 2) z obrázku příběhu: start → vrátí id, poll → po dokončení uloží MP4 na Cloudinary.
+    app.post("/admin/story-video", require("express").text({ type: "text/plain", limit: "50kb" }), async (req, res) => {
+        if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        let b = {}; try { b = JSON.parse(req.body || "{}"); } catch (e) {}
+        try {
+            const size = b.size || "1280x720";
+            const [w, h] = size.split("x");
+            const imgUrl = `https://res.cloudinary.com/rfgq6m1z/image/upload/c_fill,g_auto,w_${w},h_${h}/f_jpg,q_92/PracovniTipyAI/story/${String(b.image || "").replace(/[^a-z0-9-]/g, "")}.png`;
+            const img = Buffer.from(await (await fetch(imgUrl)).arrayBuffer());
+            const form = new FormData();
+            form.append("model", String(b.model || "sora-2"));
+            form.append("prompt", String(b.prompt || ""));
+            form.append("size", size);
+            form.append("seconds", String(b.seconds || "8"));
+            form.append("input_reference", new Blob([img], { type: "image/jpeg" }), "ref.jpg");
+            const r = await fetch("https://api.openai.com/v1/videos", { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
+            const j = await r.json();
+            res.status(r.ok ? 200 : 502).json(r.ok ? { ok: true, id: j.id, status: j.status } : { ok: false, error: (j.error && j.error.message) || r.status });
+        } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
+    });
+    app.get("/admin/story-video/:id", async (req, res) => {
+        if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        try {
+            const H = { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` };
+            const j = await (await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(req.params.id)}`, { headers: H })).json();
+            if (j.status !== "completed") return res.json({ ok: true, status: j.status, progress: j.progress, error: j.error && j.error.message });
+            const name = String(req.query.name || req.params.id).replace(/[^a-z0-9-]/g, "");
+            const mp4 = Buffer.from(await (await fetch(`https://api.openai.com/v1/videos/${encodeURIComponent(req.params.id)}/content`, { headers: H })).arrayBuffer());
+            const up = await cloudinary.uploader.upload(`data:video/mp4;base64,${mp4.toString("base64")}`, { resource_type: "video", public_id: `PracovniTipyAI/story/video/${name}`, overwrite: true, invalidate: true });
+            res.json({ ok: true, status: "completed", url: up.secure_url });
+        } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
     });
 
     app.get("/admin/models", async (req, res) => {
