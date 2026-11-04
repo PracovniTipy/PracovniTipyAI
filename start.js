@@ -163,7 +163,8 @@ ${s("08", "První týden", `<p>Vyřiď registraci a osobní číslo pro práci a
 // která se dívá na nás a ukazuje, kam kliknout (světelná stopa od jejího prstu k tlačítku).
 // Obraz se při posouvání NEhýbe – scény se jen prolínají; pohyb dělá video/živé efekty.
 // ---------------------------------------------------------------------------
-const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscale/c_scale,w_${w}/f_auto,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscale/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const IMG_PLAIN = n => `https://res.cloudinary.com/rfgq6m1z/image/upload/c_scale,w_1536/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
 const VID = n => `https://res.cloudinary.com/rfgq6m1z/video/upload/q_auto/PracovniTipyAI/story/video/${n}.mp4`;
 const INSURANCE_FALLBACK = "https://www.epojisteni.cz/kalkulace-cestovni/";
 // Které scény už mají AI video (Sora) – doplňuje se po vygenerování.
@@ -202,7 +203,7 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .bar{position:fixed;top:0;left:0;height:3px;background:linear-gradient(90deg,var(--a2),var(--a));width:calc(var(--p,0)*100%);z-index:31;box-shadow:0 0 12px var(--a)}
 #road{position:fixed;inset:0;width:100%;height:100%;z-index:2;pointer-events:none}
 #road .edge{fill:none;stroke:rgba(255,255,255,.06);stroke-width:clamp(30px,3.6vw,50px);stroke-linecap:round}
-#road .asph{fill:none;stroke:rgba(10,12,20,.55);stroke-width:clamp(22px,2.8vw,40px);stroke-linecap:round}
+#road .asph{fill:none;stroke:rgba(10,12,20,.4);stroke-width:clamp(22px,2.8vw,40px);stroke-linecap:round}
 #road .mid{fill:none;stroke:#fff;stroke-opacity:.38;stroke-width:2;stroke-dasharray:14 18}
 #road .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
 #road path{transition:opacity .6s}#road.swap path{opacity:0}
@@ -255,6 +256,8 @@ a.chip:hover{background:rgba(255,255,255,.22);transform:translateY(-2px)}
 .offer em{font-style:normal;font-size:13px;white-space:nowrap;padding:6px 10px;border-radius:999px;background:linear-gradient(90deg,rgba(255,255,255,.08),rgba(255,255,255,.24),rgba(255,255,255,.08));background-size:200% 100%;animation:shim 2.4s linear infinite}
 @keyframes shim{to{background-position:-200% 0}}
 .price{opacity:.75;font-size:14px;margin-top:12px}
+.sc[data-s=prace] .h{font-size:clamp(40px,4.8vw,78px)}
+@media (max-height:820px){.sc[data-s=prace] .offer:nth-child(n+3){display:none}}
 .lands{margin-top:24px;font-size:14px;opacity:.8;line-height:2}.lands a{margin-right:12px;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.35)}
 .hint{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;text-transform:uppercase;opacity:.7;z-index:6;transition:opacity .6s}
 .hint:after{content:"";display:block;width:1px;height:36px;margin:10px auto 0;background:linear-gradient(#fff,transparent);animation:drip 1.8s ease-in-out infinite;transform-origin:top}
@@ -333,6 +336,8 @@ addEventListener('pointermove',e=>par(e.clientX/innerWidth-.5,e.clientY/innerHei
 addEventListener('deviceorientation',e=>{if(e.gamma!=null)par(Math.max(-1,Math.min(1,e.gamma/30))*.5,Math.max(-1,Math.min(1,(e.beta-45)/30))*.5)},{passive:true});
 // videa: načíst až když jsou blízko, zobrazit až když hrají
 layers.forEach(m=>{const v=m.querySelector('video');if(v)v.addEventListener('playing',()=>v.classList.add('ready'))});
+// pojistka: když upscale ještě není hotový (Cloudinary vrátí malý náhled), použij originál
+document.querySelectorAll('.m img').forEach(im=>{const fix=()=>{if(im.naturalWidth&&im.naturalWidth<600&&im.dataset.plain&&im.src!==im.dataset.plain){im.removeAttribute('srcset');im.src=im.dataset.plain}};im.addEventListener('load',fix);im.addEventListener('error',()=>{im.removeAttribute('srcset');im.src=im.dataset.plain});if(im.complete)fix()});
 // poletující světlušky
 const mo=document.querySelector('.motes');for(let i=0;i<26;i++){const e=document.createElement('i');e.style.left=(Math.random()*100)+'%';e.style.top=(40+Math.random()*70)+'%';e.style.setProperty('--dx',((Math.random()-.5)*120)+'px');e.style.animationDuration=(8+Math.random()*10)+'s';e.style.animationDelay=(-Math.random()*12)+'s';mo.appendChild(e)}
 // odletová tabule
@@ -387,7 +392,7 @@ function journeyPage(offers) {
 <div class="row rv d3"><a class="btn tgt" href="${go("start-end")}"><span>Chci svou první nabídku</span></a></div>
 <p class="lands rv d4">Průvodce zeměmi: ${lands}</p>`],
     ];
-    const media = SC.map(([n], i) => { const img = `w-${n}`; return `<div class="m${i === 0 ? " on" : ""}"><div class="in"><img src="${IMG(img, 1920)}" srcset="${IMG(img, 1200)} 1200w, ${IMG(img, 1920)} 1920w, ${IMG(img, 2600)} 2600w" sizes="100vw" alt="" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>${STORY_VIDEOS.has(img) ? `<video muted loop playsinline autoplay preload="${i === 0 ? "auto" : "metadata"}" poster="${IMG(img, 1200)}" src="${VID(img)}"></video>` : ""}</div></div>`; }).join("");
+    const media = SC.map(([n], i) => { const img = `w-${n}`; return `<div class="m${i === 0 ? " on" : ""}"><div class="in"><img data-plain="${IMG_PLAIN(img)}" src="${IMG(img, 1920)}" srcset="${IMG(img, 1200)} 1200w, ${IMG(img, 1920)} 1920w, ${IMG(img, 2600)} 2600w" sizes="100vw" alt="" ${i === 0 ? 'fetchpriority="high"' : 'loading="lazy"'}>${STORY_VIDEOS.has(img) ? `<video muted loop playsinline autoplay preload="${i === 0 ? "auto" : "metadata"}" poster="${IMG(img, 1200)}" src="${VID(img)}"></video>` : ""}</div></div>`; }).join("");
     const secs = SC.map(([n, tint, ch, inner]) => { const f = FINGER[`w-${n}`] || []; return `<section class="sc" data-s="${n}" data-tint="${tint}" data-fx="${f[0] || ""}" data-fy="${f[1] || ""}"><div class="st"><div class="tx"><p class="ch">${ch}</p>${inner}</div></div></section>`; }).join("\n");
     const body = `
 <div class="intro"><div><b><span>Pracovní</span> <span>tipy</span></b><i></i></div></div>
@@ -464,7 +469,7 @@ module.exports = function setupStart(app, { cloudinary }) {
             form.append("seconds", String(b.seconds || "8"));
             form.append("input_reference", new Blob([img], { type: "image/jpeg" }), "ref.jpg");
             const r = await fetch("https://api.openai.com/v1/videos", { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
-            const j = await r.json();
+            const raw = await r.text(); let j = {}; try { j = JSON.parse(raw); } catch (e) { j = { error: { message: `HTTP ${r.status}: ${raw.slice(0, 300)}` } }; }
             res.status(r.ok ? 200 : 502).json(r.ok ? { ok: true, id: j.id, status: j.status } : { ok: false, error: (j.error && j.error.message) || r.status });
         } catch (err) { res.status(500).json({ ok: false, error: err.message }); }
     });
