@@ -15,13 +15,15 @@ const { v2: cloudinary } = require("cloudinary");
 ffmpeg.setFfmpegPath(ffmpegPath);
 
 const app = express();
+app.set("trust proxy", false);
+require("./securityPatch")(app);
 
 app.use(express.urlencoded({ extended: true, limit: "25mb" }));
 
 const multer = require("multer");
 const upload = multer({ storage: multer.memoryStorage() });
 
-app.use(express.json({ limit: "25mb" }));
+app.use(express.json({ limit: "25mb", verify(req, _res, buf) { if (req.originalUrl.startsWith("/webhook/")) req.rawBody = Buffer.from(buf); } }));
 
 // Zachytí chyby z parsování požadavku (např. neplatný/zkomprimovaný JSON
 // od Make.com), zaloguje je do Railway logů a vrátí čitelnou odpověď

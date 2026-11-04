@@ -171,8 +171,14 @@ function setupCv(app, { cloudinary }) {
     // Limity počítáme zvlášť pro každý krok (dřív se zprávy v chatu počítaly
     // do limitu pro vytvoření CV a po pár zprávách to hlásilo chybu).
     function rateLimited(req, max, bucket) {
-        const ip = bucket + ":" + String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+        // Skutečná IP z Railway (X-Real-IP); X-Forwarded-For si může klient podvrhnout.
+        const ip = bucket + ":" + String(req.headers["x-real-ip"] || req.socket.remoteAddress || "").trim();
         const now = Date.now();
+        // Celkový strop za hodinu (ochrana rozpočtu OpenAI i při střídání IP).
+        const g = "all:" + bucket, gl = (hits.get(g) || []).filter(t => now - t < 60 * 60 * 1000);
+        gl.push(now); hits.set(g, gl);
+        if (gl.length > max * 20) return true;
+        if (hits.size > 50000) hits.clear();
         const list = (hits.get(ip) || []).filter(t => now - t < 60 * 60 * 1000);
         list.push(now);
         hits.set(ip, list);
