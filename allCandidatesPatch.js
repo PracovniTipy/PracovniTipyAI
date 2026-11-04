@@ -14,7 +14,7 @@ let rollingAt = 0;
 
 const SUPPORTED_COUNTRIES = [
   "Austria", "Belgium", "Cyprus", "Denmark", "Estonia", "Finland", "France",
-  "Germany", "Greece", "Ireland", "Italy", "Malta", "Netherlands", "Norway",
+  "Germany", "Greece", "Ireland", "Italy", "Malta", "Netherlands",
   "Spain", "Sweden"
 ];
 

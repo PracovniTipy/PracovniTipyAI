@@ -204,7 +204,8 @@ function normalizeJob(job) {
 
 function safeJob(job, requireLink = false) {
   if (!job || typeof job !== "object" || Array.isArray(job)) return false;
-  if (!titleOf(job) || !countryOf(job) || forbiddenJob(job)) return false;
+  // Jen EU: Norsko (není v EU) nezveřejňujeme
+  if (!titleOf(job) || !countryOf(job) || countryOf(job) === "Norway" || forbiddenJob(job)) return false;
   if (!languageDecision(job).allowed) return false;
   if (requireLink && !linkOf(job)) return false;
   return true;
