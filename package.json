@@ -15,7 +15,7 @@
   "dependencies": {
     "canvas": "^3.1.0",
     "cloudinary": "^2.5.1",
-    "dotenv": "^16.4.5",
+    "dotenv": "^18.0.9",
     "express": "^4.21.2",
     "ffmpeg-static": "^5.2.0",
     "fluent-ffmpeg": "^2.1.3",
