@@ -300,6 +300,31 @@ const SUPPORTED_CZ = { Ireland: "Irsko", Norway: "Norsko", Netherlands: "Nizozem
 module.exports = function setupStart(app, { cloudinary }) {
     const TEMPLATE_FOLDER = path.join(__dirname, "templates");
 
+    // AI obrázky příběhu (stejná postava jako v reelech) – generuje se jednorázově
+    // přes OpenAI s referenční fotkou postavy, ukládá na Cloudinary.
+    app.post("/admin/story-image", require("express").text({ type: "text/plain", limit: "50kb" }), async (req, res) => {
+        if (!process.env.STATS_KEY || req.get("x-admin-key") !== process.env.STATS_KEY) return res.status(403).json({ ok: false });
+        let b = {}; try { b = JSON.parse(req.body || "{}"); } catch (e) {}
+        const name = String(b.name || "").replace(/[^a-z0-9-]/g, "");
+        if (!name || !b.prompt) return res.status(400).json({ ok: false, error: "name+prompt" });
+        try {
+            const refFile = path.join(TEMPLATE_FOLDER, b.ref || "reel/Irsko reel.png");
+            const form = new FormData();
+            form.append("model", "gpt-image-1");
+            form.append("prompt", String(b.prompt));
+            form.append("size", b.size || "1024x1536");
+            form.append("quality", "high");
+            form.append("image", new Blob([fs.readFileSync(refFile)], { type: "image/png" }), "ref.png");
+            const r = await fetch("https://api.openai.com/v1/images/edits", { method: "POST", headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` }, body: form });
+            const j = await r.json();
+            if (!r.ok) return res.status(502).json({ ok: false, error: (j.error && j.error.message) || r.status });
+            const up = await cloudinary.uploader.upload(`data:image/png;base64,${j.data[0].b64_json}`, { public_id: `PracovniTipyAI/story/${name}`, overwrite: true, invalidate: true });
+            res.json({ ok: true, url: up.secure_url });
+        } catch (err) {
+            res.status(500).json({ ok: false, error: err.message });
+        }
+    });
+
     app.get("/img/zeme/:slug", (req, res) => {
         const c = COUNTRIES.find(x => slug(x.name) === slug(req.params.slug));
         const file = c && path.join(TEMPLATE_FOLDER, c.bg);
