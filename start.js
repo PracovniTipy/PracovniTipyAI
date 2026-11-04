@@ -182,7 +182,7 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .st{position:sticky;top:0;height:100svh;overflow:hidden;display:grid;grid-template-columns:1fr auto;align-items:center;gap:clamp(24px,5vw,80px);padding:80px clamp(22px,6vw,110px) 60px calc(var(--road) + clamp(26px,5vw,90px))}
 .bg{position:absolute;inset:-6%;background-size:cover;background-position:center;filter:blur(38px) saturate(1.3) brightness(.42);transform:scale(calc(1.15 - var(--k,0)*.1))}
 .bg:after{content:"";position:absolute;inset:0;background:radial-gradient(ellipse at 70% 50%,transparent 20%,rgba(4,6,12,.75))}
-.card{position:relative;height:min(84svh,880px);aspect-ratio:2/3;border-radius:30px;overflow:hidden;box-shadow:0 60px 120px -40px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.08);transform:translateY(calc((.5 - var(--k,0))*60px)) rotate(calc((.5 - var(--k,0))*-3deg))}
+.card{position:relative;height:min(76svh,860px);aspect-ratio:2/3;border-radius:30px;overflow:hidden;box-shadow:0 60px 120px -40px rgba(0,0,0,.85),0 0 0 1px rgba(255,255,255,.08);transform:translateY(calc((.5 - var(--k,0))*60px)) rotate(calc((.5 - var(--k,0))*-3deg))}
 .card img{width:100%;height:100%;object-fit:cover;transform:scale(calc(1.18 - var(--k,0)*.16)) translateY(calc((var(--k,0) - .5)*-3%));will-change:transform}
 .card:after{content:"";position:absolute;inset:0;background:linear-gradient(120deg,transparent 40%,rgba(255,255,255,.18) 50%,transparent 60%);background-size:250% 100%;animation:shine 7s ease-in-out infinite}
 @keyframes shine{0%,70%{background-position:150% 0}100%{background-position:-60% 0}}
@@ -192,6 +192,7 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .ch{font-size:12px;letter-spacing:.24em;text-transform:uppercase;opacity:.65;margin:0 0 18px}
 .tx h1,.tx h2{font-size:clamp(42px,6.4vw,96px);line-height:.98;margin:0 0 22px}
 .tx em{font-style:italic;background:linear-gradient(90deg,#ffc27a,var(--a));-webkit-background-clip:text;background-clip:text;color:transparent;padding-right:.08em}
+.tx h2.fin{font-size:clamp(36px,4.6vw,68px)}
 .lead{font-size:clamp(17px,1.6vw,21px);opacity:.82;margin:0;max-width:520px}
 .rv{opacity:0;transform:translateY(40px);filter:blur(6px);transition:opacity .9s ease,transform 1.1s cubic-bezier(.2,.7,.2,1),filter .9s ease}
 .on .rv{opacity:1;transform:none;filter:none}.on .d1{transition-delay:.12s}.on .d2{transition-delay:.26s}.on .d3{transition-delay:.4s}.on .d4{transition-delay:.54s}
@@ -273,7 +274,7 @@ ${sc("letiste", "Krok 3", `<h2 class="serif rv d1">Letenku až <em>s potvrzenou 
 <div class="row rv d2"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a>${INSURANCE_URL ? `<a class="chip" href="${esc(INSURANCE_URL)}" target="_blank" rel="noopener sponsored">Cestovní pojištění</a>` : ""}</div>`)}
 ${sc("jahody", "Krok 4", `<h2 class="serif rv d1">První směna. <em>První výplata.</em></h2>
 <p class="lead rv d2">U každé naší nabídky vidíš mzdu z inzerátu, město a kde se přihlásit.</p>`)}
-${sc("prace", "Cíl", `<h2 class="serif rv d1">Tvoje cesta začíná <em>jednou nabídkou.</em></h2>
+${sc("prace", "Cíl", `<h2 class="serif rv d1 fin">Tvoje cesta začíná <em>jednou nabídkou.</em></h2>
 ${offerHtml}
 <div class="row rv d4"><a class="btn pulse" href="${go("start-final")}">Odemknout nabídky – 3 dny zdarma</a></div>
 <p class="price rv d4">Pak 5 € měsíčně na HeroHero.</p>
@@ -355,11 +356,21 @@ module.exports = function setupStart(app, { cloudinary }) {
         return out.slice(0, 6);
     }
 
+    // Stejná pojistka jako v automatizaci: nereálnou mzdu (např. "9 SEK / hod.") nezobrazíme.
+    const RATE = { "€": 24.5, EUR: 24.5, SEK: 2.15, NOK: 2.1, DKK: 3.28, PLN: 5.7, "£": 29, GBP: 29, CHF: 27.5 };
+    const RANGE = { "hod.": [120, 1500], "týden": [3000, 60000], "14 dní": [6000, 120000], "měsíc": [12000, 250000], "rok": [150000, 3000000] };
+    function plausible(src) {
+        const m = String(src || "").match(/^([\d\s ]+(?:,\d+)?)\s*(\S+)\s*\/\s*(hod\.|týden|14 dní|měsíc|rok)/);
+        if (!m) return false;
+        const amt = Number(m[1].replace(/[\s ]/g, "").replace(",", ".")), r = RATE[m[2]], rg = RANGE[m[3]];
+        return !!(r && rg && amt * r >= rg[0] && amt * r <= rg[1]);
+    }
+
     async function latestOffers() {
         const runs = await recentJobs();
         const out = [];
         for (const d of Object.keys(runs).sort().reverse().slice(0, 3)) {
-            for (const j of runs[d].jobs || []) if (j.salary_source && j.city && !/olanda|holland|germania|francia|spagna|belgio|svizzera|polonia|irlanda|austria|danimarca|svezia|norvegia|finlandia/i.test(j.city) && out.length < 4 && !out.some(o => o.job_title === j.job_title && o.country === j.country)) out.push(j);
+            for (const j of runs[d].jobs || []) if (j.salary_source && plausible(j.salary_source) && !/částečný/.test(j.salary_source) && j.city && !/olanda|holland|germania|francia|spagna|belgio|svizzera|polonia|irlanda|austria|danimarca|svezia|norvegia|finlandia/i.test(j.city) && out.length < 3 && !out.some(o => o.job_title === j.job_title || o.country === j.country)) out.push(j);
         }
         return out;
     }

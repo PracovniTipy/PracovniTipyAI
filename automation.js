@@ -605,6 +605,17 @@ async function czkRates() {
     }
 }
 
+// Pojistka proti chybně přečtené mzdě (např. "9,50 SEK / hod."): částka v CZK
+// musí odpovídat reálnému rozpětí pro dané období, jinak mzdu nezveřejníme.
+function plausibleSalary(salary, rates) {
+    if (!salary || typeof salary.amount !== "number" || !(salary.amount > 0)) return false;
+    const rate = rates[String(salary.currency || "").toUpperCase()];
+    if (!rate) return false;
+    const czk = salary.amount * rate;
+    const range = { hour: [120, 1500], week: [3000, 60000], biweek: [6000, 120000], month: [12000, 250000], year: [150000, 3000000] }[salary.period];
+    return !!range && czk >= range[0] && czk <= range[1];
+}
+
 function monthlyCzk(salary, rates) {
     if (!salary || typeof salary.amount !== "number" || !(salary.amount > 0)) return "";
     const rate = rates[String(salary.currency || "").toUpperCase()];
@@ -624,7 +635,7 @@ function buildJobs(enriched, rates, limit = 5, existingCountries = [], recentKey
         .map(({ job, ai }) => {
             const countryCz = SUPPORTED[job.country];
             // Mzda přesně podle inzerátu + přepočet na měsíc jen u plného úvazku.
-            const sal = ai.salary || {};
+            const sal = plausibleSalary(ai.salary, rates) ? ai.salary : {};
             const hoursPW = Number(sal.hours_per_week) || 0;
             const contractTxt = String(ai.contract_cz || "");
             const partTime = (hoursPW > 0 && hoursPW < 30) || (!hoursPW && /částečn|part/i.test(contractTxt));
@@ -749,7 +760,7 @@ function heroBatchFinished(run) {
     return Date.now() - last > 20 * 60 * 1000;
 }
 
-const CODE_VERSION = "2026-11-01a";
+const CODE_VERSION = "2026-11-04a";
 const SERVER_STARTED = new Date().toISOString();
 
 function setupAutomation(app, deps) {
