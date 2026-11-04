@@ -164,6 +164,8 @@ ${s("08", "První týden", `<p>Vyřiď registraci a osobní číslo pro práci a
 // Obrázky jsou AI upscalované na 4K (Cloudinary e_upscale), vlevo klikatá silnice s autem.
 // ---------------------------------------------------------------------------
 const IMG = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_upscale/c_scale,w_${w}/f_auto,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const PLATE = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_gen_remove:prompt_woman;remove-shadow_true/e_upscale/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
+const GIRL = (n, w) => `https://res.cloudinary.com/rfgq6m1z/image/upload/e_background_removal/c_scale,w_${w}/f_webp,q_auto:good/PracovniTipyAI/story/${n}.png`;
 const IMG_LO = n => `https://res.cloudinary.com/rfgq6m1z/image/upload/f_auto,q_auto,w_60/PracovniTipyAI/story/${n}.png`;
 const INSURANCE_FALLBACK = "https://www.epojisteni.cz/kalkulace-cestovni/";
 const JCSS = `
@@ -194,8 +196,8 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 #road .stop text{font-size:13px;opacity:.35;transition:opacity .4s}
 #road .stop.on circle{fill:var(--a);stroke:#fff;filter:drop-shadow(0 0 6px var(--a))}#road .stop.on text{opacity:1}
 .rd{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;overflow:visible}
-.rd .edge{fill:none;stroke:rgba(255,255,255,.07);stroke-width:clamp(34px,4.4vw,58px);stroke-linecap:round}
-.rd .asph{fill:none;stroke:rgba(10,12,20,.74);stroke-width:clamp(26px,3.4vw,46px);stroke-linecap:round}
+.rd .edge{fill:none;stroke:rgba(255,255,255,.13);stroke-width:clamp(34px,4.4vw,58px);stroke-linecap:round}
+.rd .asph{fill:none;stroke:rgba(8,10,16,.82);stroke-width:clamp(26px,3.4vw,46px);stroke-linecap:round}
 .rd .mid{fill:none;stroke:#fff;stroke-opacity:.42;stroke-width:2;stroke-dasharray:16 18}
 .rd .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
 .rd.rc{z-index:4}
@@ -219,8 +221,30 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .rv{opacity:0;transform:translateY(30px);filter:blur(8px);transition:opacity .9s ease,transform 1.1s cubic-bezier(.2,.7,.2,1),filter .9s ease}
 .on .rv{opacity:1;transform:none;filter:none}.on .d1{transition-delay:.35s}.on .d2{transition-delay:.5s}.on .d3{transition-delay:.65s}.on .d4{transition-delay:.8s}
 .stage{position:relative;perspective:1200px;z-index:2}
-.card{position:relative;height:min(74svh,860px);aspect-ratio:2/3;border-radius:32px;overflow:hidden;transform-style:preserve-3d;box-shadow:0 70px 140px -40px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.1),0 0 90px -20px var(--tint);transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(calc((.5 - var(--k,0))*70px));transition:transform .5s cubic-bezier(.2,.7,.2,1),box-shadow 1s}
-.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scale(calc(1.2 - var(--k,0)*.17)) translateY(calc((var(--k,0) - .5)*-4%));will-change:transform}
+.card{position:relative;height:min(74svh,860px);aspect-ratio:2/3;border-radius:32px;overflow:hidden;transform-style:preserve-3d;box-shadow:0 70px 140px -40px rgba(0,0,0,.9),0 0 0 1px rgba(255,255,255,.1),0 0 90px -20px var(--tint);transform:rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg));transition:transform .5s cubic-bezier(.2,.7,.2,1),box-shadow 1s}
+.card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.card .lp,.card .lg{position:absolute;inset:-4%;opacity:0;transition:opacity .9s ease}
+.card.deep .lp,.card.deep .lg{opacity:1}.card.deep>img.base{opacity:0;transition:opacity .9s}
+.card .lp{transform:translate(calc(var(--dx,0)*14px),calc(var(--dy,0)*10px));transition:opacity .9s,transform .6s cubic-bezier(.2,.7,.2,1)}
+.card .lp img{filter:blur(1.2px) brightness(.88) saturate(1.1);animation:drift 24s ease-in-out infinite alternate}
+@keyframes drift{to{transform:scale(1.06) translate(-1.5%,1%)}}
+.card .lg{transform:translate(calc(var(--dx,0)*-30px),calc(var(--dy,0)*-18px)) translateZ(40px);transition:opacity .9s,transform .6s cubic-bezier(.2,.7,.2,1)}
+.card .lg img{filter:drop-shadow(0 24px 30px rgba(0,0,0,.5));transform-origin:50% 100%;animation:breath 5.5s ease-in-out infinite}
+@keyframes breath{0%,100%{transform:rotate(-.4deg) translateY(0) scale(1)}50%{transform:rotate(.4deg) translateY(-1.2%) scale(1.012)}}
+.sc.on .card .lg{animation:enter 1.6s cubic-bezier(.2,.9,.2,1) both}
+@keyframes enter{from{opacity:0;translate:18% 0;filter:blur(8px)}to{opacity:1;translate:0 0;filter:none}}
+.sc[data-s=letiste] .card .lg img{animation:walk 1.15s ease-in-out infinite}
+@keyframes walk{0%,100%{transform:translateY(0) rotate(-.6deg)}25%{transform:translateY(-1.4%) rotate(0)}50%{transform:translateY(0) rotate(.6deg)}75%{transform:translateY(-1.4%) rotate(0)}}
+.sc[data-s=letiste] .card .lg{animation:enter 1.6s cubic-bezier(.2,.9,.2,1) both,stroll 14s ease-in-out 1.6s infinite alternate}
+@keyframes stroll{from{translate:0 0}to{translate:-9% 0}}
+.sc[data-s=prace] .card .lg img{animation:joy 3.2s cubic-bezier(.3,1.6,.5,1) infinite}
+@keyframes joy{0%,60%,100%{transform:translateY(0) scale(1)}70%{transform:translateY(-3.5%) scale(1.02) rotate(-1deg)}82%{transform:translateY(0) scale(.99)}90%{transform:translateY(-1.5%)}}
+.sc[data-s=kufr] .card .lg img,.sc[data-s=jahody] .card .lg img{animation:work 2.6s ease-in-out infinite}
+@keyframes work{0%,100%{transform:translateY(0) rotate(0)}40%{transform:translateY(1.6%) rotate(1.2deg)}70%{transform:translateY(-.6%) rotate(-.4deg)}}
+.sc[data-s=zivotopis] .card .lg img,.sc[data-s=letenky] .card .lg img{animation:nod 4s ease-in-out infinite}
+@keyframes nod{0%,100%{transform:rotate(0) translateY(0)}30%{transform:rotate(-1deg) translateY(-.8%)}60%{transform:rotate(.6deg) translateY(.3%)}}
+.sc[data-s=pojisteni] .card .lg img{animation:breath 4.5s ease-in-out infinite,shield 3s ease-in-out infinite}
+@keyframes shield{50%{filter:drop-shadow(0 24px 30px rgba(0,0,0,.5)) drop-shadow(0 0 22px rgba(80,230,210,.55))}}
 .card .gl{position:absolute;inset:0;background:radial-gradient(circle at var(--gx,30%) var(--gy,20%),rgba(255,255,255,.28),transparent 45%);mix-blend-mode:overlay;pointer-events:none}
 .card .sh{position:absolute;inset:0;background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.2) 50%,transparent 60%);background-size:260% 100%;animation:shine 8s ease-in-out infinite;pointer-events:none}
 @keyframes shine{0%,72%{background-position:160% 0}100%{background-position:-60% 0}}
@@ -278,7 +302,7 @@ a.chip:hover{background:rgba(255,255,255,.2);transform:translateY(-2px)}
 .steps{position:fixed;left:50%;bottom:16px;transform:translateX(-50%);z-index:32;display:flex;align-items:center;gap:0;padding:8px 10px;border-radius:999px;background:rgba(8,10,18,.62);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(16px);box-shadow:0 20px 50px -20px rgba(0,0,0,.8)}
 .steps .ln{position:absolute;left:28px;right:28px;top:50%;height:2px;background:rgba(255,255,255,.12);border-radius:2px;pointer-events:none}
 .steps .ln i{position:absolute;left:0;top:0;bottom:0;width:calc(var(--sp,0)*100%);background:linear-gradient(90deg,var(--a2),var(--a));box-shadow:0 0 10px var(--a);transition:width .6s cubic-bezier(.2,.7,.2,1)}
-.steps a{position:relative;z-index:1;display:grid;place-items:center;width:38px;height:38px;margin:0 6px;border-radius:50%;text-decoration:none;font-size:17px;background:#141826;border:1.5px solid rgba(255,255,255,.18);filter:grayscale(1);opacity:.55;transition:all .4s}
+.steps a{position:relative;z-index:1;display:grid;place-items:center;width:34px;height:34px;margin:0 7px;border-radius:50%;text-decoration:none;font:600 11px/1 Inter,sans-serif;letter-spacing:.02em;color:#fff;background:#141826;border:1.5px solid rgba(255,255,255,.18);filter:grayscale(1);opacity:.55;transition:all .4s}
 .steps a.done{filter:none;opacity:.9;border-color:var(--a)}
 .steps a.now{filter:none;opacity:1;transform:scale(1.22);border-color:#fff;background:linear-gradient(135deg,#ff9a4a,var(--a));box-shadow:0 0 0 6px rgba(255,107,74,.25),0 0 24px rgba(255,107,74,.7)}
 .steps a span{position:absolute;bottom:calc(100% + 12px);left:50%;transform:translateX(-50%) translateY(6px);white-space:nowrap;font:600 12px Inter,sans-serif;letter-spacing:.04em;padding:5px 10px;border-radius:999px;background:#fff;color:#14110d;opacity:0;pointer-events:none;transition:all .3s}
@@ -335,7 +359,11 @@ build();tick();secs[0].classList.add('on');frame();
 // světlo za kurzorem + 3D náklon karty
 addEventListener('pointermove',e=>{R.style.setProperty('--mx',e.clientX+'px');R.style.setProperty('--my',e.clientY+'px');
  document.querySelectorAll('.sc.on .card').forEach(c=>{const r=c.getBoundingClientRect();if(r.bottom<0||r.top>innerHeight)return;
-  const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;c.style.setProperty('--ry',((x-.5)*10).toFixed(2)+'deg');c.style.setProperty('--rx',((.5-y)*8).toFixed(2)+'deg');c.style.setProperty('--gx',(x*100).toFixed(0)+'%');c.style.setProperty('--gy',(y*100).toFixed(0)+'%')})},{passive:true});
+  const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;c.style.setProperty('--ry',((x-.5)*10).toFixed(2)+'deg');c.style.setProperty('--rx',((.5-y)*8).toFixed(2)+'deg');c.style.setProperty('--gx',(x*100).toFixed(0)+'%');c.style.setProperty('--gy',(y*100).toFixed(0)+'%');c.style.setProperty('--dx',(x-.5).toFixed(3));c.style.setProperty('--dy',(y-.5).toFixed(3))})},{passive:true});
+// telefon: hloubka podle naklonění
+addEventListener('deviceorientation',e=>{if(e.gamma==null)return;const x=Math.max(-.5,Math.min(.5,e.gamma/40)),y=Math.max(-.5,Math.min(.5,(e.beta-45)/40));document.querySelectorAll('.card').forEach(c=>{c.style.setProperty('--dx',x.toFixed(3));c.style.setProperty('--dy',y.toFixed(3))})},{passive:true});
+// 3D vrstvy (pozadí bez postavy + postava zvlášť) – zapnout až když jsou obě načtené
+document.querySelectorAll('.card').forEach(c=>{const ly=[...c.querySelectorAll('img.ly')];let ok=0;ly.forEach(im=>{const done=()=>{if(im.naturalWidth>600&&++ok===ly.length)c.classList.add('deep')};if(im.complete&&im.naturalWidth)done();else im.addEventListener('load',done,{once:true})})});
 // odletová tabule
 const D=JSON.parse(document.getElementById('dest').textContent);let di=0;
 function setRow(el,txt){const n=el.children.length;txt=(txt+' '.repeat(n)).slice(0,n);[...el.children].forEach((sp,i)=>{const ch=txt[i];if(sp.textContent!==ch){setTimeout(()=>{sp.textContent=ch;sp.classList.remove('fl');void sp.offsetWidth;sp.classList.add('fl')},i*45)}})}
@@ -360,19 +388,20 @@ function journeyPage(offers) {
     const lands = COUNTRIES.map(c => `<a href="${BASE}/start/${slug(c.name)}">${esc(c.name)}</a>`).join("");
     const DEST = ["DUBLIN", "OSLO", "AMSTERDAM", "VIDEN", "KODAN", "STOCKHOLM", "HELSINKY", "VALLETTA", "LARNAKA", "BERLIN"];
     const flap = n => `<div class="f">${"<span> </span>".repeat(n)}</div>`;
-    const sc = (img, icon, tint, ch, inner, opt = {}) => `<section class="sc" data-icon="${icon}" data-tint="${tint}"><div class="st">
+    const sc = (img, icon, tint, ch, inner, opt = {}) => `<section class="sc" data-s="${img}" data-icon="${icon}" data-tint="${tint}"><div class="st">
 <div class="bg" style="background-image:url('${IMG_LO(img)}')"></div>${opt.back || ""}
 <svg class="rd" aria-hidden="true"><path class="edge"/><path class="asph"/><path class="mid"/><path class="done"/></svg><svg class="rd rc" aria-hidden="true"><use class="car" href="#carS"/></svg>
 <div class="tx"><p class="ch">${ch}</p>${inner}</div>
-<div class="stage">${opt.stage || ""}<div class="card"><img src="${IMG(img, 1400)}" srcset="${IMG(img, 900)} 900w, ${IMG(img, 1400)} 1400w, ${IMG(img, 2000)} 2000w" sizes="(max-width:860px) 100vw, 46vh" alt="" ${img === "doma" ? 'fetchpriority="high"' : 'loading="lazy"'}>${opt.inCard || ""}<div class="dust"></div><div class="gl"></div><div class="sh"></div></div></div>${opt.extra || ""}</div></section>`;
+<div class="stage">${opt.stage || ""}<div class="card"><img class="base" src="${IMG(img, 1400)}" srcset="${IMG(img, 900)} 900w, ${IMG(img, 1400)} 1400w, ${IMG(img, 2000)} 2000w" sizes="(max-width:860px) 100vw, 46vh" alt="" ${img === "doma" ? 'fetchpriority="high"' : 'loading="lazy"'}><div class="lp"><img class="ly" src="${PLATE(img, 1400)}" alt="" loading="lazy"></div>${opt.inCard || ""}<div class="lg"><img class="ly" src="${GIRL(img, 1400)}" alt="" loading="lazy"></div><div class="dust"></div><div class="gl"></div><div class="sh"></div></div></div>${opt.extra || ""}</div></section>`;
     const body = `
 <div class="intro"><div><b><span>Pracovní</span> <span>tipy</span></b><i></i></div></div>
 <div class="amb"></div><div class="glow"></div><div class="grain"></div><div class="vig"></div><div class="bar"></div>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs><linearGradient id="gr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc27a"/><stop offset="1" stop-color="#ff6b4a"/></linearGradient>
 <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff6c8" stop-opacity=".9"/><stop offset="1" stop-color="#fff6c8" stop-opacity="0"/></linearGradient>
-<g id="carS"><path class="beam" d="M13,-5 L62,-22 L62,22 L13,5 Z"/><rect x="-14" y="-8" width="28" height="16" rx="5.5" fill="#ff6b4a"/><rect x="-14" y="-8" width="28" height="7" rx="4" fill="#ff8a63"/><rect x="-2" y="-6.5" width="9" height="13" rx="2.5" fill="#141a2a"/><rect x="-11" y="-6.5" width="6" height="13" rx="2" fill="#141a2a" opacity=".85"/><circle cx="13" cy="-5" r="1.8" fill="#fff6c8"/><circle cx="13" cy="5" r="1.8" fill="#fff6c8"/><rect x="-15" y="-6" width="1.6" height="3" fill="#ff2a2a"/><rect x="-15" y="3" width="1.6" height="3" fill="#ff2a2a"/></g></defs></svg>
+<linearGradient id="cb" x1="0" y1="-1" x2="0" y2="1"><stop offset="0" stop-color="#ffb08a"/><stop offset=".5" stop-color="#ff6b4a"/><stop offset="1" stop-color="#c8402a"/></linearGradient>
+<g id="carS"><path class="beam" d="M15,-5 L70,-26 L70,26 L15,5 Z"/><ellipse cx="0" cy="0" rx="19" ry="12" fill="rgba(0,0,0,.35)" filter="blur(2px)"/><path d="M-16,-7 C-16,-9.5 -13,-10 -10,-10 L7,-9.5 C13,-9 16.5,-5 16.5,0 C16.5,5 13,9 7,9.5 L-10,10 C-13,10 -16,9.5 -16,7 Z" fill="url(#cb)"/><path d="M2,-7 L7.5,-5.5 C9,-2 9,2 7.5,5.5 L2,7 Z" fill="#0d1220"/><path d="M-12,-6.5 L-8,-7 L-8,7 L-12,6.5 Z" fill="#0d1220" opacity=".9"/><rect x="-8" y="-7" width="10" height="14" rx="3" fill="#ff8a63"/><path d="M-8,-7 L2,-7" stroke="#ffd3c0" stroke-width=".8" opacity=".7"/><ellipse cx="15" cy="-5.2" rx="1.6" ry="2.2" fill="#fff6c8"/><ellipse cx="15" cy="5.2" rx="1.6" ry="2.2" fill="#fff6c8"/><rect x="-16.6" y="-7" width="1.6" height="3.6" rx=".8" fill="#ff2a2a"/><rect x="-16.6" y="3.4" width="1.6" height="3.6" rx=".8" fill="#ff2a2a"/></g></defs></svg>
 <div class="top"><b>Pracovní tipy</b><span id="chap">01 / 08</span></div>
-<nav class="steps" aria-label="Postup">${[["🏠","Začátek"],["📄","Životopis"],["💼","Výběr práce"],["🎫","Letenka"],["🛡️","Pojištění"],["🧳","Kufr"],["🛫","Odlet"],["🍓","První výplata"]].map(([ic, t], i) => `<a href="#" data-i="${i}" aria-label="${t}">${ic}<span>${i ? i + ". " : ""}${t}</span></a>`).join("")}<div class="ln"><i></i></div></nav>
+<nav class="steps" aria-label="Postup">${["Start", "Životopis", "Výběr práce", "Letenka", "Pojištění", "Kufr", "Odlet", "První výplata"].map((t, i) => `<a href="#" data-i="${i}" aria-label="${t}"><b>${i ? String(i).padStart(2, "0") : "●"}</b><span>${t}</span></a>`).join("")}<div class="ln"><i></i></div></nav>
 ${sc("doma", "🏠", "#3a5bd9", "Prolog", `${HD("h1", "Co kdyby to šlo", "jinde?")}
 <p class="lead rv d2">Sklady, farmy, sběr ovoce, hotely, úklid. Jako občan EU nepotřebuješ víza ani pracovní povolení.</p>`, { inCard: `<div class="stars"></div>`, extra: `<div class="hint">Posouvej</div>` })}
 ${sc("zivotopis", "📄", "#8a5cf0", "Krok 1 · Životopis", `${HD("h2", "Životopis za", "pár minut.")}
