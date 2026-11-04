@@ -268,6 +268,7 @@ a.chip:hover{background:rgba(255,255,255,.2);transform:translateY(-2px)}
 .flare{position:absolute;right:-20%;top:-30%;width:90vmin;height:90vmin;border-radius:50%;background:radial-gradient(circle,rgba(255,214,150,.55),rgba(255,140,80,.12) 40%,transparent 65%);animation:breathe 6s ease-in-out infinite;pointer-events:none;z-index:1}
 @keyframes breathe{50%{transform:scale(1.12) translate(-3%,3%);opacity:.75}}
 footer{position:relative;z-index:3;padding:28px 22px 40px calc(var(--road) + 22px);font-size:12px;opacity:.5;background:#05070d}
+@media (max-height:760px) and (min-width:861px){.offer:nth-child(3){display:none}.h{font-size:clamp(40px,5.4vw,84px)}}
 @media (max-width:860px){
  .st{grid-template-columns:1fr;align-items:end;padding:0 18px 30px calc(var(--road) + 10px)}
  .stage{position:absolute;inset:0;perspective:none}
@@ -329,7 +330,8 @@ if(rows.length){board();setInterval(board,2600)}
 // nadpis rozdělený na slova (každé slovo vyjede zvlášť)
 function HD(tag, plain, em) {
     let i = 0;
-    const words = (s, cls) => String(s).split(" ").filter(Boolean).map(w => `<span class="w${cls}" style="--i:${i++}"><span>${esc(w)}</span></span>`).join(" ");
+    // jednopísmenné předložky/spojky nesmí zůstat na konci řádku (česká typografie)
+    const words = (s, cls) => String(s).replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2\u00a0").replace(/(^|\s)([ksvzouaiKSVZOUAI]) /g, "$1$2\u00a0").split(" ").filter(Boolean).map(w => `<span class="w${cls}" style="--i:${i++}"><span>${esc(w)}</span></span>`).join(" ");
     return `<${tag} class="h serif">${words(plain, "")}${em ? " " + words(em, " em") : ""}</${tag}>`;
 }
 
@@ -359,9 +361,9 @@ ${sc("zivotopis", "📄", "#8a5cf0", "Krok 1 · Životopis", `${HD("h2", "Život
 <div class="row rv d3"><a class="btn" href="${BASE}/cv?src=start-journey">Vytvořit životopis</a></div>`)}
 ${sc("prace", "💼", "#ff8a4a", "Krok 2 · Práce", `${HD("h2", "Vyber si práci", "na HeroHero.")}
 <p class="live rv d1"><i></i>Nové nabídky každý den · mzda, město, odkaz na přihlášku</p>
-${offerHtml}
-<div class="row rv d3"><a class="btn" href="${go("start-work")}">Odemknout nabídky – 3 dny zdarma</a></div>
-<p class="price rv d4">Pak 5 € měsíčně na HeroHero.</p>`)}
+<div class="row rv d2"><a class="btn" href="${go("start-work")}">Odemknout nabídky – 3 dny zdarma</a></div>
+<p class="price rv d3">Pak 5 € měsíčně na HeroHero.</p>
+${offerHtml}`)}
 ${sc("letenky", "🎫", "#4a8cff", "Krok 3 · Letenka", `${HD("h2", "Letenku kupuj až", "s potvrzenou prací.")}
 <p class="lead rv d2">Porovnej ceny a zkontroluj, kolik stojí zavazadlo.</p>
 <div class="row rv d3"><a class="chip" href="https://www.google.com/travel/flights?q=${q}" target="_blank" rel="noopener">Google Flights</a><a class="chip" href="https://www.kiwi.com/cz/" target="_blank" rel="noopener">Kiwi.com</a><a class="chip" href="https://www.skyscanner.cz/" target="_blank" rel="noopener">Skyscanner</a></div>`,
