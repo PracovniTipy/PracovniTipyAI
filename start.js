@@ -198,6 +198,7 @@ a{color:inherit}.serif{font-family:Fraunces,Georgia,serif;font-weight:400;letter
 .rd .asph{fill:none;stroke:rgba(10,12,20,.74);stroke-width:clamp(26px,3.4vw,46px);stroke-linecap:round}
 .rd .mid{fill:none;stroke:#fff;stroke-opacity:.42;stroke-width:2;stroke-dasharray:16 18}
 .rd .done{fill:none;stroke:url(#gr);stroke-width:4;stroke-linecap:round;filter:drop-shadow(0 0 8px rgba(255,107,74,.95))}
+.rd.rc{z-index:4}
 .rd .car{filter:drop-shadow(0 6px 10px rgba(0,0,0,.6))}
 #car .beam,#carS .beam{fill:url(#beam);opacity:.85}
 #car .body{filter:drop-shadow(0 3px 5px rgba(0,0,0,.6))}
@@ -292,10 +293,10 @@ const JSCRIPT = `<script>
 (function(){
 const secs=[...document.querySelectorAll('.sc')],chap=document.getElementById('chap'),R=document.documentElement;
 // každá scéna má vlastní úsek klikaté silnice přes celou šířku; úseky na sebe navazují uprostřed
-const roads=secs.map((s,i)=>({s,svg:s.querySelector('.rd'),dir:i%2?-1:1,cur:0,tgt:0,P:null,L:0}));
+const roads=secs.map((s,i)=>({s,svg:s.querySelector('.rd'),car:s.querySelector('.rc'),dir:i%2?-1:1,cur:0,tgt:0,P:null,L:0}));
 function build(){
  const w=innerWidth,h=innerHeight,amp=w*(w<861?.3:.4);
- roads.forEach(r=>{r.svg.setAttribute('viewBox','0 0 '+w+' '+h);let d='';
+ roads.forEach(r=>{r.svg.setAttribute('viewBox','0 0 '+w+' '+h);r.car.setAttribute('viewBox','0 0 '+w+' '+h);let d='';
   for(let i=0;i<=180;i++){const t=i/180,x=w/2+r.dir*amp*Math.sin(t*Math.PI*3),y=-80+t*(h+160);d+=(i?' L':'M')+x.toFixed(1)+' '+y.toFixed(1)}
   r.svg.querySelectorAll('path').forEach(p=>p.setAttribute('d',d));r.P=r.svg.querySelector('.asph');r.L=r.P.getTotalLength();
   r.svg.querySelector('.done').style.strokeDasharray=r.L});
@@ -303,7 +304,7 @@ function build(){
 function frame(){
  roads.forEach(r=>{if(!r.P)return;r.cur+=(r.tgt-r.cur)*.1;
   const t=.04+r.cur*.92,a=r.P.getPointAtLength(t*r.L),b=r.P.getPointAtLength(Math.min(r.L,t*r.L+3)),ang=Math.atan2(b.y-a.y,b.x-a.x)*180/Math.PI,sc=innerWidth<861?1.3:1.8;
-  r.svg.querySelector('.car').setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+sc+')');
+  r.car.querySelector('.car').setAttribute('transform','translate('+a.x.toFixed(1)+' '+a.y.toFixed(1)+') rotate('+ang.toFixed(1)+') scale('+sc+')');
   r.svg.querySelector('.done').style.strokeDashoffset=(r.L*(1-t)).toFixed(1)});
  requestAnimationFrame(frame);
 }
@@ -346,7 +347,7 @@ function journeyPage(offers) {
     const flap = n => `<div class="f">${"<span> </span>".repeat(n)}</div>`;
     const sc = (img, icon, tint, ch, inner, opt = {}) => `<section class="sc" data-icon="${icon}" data-tint="${tint}"><div class="st">
 <div class="bg" style="background-image:url('${IMG_LO(img)}')"></div>${opt.back || ""}
-<svg class="rd" aria-hidden="true"><path class="edge"/><path class="asph"/><path class="mid"/><path class="done"/><use class="car" href="#carS"/></svg>
+<svg class="rd" aria-hidden="true"><path class="edge"/><path class="asph"/><path class="mid"/><path class="done"/></svg><svg class="rd rc" aria-hidden="true"><use class="car" href="#carS"/></svg>
 <div class="tx"><p class="ch">${ch}</p>${inner}</div>
 <div class="stage">${opt.stage || ""}<div class="card"><img src="${IMG(img, 1400)}" srcset="${IMG(img, 900)} 900w, ${IMG(img, 1400)} 1400w, ${IMG(img, 2000)} 2000w" sizes="(max-width:860px) 100vw, 46vh" alt="" ${img === "doma" ? 'fetchpriority="high"' : 'loading="lazy"'}>${opt.inCard || ""}<div class="dust"></div><div class="gl"></div><div class="sh"></div></div></div>${opt.extra || ""}</div></section>`;
     const body = `
