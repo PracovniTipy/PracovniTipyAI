@@ -8,6 +8,7 @@
 // ---------------------------------------------------------------------------
 const crypto = require("crypto");
 const express = require("express");
+const TP_DRIVE = require("./tpdrive");
 
 const BASE = "https://pracovnitipyai-production.up.railway.app";
 const esc = s => String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -121,7 +122,7 @@ document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',(
 </script>`;
 
 function page(title, desc, body) {
-    return `<!doctype html><html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+    return `<!doctype html><html lang="cs"><head><meta charset="utf-8">${TP_DRIVE}<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title><meta name="description" content="${esc(desc)}"><meta name="theme-color" content="#05070d">
 <meta property="og:image" content="${IMG("prace", 1200)}">
 <link rel="preconnect" href="https://res.cloudinary.com"><link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
